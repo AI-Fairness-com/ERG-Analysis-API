@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERG Analysis API | Clinical Decision Support</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a3a5c 0%, #2a5a8c 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            opacity: 0.85;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+            font-size: 14px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #2a5a8c;
+            box-shadow: 0 0 0 3px rgba(42, 90, 140, 0.1);
+        }
+
+        .file-zone {
+            border: 2px dashed #cbd5e0;
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f8fafc;
+        }
+
+        .file-zone:hover {
+            border-color: #2a5a8c;
+            background: #f1f5f9;
+        }
+
+        .file-zone.drag-over {
+            border-color: #2a5a8c;
+            background: #e0f2fe;
+        }
+
+        .file-zone input {
+            display: none;
+        }
+
+        .file-name {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .protocol-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .protocol-btn {
+            padding: 8px 16px;
+            background: #f1f5f9;
+            border: 2px solid #e2e8f0;
+            border-radius: 40px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .protocol-btn.selected {
+            background: #2a5a8c;
+            border-color: #2a5a8c;
+            color: white;
+        }
+
+        .eye-buttons {
+            display: flex;
+            gap: 15px;
+        }
+
+        .eye-btn {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            background: #f1f5f9;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .eye-btn.selected {
+            background: #2a5a8c;
+            border-color: #2a5a8c;
+            color: white;
+        }
+
+        button[type="submit"] {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #1a3a5c 0%, #2a5a8c 100%);
+            color: white;
+            border: none;
+            border-radius: 40px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button[type="submit"]:hover {
+            transform: translateY(-2px);
+        }
+
+        button[type="submit"]:disabled {
+            opacity: 0.6;
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2a5a8c;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .results {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 16px;
+        }
+
+        .traffic-light {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 20px;
+        }
+
+        .traffic-light.GREEN { background: #dcfce7; border-left: 5px solid #22c55e; }
+        .traffic-light.AMBER { background: #fef9c3; border-left: 5px solid #eab308; }
+        .traffic-light.RED { background: #fee2e2; border-left: 5px solid #ef4444; }
+
+        .traffic-icon {
+            font-size: 48px;
+        }
+
+        .traffic-text h3 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .traffic-text p {
+            color: #555;
+            font-size: 14px;
+        }
+
+        .measurements {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .measure-card {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .measure-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1a3a5c;
+        }
+
+        .measure-card .label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .disclaimer {
+            font-size: 11px;
+            color: #999;
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .error {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .content { padding: 20px; }
+            .measurements { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔬 ERG Analysis API</h1>
+            <p>Clinical Decision Support for Retinal Electrophysiology</p>
+        </div>
+
+        <div class="content">
+            <!-- Upload Form -->
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label>📄 ERG Recording File</label>
+                    <div class="file-zone" id="fileZone">
+                        <input type="file" id="fileInput" name="file" accept=".csv,.edf,.hdf5">
+                        <div>
+                            <div style="font-size: 40px; margin-bottom: 10px;">📊</div>
+                            <div>Click or drag file here</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 8px;">CSV, EDF, or HDF5</div>
+                        </div>
+                        <div class="file-name" id="fileName"></div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>🔬 ISCEV Protocol</label>
+                    <div class="protocol-buttons" id="protocolButtons">
+                        <div class="protocol-btn" data-protocol="DA 0.01">DA 0.01</div>
+                        <div class="protocol-btn selected" data-protocol="DA 3.0">DA 3.0</div>
+                        <div class="protocol-btn" data-protocol="DA 10.0">DA 10.0</div>
+                        <div class="protocol-btn" data-protocol="LA 3.0">LA 3.0</div>
+                        <div class="protocol-btn" data-protocol="LA 30 Hz">LA 30 Hz</div>
+                    </div>
+                    <input type="hidden" name="protocol" id="selectedProtocol" value="DA 3.0">
+                </div>
+
+                <div class="form-group">
+                    <label>👁️ Eye</label>
+                    <div class="eye-buttons" id="eyeButtons">
+                        <div class="eye-btn selected" data-eye="OD">Right Eye (OD)</div>
+                        <div class="eye-btn" data-eye="OS">Left Eye (OS)</div>
+                        <div class="eye-btn" data-eye="both">Both Eyes</div>
+                    </div>
+                    <input type="hidden" name="eye" id="selectedEye" value="OD">
+                </div>
+
+                <div class="form-group">
+                    <label>🆔 Patient ID (anonymous)</label>
+                    <input type="text" name="patient_id" placeholder="e.g., PAT-001 or visit-2026-05-01">
+                </div>
+
+                <button type="submit" id="submitBtn">🚀 Analyze ERG Signal</button>
+            </form>
+
+            <!-- Loading Spinner -->
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <div>Processing ERG signal...<br>Filtering → Feature extraction → Classification → Generating report</div>
+            </div>
+
+            <!-- Error Display -->
+            <div class="error" id="error"></div>
+
+            <!-- Results Display -->
+            <div class="results" id="results">
+                <div class="traffic-light" id="trafficLight"></div>
+                <div class="measurements" id="measurements"></div>
+                <div id="filterLog" style="font-size: 12px; color: #666; margin-top: 10px;"></div>
+                <div class="disclaimer" id="disclaimer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const fileInput = document.getElementById('fileInput');
+        const fileZone = document.getElementById('fileZone');
+        const fileName = document.getElementById('fileName');
+        const protocolBtns = document.querySelectorAll('.protocol-btn');
+        const eyeBtns = document.querySelectorAll('.eye-btn');
+        const submitBtn = document.getElementById('submitBtn');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const errorDiv = document.getElementById('error');
+
+        // File zone click handler
+        fileZone.addEventListener('click', () => fileInput.click());
+
+        // Drag and drop
+        fileZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileZone.classList.add('drag-over');
+        });
+
+        fileZone.addEventListener('dragleave', () => {
+            fileZone.classList.remove('drag-over');
+        });
+
+        fileZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileZone.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            if (files.length) {
+                fileInput.files = files;
+                updateFileName(files[0].name);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                updateFileName(e.target.files[0].name);
+            }
+        });
+
+        function updateFileName(name) {
+            fileName.textContent = `Selected: ${name}`;
+            fileName.style.color = '#2a5a8c';
+        }
+
+        // Protocol selection
+        protocolBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                protocolBtns.forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                document.getElementById('selectedProtocol').value = btn.dataset.protocol;
+            });
+        });
+
+        // Eye selection
+        eyeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                eyeBtns.forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                document.getElementById('selectedEye').value = btn.dataset.eye;
+            });
+        });
+
+        // Form submission
+        const form = document.getElementById('uploadForm');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Validate file
+            if (!fileInput.files.length) {
+                showError('Please select an ERG file to analyze.');
+                return;
+            }
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('protocol', document.getElementById('selectedProtocol').value);
+            formData.append('eye', document.getElementById('selectedEye').value);
+            formData.append('patient_id', document.querySelector('input[name="patient_id"]').value || 'GUEST');
+
+            // Show loading
+            submitBtn.disabled = true;
+            loading.style.display = 'block';
+            results.style.display = 'none';
+            errorDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Analysis failed');
+                }
+
+                displayResults(data);
+
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                submitBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        function displayResults(data) {
+            // Traffic light
+            const trafficDiv = document.getElementById('trafficLight');
+            const status = data.traffic_light.status;
+            trafficDiv.className = `traffic-light ${status}`;
+            trafficDiv.innerHTML = `
+                <div class="traffic-icon">${status === 'GREEN' ? '🟢' : status === 'AMBER' ? '🟡' : '🔴'}</div>
+                <div class="traffic-text">
+                    <h3>${status} Signal</h3>
+                    <p>${data.traffic_light.message}</p>
+                    <p style="font-size: 12px; margin-top: 5px;">Z-score: ${data.traffic_light.z_score}</p>
+                </div>
+            `;
+
+            // Measurements
+            const measuresDiv = document.getElementById('measurements');
+            measuresDiv.innerHTML = `
+                <div class="measure-card">
+                    <div class="value">${data.measurements.b_wave_amplitude_uv} µV</div>
+                    <div class="label">b-wave Amplitude</div>
+                </div>
+                <div class="measure-card">
+                    <div class="value">${data.measurements.b_wave_implicit_time_ms} ms</div>
+                    <div class="label">b-wave Implicit Time</div>
+                </div>
+            `;
+
+            // Filter log
+            const logDiv = document.getElementById('filterLog');
+            logDiv.innerHTML = `<strong>🔧 Processing Steps:</strong><br>${data.filter_log.map(step => `→ ${step}`).join('<br>')}`;
+
+            // Disclaimer
+            document.getElementById('disclaimer').textContent = data.disclaimer;
+
+            // Report ID
+            const reportId = document.createElement('div');
+            reportId.style.cssText = 'margin-top: 10px; font-size: 11px; color: #888; text-align: center;';
+            reportId.innerHTML = `Report ID: ${data.report_id} | Generated: ${new Date(data.generated_at).toLocaleString()}`;
+            document.getElementById('results').appendChild(reportId);
+
+            results.style.display = 'block';
+        }
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            results.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
