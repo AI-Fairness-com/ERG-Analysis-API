@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ERG Analysis API</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f0f2f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; }
+        input, select { width: 100%; padding: 10px; margin: 10px 0; }
+        button { background: #1a3a5c; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔬 ERG Analysis API</h1>
+        <form action="/analyze" method="post" enctype="multipart/form-data">
+            <input type="file" name="file" accept=".csv">
+            <select name="protocol">
+                <option>DA 0.01</option>
+                <option selected>DA 3.0</option>
+                <option>DA 10.0</option>
+                <option>LA 3.0</option>
+                <option>LA 30 Hz</option>
+            </select>
+            <button type="submit">Analyze ERG</button>
+        </form>
+    </div>
+</body>
+</html>
