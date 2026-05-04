@@ -5,7 +5,8 @@
 
 **Full-field ERG signal processing, machine learning classification, and clinical decision support API.**
 
-This repository accompanies the textbook *"ERG Signal Processing with Python: Machine Learning Techniques for Retinal Electrophysiology and Clinical Decision Support"* (Apress/Springer-Nature, forthcoming (Tavakoli 2027)).
+This repository accompanies the textbook "**Hands-On Electroretinography in the Age of AI**
+_*A Practical Guide from Clinical Fundamentals to Intelligent Decision Support*" (Apress/Springer-Nature, forthcoming (Tavakoli 2027)).
 
 ## Overview
 
