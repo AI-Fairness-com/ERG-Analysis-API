@@ -983,6 +983,8 @@ class ERGReportGenerator:
             'Gold foil': 'contact_lens',
             'Skin': 'skin',
             'skin': 'skin',
+            'Tomey EP-1000': 'tomey_ep1000',
+            'tomey_ep1000': 'tomey_ep1000',
         }
 
     def _normalize_electrode_type(self, electrode_type: Any) -> str:
@@ -2283,7 +2285,7 @@ pupil_diameter_widget = widgets.FloatSlider(
     description='Pupil Diameter (mm):'
 )
 electrode_widget = widgets.Dropdown(
-    options=['contact_lens', 'gold_foil', 'dtl_fiber', 'skin'],
+    options=['contact_lens', 'gold_foil', 'dtl_fiber', 'skin', 'Tomey EP-1000'],
     value='contact_lens',
     description='Electrode Type:'
 )
