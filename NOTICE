@@ -1,0 +1,14 @@
+ERG Analysis API
+Copyright (c) 2026 Hamid Tavakoli
+
+This product includes software developed at:
+https://github.com/AI-Fairness-com/ERG-Analysis-API
+
+This product includes software from the following open-source projects:
+- NumPy (BSD License)
+- SciPy (BSD License)
+- PyTorch (BSD-style License)
+- scikit-learn (BSD License)
+- MNE-Python (BSD License)
+- SHAP (MIT License)
+- Hugging Face Timm (Apache 2.0 License)
