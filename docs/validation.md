@@ -10,11 +10,11 @@ This document summarizes the validation status, performance metrics, and TRIPOD-
 
 ## Validation Status Summary
 
-Source: README.md (ERG-Analysis-API repository, version 2.3.2)
+Source: README.md (ERG-Analysis-API repository, version 2.4.0)
 
 | Validation Type | Dataset | Result | Status |
 |-----------------|---------|--------|--------|
-| **Synthetic (Internal)** | 7 disease classes | 100% correct classification | ✅ PASS |
+| **Synthetic (Internal v2.3.2, inherited by v2.4.0)** | 12 scenarios × 5 protocols × 4 electrode types | 13/13 runs passed | ✅ PASS |
 | **Technical (External)** | OculusGraphy 2020 (n=149) | 100% processing success | ✅ PASS |
 | **Specificity (External)** | Baker et al. 2025 (n=407) | 94.5% GREEN rate | ✅ PASS |
 | **Sensitivity (External)** | Real pathology recordings | Planned for V3.0 | ⏳ PENDING |
