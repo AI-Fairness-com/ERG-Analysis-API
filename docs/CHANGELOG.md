@@ -72,7 +72,7 @@ v2.3.2 13/13 pass also inherited.
   by `ERG_CSV_Generator_v2_4_corrected.py` (fixes: G1 b_abs calibration, G2 LA3 b_w, G3
   flicker model, G4 DA001 amplitude, G5 ≥60y a_IT). Combined two-run result: 30/41 PASS.
   Outstanding generator defects: G3 LA 30Hz flicker model, G6 DA10 a_IT norms, G7 LA3 a_IT
-  norms, A1 Grade D noise model. Full audit: `validation/VALIDATION_REPORT_v2_4_0_FINAL.docx`.
+  norms, A1 Grade D noise model. Full audit: `validation/VALIDATION_REPORT_v2_4_0_FINAL.pdf`.
   OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42 ⚠️ CONDITIONAL
 
 ---
@@ -82,7 +82,7 @@ v2.3.2 13/13 pass also inherited.
 Full upgrade and validation release. Eighteen defects resolved across six pipeline cells.
 Baker et al. (2025) N=407 normative data integrated with all 48 µ/σ values verified.
 Synthetic validation 13/13 passed. External validation cleared.
-See `docs/VALIDATION_REPORT_v2.3.2.docx` for the complete validation report.
+See `validation/VALIDATION_REPORT_v2.3.2.pdf` for the complete validation report.
 
 ### Bug Fixes
 
