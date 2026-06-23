@@ -148,7 +148,7 @@
     .waveform-title i { color: #4ecdc4; }
     #ergWaveformSvg {
       width: 100%;
-      height: 220px;
+      height: 280px;
       display: block;
       border-radius: 6px;
       background: #0b1220;
@@ -173,7 +173,7 @@
     }
     @media print {
       .waveform-panel { background: #fff !important; page-break-inside: avoid; }
-      #ergWaveformSvg { background: #fff !important; height: 260px !important; }
+      #ergWaveformSvg { background: #fff !important; height: 300px !important; }
       .result-actions { display: none !important; }
       .upload-section, .hero-section, nav, footer { display: none !important; }
       .result-panel { display: block !important; box-shadow: none !important; }
@@ -676,6 +676,28 @@
       border-color: var(--teal);
       box-shadow: 0 0 0 3px rgba(14,124,134,0.12);
     }
+    .field-select.field-invalid,
+    .field-input.field-invalid,
+    .field-text.field-invalid {
+      border-color: var(--red);
+      background: var(--red-bg);
+    }
+    .field-select.field-invalid:focus,
+    .field-input.field-invalid:focus,
+    .field-text.field-invalid:focus {
+      box-shadow: 0 0 0 3px rgba(155,35,53,0.18);
+    }
+    .field-error-msg {
+      display: none;
+      align-items: flex-start;
+      gap: 6px;
+      margin-top: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--red);
+      line-height: 1.4;
+    }
+    .field-error-msg.visible { display: flex; }
     .field-select {
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234A5568' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
@@ -1172,11 +1194,11 @@
       background: #0b1220;
     }
     .waveform-title {
-      font-size: 0.72rem;
+      font-size: 0.85rem;
       font-weight: 700;
-      letter-spacing: 0.10em;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--text-muted);
+      color: #F5F7F8;
       margin-bottom: 0.75rem;
       display: flex;
       align-items: center;
@@ -1185,7 +1207,7 @@
     .waveform-title i { color: #4ecdc4; }
     #ergWaveformSvg {
       width: 100%;
-      height: 220px;
+      height: 280px;
       display: block;
       border-radius: 6px;
       background: #0b1220;
@@ -1199,18 +1221,20 @@
     .waveform-legend-item {
       display: flex;
       align-items: center;
-      gap: 0.35rem;
-      font-size: 0.68rem;
-      color: var(--text-muted);
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #F5F7F8;
     }
     .legend-line {
-      width: 22px;
-      height: 2px;
-      border-radius: 1px;
+      width: 24px;
+      height: 3px;
+      border-radius: 1.5px;
+      flex-shrink: 0;
     }
     @media print {
       .waveform-panel { background: #fff !important; page-break-inside: avoid; }
-      #ergWaveformSvg { background: #fff !important; height: 260px !important; }
+      #ergWaveformSvg { background: #fff !important; height: 300px !important; }
       .result-actions { display: none !important; }
       .upload-section, .hero-section, nav, footer { display: none !important; }
       .result-panel { display: block !important; box-shadow: none !important; }
@@ -1370,9 +1394,62 @@
 
 <div class="shell">
 
+  <!-- ── BRAND BAR ─────────────────────────────────────────────── -->
+  <div class="brand-bar" role="banner">
+    <img class="brand-mark" src="data:image/png;base64,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iKTAwiIiIimwsIiISAosLCIikgILi4iIpMDCIiIiKbCwiIhICiwsIiKSAguLiIikwMIiIiIpsLCIiEgKLCwiIpICC4uIiKTAwiIiIimwsIiISAosLCIikgILi4iIpMDCIiIiKbCwiIhICiwsIiKSAguLiIikwMIiIiIpsLCIiEgKLCwiIpICC4uIiKTAwiIiIimwsIiISAosLCIikgILi4iIpMDCIiIiKbCwiIhICiwsIiKSAguLiIikwMIiIiIpsLCIiEgKLCwiIpICC4uIiKTAwiIiIimwsIiISAosLCIikgILi4iIpMDCIiIiKbCwiIhICiwsIiKSAguLiIikwMIiIiIpsLCIiEgKLCwiIpICC4uIiKTAwiIiIimwsIiISAosLCIikgILi4iIpMDCIiIiKbCwiIhICiwsIiKSAguLiIikwMIiIiIpsLCIiEgKLCwiIpICC4uIiKTAwiIiIimwsIiISAosLCIikgILi4iIpMDCIiIiKbCwiIhICiwsIiKSAguLiIikwMIiIiIpsLCIiEgKLCwiIpICC4uIiKTAwiIiIimwsIiISAosLCIikgILi4iIpMDCIiIiKbCwiIhICiwsIiKSAguLiIikwMIiIiIpsLCIiEgKLCwiIpICC4uIiKTAwiIiIimwsIiISAosLCIikgILi4iIpMDCIiIiKbCwiIhICiwsIiKSAguLiIikwMIiIiIpsLCIiEgKLCwiIpICC4uIiKTAwiIiIimwsIiISAosLCIikgILi4iIpMDCIiIiKbCwiIhICiwsIiKSAguLiIikwMIiIiIpsLCIiEgKLCwiIpKCLjqA7BLjEhCfmCA6xnFLcMeLjkDUZIkJCfCZPtExjpvbHSs6QkRQ/H6/IzoEERHRsfCSIBERSYGFRUREUmBhERGRFFhYREQkBRYWERFJgYVFRERSYGEREZEUWFhERCQFFhYREUmBhUVERFJgYRERkRRYWEREJAUWFhERSYGFRUREUmBhERGRFFhYREQkBRYWERFJgYVFRERSYGEREZEUWFhERCQFFhYREUmBhUVERFL4/wVcrY+Nuh3nAAAAAElFTkSuQmCC" alt="AI Fairness CIO logo"
+         onerror="this.outerHTML='&lt;div class=&quot;brand-mark brand-mark-fallback&quot; aria-hidden=&quot;true&quot;&gt;Fi&lt;/div&gt;'" />
+    <div class="brand-text">
+      <div class="brand-name">AI Fairness CIO</div>
+      <div class="brand-reg">Charity Commission for England and Wales &middot; Registered Charity No. 1218464</div>
+    </div>
+  </div>
+  <style>
+    .brand-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.9rem clamp(1rem, 4vw, 3rem) 0.7rem;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .brand-mark {
+      flex-shrink: 0;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      display: block;
+    }
+    .brand-mark-fallback {
+      background: var(--green);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    }
+    .brand-name {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--green);
+      line-height: 1.2;
+    }
+    .brand-reg {
+      font-size: 0.68rem;
+      color: rgba(255,255,255,0.4);
+      line-height: 1.3;
+    }
+    @media print {
+      .brand-bar { display: flex !important; }
+    }
+  </style>
+
   <!-- ── HERO ──────────────────────────────────────────────────── -->
   <header class="hero">
     <div class="hero-depth"></div>
+
 
     <div class="hero-inner">
       <div class="hero-text">
@@ -1831,6 +1908,24 @@
         </div>
 
         <div class="form-field">
+          <label class="field-label" for="recordingDate">
+            <i class="fas fa-calendar-day" aria-hidden="true"></i> Recording Date
+            <span class="field-required">*</span>
+          </label>
+          <input type="date" id="recordingDate" class="field-text" required aria-required="true"
+            aria-describedby="recordingDateHelp recordingDateError"/>
+          <div class="field-hint" id="recordingDateHelp">
+            <i class="fas fa-info-circle" aria-hidden="true"></i>
+            The date this ERG was actually recorded — not today's date, unless the recording was made today.
+            Must not be a future date.
+          </div>
+          <div class="field-error-msg" id="recordingDateError" role="alert">
+            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            <span id="recordingDateErrorText">Please enter a valid recording date.</span>
+          </div>
+        </div>
+
+        <div class="form-field">
           <label class="field-label" for="ageGroup">
             <i class="fas fa-calendar-alt" aria-hidden="true"></i> Age Group
             <span class="field-required">*</span>
@@ -1992,29 +2087,11 @@
               <span class="toggle-track"></span>
             </span>
             <div class="toggle-info">
-              <div class="toggle-title">⚠️ Override: Apply 50 Hz Notch Filter</div>
+              <div class="toggle-title" id="notchTitle">✅ ISCEV-Compliant: No Notch Filter Applied</div>
               <div class="toggle-desc" id="notchDesc">
-                ISCEV 2022 advises against notch filters (Page 7, Col 2, Para 4) — they distort waveform morphology.
-                Enable only with documented clinical justification. Q = 50 (~1.0 Hz bandwidth).
-              </div>
-            </div>
-          </label>
-        </div>
-
-        <div class="form-field span-2" id="notchConsentWrap" style="display:none;">
-          <label class="toggle-row" style="border-color:rgba(155,35,53,0.3);background:var(--red-bg);">
-            <span class="toggle">
-              <input type="checkbox" id="notchConsent" aria-describedby="notchConsentDesc"/>
-              <span class="toggle-track"></span>
-            </span>
-            <div class="toggle-info">
-              <div class="toggle-title" style="color:var(--red);">
-                <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
-                Confirm clinical justification for notch filter override
-              </div>
-              <div class="toggle-desc" id="notchConsentDesc">
-                I confirm there is documented clinical justification for applying the 50 Hz notch filter
-                in this recording, and I accept that waveform morphology may be distorted (ISCEV 2022).
+                ISCEV 2022 (Page 7, Col 2, Para 4) advises against notch filters — they distort waveform morphology.
+                Toggle right to override: applies 50 Hz notch filter (Q = 50, ~1.0 Hz bandwidth) and confirms
+                documented clinical justification. Toggle left to restore ISCEV-compliant behaviour.
               </div>
             </div>
           </label>
@@ -2162,6 +2239,21 @@
                style="font-family:'Inter',sans-serif;font-size:0.68rem;color:var(--slate);">
             Ref. range pending
           </div>
+          <div id="resPhnrWarning" style="display:none;margin-top:6px;padding:6px 8px;
+               border-radius:6px;background:rgba(155,35,53,0.08);border:1px solid rgba(155,35,53,0.35);">
+            <div style="font-family:'Inter',sans-serif;font-size:0.68rem;font-weight:700;color:var(--red);
+                 display:flex;align-items:flex-start;gap:4px;">
+              <i class="fas fa-exclamation-triangle" aria-hidden="true" style="margin-top:1px;"></i>
+              <span>Atypical polarity — check signal quality</span>
+            </div>
+            <div style="font-family:'Inter',sans-serif;font-size:0.64rem;color:var(--red);
+                 line-height:1.4;margin-top:3px;">
+              PhNR is defined as a negative deflection. A positive reading suggests electrode
+              polarity inversion, signal drift, or another feature (b-wave tail / i-wave / OP
+              ringing) dominating the search window rather than a true PhNR. Verify electrode
+              connection before clinical interpretation.
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2172,7 +2264,7 @@
           Filtered ERG Waveform
           <span style="margin-left:auto;font-size:0.65rem;font-weight:400;color:#4ecdc4;" id="waveformMeta"></span>
         </div>
-        <svg id="ergWaveformSvg" viewBox="0 0 900 220" preserveAspectRatio="none"
+        <svg id="ergWaveformSvg" viewBox="0 0 900 280" preserveAspectRatio="none"
              role="img" aria-label="ERG filtered waveform plot"></svg>
         <div class="waveform-legend">
           <div class="waveform-legend-item">
@@ -2197,9 +2289,9 @@
         <button class="result-action-btn btn-secondary" id="downloadReport">
           <i class="fas fa-file-alt" aria-hidden="true"></i> Download Full Report
         </button>
-        <button class="result-action-btn btn-secondary" id="printReport"
+        <button class="result-action-btn btn-secondary" id="downloadClinicalPdf"
                 style="display:flex;align-items:center;gap:0.4rem;">
-          <i class="fas fa-print" aria-hidden="true"></i> Print / Save PDF
+          <i class="fas fa-file-pdf" aria-hidden="true"></i> Download Clinical PDF
         </button>
         <button class="result-action-btn btn-secondary" id="runAnother" style="margin-left:auto;">
           <i class="fas fa-redo" aria-hidden="true"></i> Analyse Another
@@ -2313,9 +2405,18 @@
 
   notchToggle.addEventListener('change', function() {
     notchRow.classList.toggle('active', this.checked);
-    const wrap = document.getElementById('notchConsentWrap');
-    wrap.style.display = this.checked ? 'block' : 'none';
-    if (!this.checked) document.getElementById('notchConsent').checked = false;
+    const title = document.getElementById('notchTitle');
+    if (this.checked) {
+      notchRow.style.borderColor = 'rgba(155,35,53,0.3)';
+      notchRow.style.background  = 'var(--red-bg)';
+      title.innerHTML = '<i class="fas fa-exclamation-triangle" aria-hidden="true"></i> Override Active: 50 Hz Notch Filter Applied — clinical justification confirmed';
+      title.style.color = 'var(--red)';
+    } else {
+      notchRow.style.borderColor = '';
+      notchRow.style.background  = '';
+      title.innerHTML = '✅ ISCEV-Compliant: No Notch Filter Applied';
+      title.style.color = '';
+    }
     updateSubmit();
   });
 
@@ -2371,18 +2472,62 @@
     }
   });
 
+  function validateRecordingDate(showInline) {
+    const input   = document.getElementById('recordingDate');
+    const errBox  = document.getElementById('recordingDateError');
+    const errText = document.getElementById('recordingDateErrorText');
+    const val     = input.value; // 'YYYY-MM-DD' or '' — native date input guarantees this format or empty
+
+    function setInvalid(msg) {
+      if (showInline) {
+        input.classList.add('field-invalid');
+        errText.textContent = msg;
+        errBox.classList.add('visible');
+      }
+      return false;
+    }
+    function setValid() {
+      input.classList.remove('field-invalid');
+      errBox.classList.remove('visible');
+      return true;
+    }
+
+    if (!val) {
+      return setInvalid('Recording date is required. Please select the date this ERG was recorded.');
+    }
+
+    const recDate = new Date(val + 'T00:00:00');
+    if (isNaN(recDate.getTime())) {
+      return setInvalid('Recording date is not a valid date.');
+    }
+
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // allow "today" through end of day
+    if (recDate.getTime() > today.getTime()) {
+      return setInvalid('Recording date cannot be in the future. Please correct the date.');
+    }
+
+    return setValid();
+  }
+
   function updateSubmit() {
     const hasFile   = ergFile.files && ergFile.files.length > 0;
     const hasAge    = document.getElementById('ageGroup').value !== '';
     const hasProto  = document.querySelector('input[name="protocol"]:checked') !== null;
     const hasElec   = document.querySelector('input[name="electrode"]:checked') !== null;
+    const hasDate   = validateRecordingDate(false); // silent check only, no inline marking on every keystroke
     const notchOn      = document.getElementById('notchToggle').checked;
-    const notchOk      = !notchOn || document.getElementById('notchConsent').checked;
-    submitBtn.disabled = !(hasFile && hasAge && hasProto && hasElec && notchOk);
+    const notchOk      = true; // single toggle: override state is self-confirming
+    submitBtn.disabled = !(hasFile && hasAge && hasProto && hasElec && hasDate && notchOk);
   }
 
   document.getElementById('ageGroup').addEventListener('change', updateSubmit);
-  document.getElementById('notchConsent').addEventListener('change', updateSubmit);
+  // notchConsent listener removed — consent is implicit in the single notch toggle
+  document.getElementById('recordingDate').addEventListener('change', function() {
+    validateRecordingDate(true);
+    updateSubmit();
+  });
+  document.getElementById('recordingDate').addEventListener('input', updateSubmit);
   document.querySelectorAll('input[name="protocol"]').forEach(r => r.addEventListener('change', updateSubmit));
   document.querySelectorAll('input[name="electrode"]').forEach(r => r.addEventListener('change', updateSubmit));
 
@@ -2446,24 +2591,28 @@
     const op  = wv.op_signal;
     const preMs = wv.pre_stimulus_ms || 50;
 
-    // SVG viewport
-    const W = 900, H = 220;
-    const PAD = { top: 22, right: 24, bottom: 34, left: 52 };
+    // SVG viewport — taller than before, with more top/bottom padding so
+    // peak/trough labels never clip regardless of signal shape.
+    const W = 900, H = 280;
+    const PAD = { top: 34, right: 24, bottom: 46, left: 52 };
     const pw = W - PAD.left - PAD.right;
     const ph = H - PAD.top  - PAD.bottom;
 
     const tMin = Math.min(...t), tMax = Math.max(...t);
+    const flashT = tMin + preMs; // absolute time of flash onset
     const ampMin = Math.min(...sig), ampMax = Math.max(...sig);
-    const ampPad = (ampMax - ampMin) * 0.12 || 10;
-    const yLo = ampMin - ampPad, yHi = ampMax + ampPad;
+    const ampPadBot = (ampMax - ampMin) * 0.7 || 10;
+    const ampPadTop = (ampMax - ampMin) * 0.75 || 10;
+    const yLo = ampMin - ampPadBot, yHi = ampMax + ampPadTop;
 
     function tx(v) { return PAD.left + (v - tMin) / (tMax - tMin) * pw; }
     function ty(v) { return PAD.top  + (1 - (v - yLo) / (yHi - yLo)) * ph; }
+    function relMs(tAbs) { return tAbs - flashT; } // flash-relative ms, ISCEV convention
 
     let html = '';
 
     // Pre-stimulus shaded region
-    const xFlash = tx(preMs);
+    const xFlash = tx(flashT);
     html += `<rect x="${PAD.left}" y="${PAD.top}" width="${xFlash - PAD.left}"
                height="${ph}" fill="rgba(255,255,255,0.04)" rx="2"/>`;
 
@@ -2472,11 +2621,22 @@
     html += `<line x1="${PAD.left}" y1="${y0}" x2="${PAD.left+pw}" y2="${y0}"
                stroke="rgba(255,255,255,0.12)" stroke-width="1" stroke-dasharray="4,4"/>`;
 
-    // Flash onset line
+    // Vertical measurement gridlines every 50ms, FLASH-RELATIVE, unlabeled —
+    // a visual ruler so any feature's approximate timing can be read off.
+    let tick0 = Math.ceil(relMs(tMin) / 50) * 50;
+    for (let m = tick0; m <= relMs(tMax); m += 50) {
+      const xAbs = flashT + m;
+      if (xAbs < tMin || xAbs > tMax) continue;
+      const gx = tx(xAbs);
+      html += `<line x1="${gx}" y1="${PAD.top}" x2="${gx}" y2="${PAD.top+ph}"
+                 stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`;
+    }
+
+    // Flash onset line — this IS t=0 on the displayed axis
     html += `<line x1="${xFlash}" y1="${PAD.top}" x2="${xFlash}" y2="${PAD.top+ph}"
                stroke="#e74c3c" stroke-width="1.2" stroke-dasharray="5,4" opacity="0.85"/>`;
     html += `<text x="${xFlash+4}" y="${PAD.top+11}" fill="#e74c3c"
-               font-size="9" font-family="monospace" opacity="0.85">Flash</text>`;
+               font-size="9" font-family="monospace" opacity="0.85">Flash (0ms)</text>`;
 
     // OP signal (dashed amber, drawn first so main signal overlays)
     if (op && op.length === sig.length) {
@@ -2498,33 +2658,113 @@
     }
     html += `<path d="${path}" fill="none" stroke="#4ecdc4" stroke-width="1.6" opacity="0.95"/>`;
 
-    // Annotate a-wave trough
-    const aAmp = features.a_wave_amplitude_uv;
+    // Helper: sample the actual recorded signal value nearest to time t.
+    // Never use a derived/clinical distance (e.g. b_wave_amplitude_uv) as a
+    // y-coordinate — only the real trace value guarantees the dot sits on
+    // the visible signal. See erg_report_generator.py _sample_at() — keep
+    // both implementations identical.
+    function sampleAt(time, ms) {
+      if (ms <= time[0]) return sig[0];
+      if (ms >= time[time.length - 1]) return sig[sig.length - 1];
+      let lo = 0, hi = time.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (time[mid] < ms) lo = mid + 1; else hi = mid;
+      }
+      return sig[lo];
+    }
+
+    // Label with NO background fill (fully transparent, per design
+    // feedback) -- relies on explicit placement choices to avoid covering
+    // the trace, mirroring the PDF renderer.
+    function labeled(x, y, text, color, anchor) {
+      anchor = anchor || 'start';
+      html += `<text x="${x}" y="${y}" fill="${color}" font-size="9"
+                 font-family="monospace" text-anchor="${anchor}">${text}</text>`;
+    }
+
+    // Annotate a-wave trough — dot placed at the REAL sampled trace value
     const aImp = features.a_wave_implicit_time_ms;
-    if (aAmp != null && aImp != null) {
-      const ax = tx(preMs + aImp), ay = ty(aAmp);
-      html += `<circle cx="${ax}" cy="${ay}" r="4" fill="none" stroke="#e74c3c" stroke-width="1.5"/>`;
-      html += `<text x="${ax}" y="${ay - 7}" fill="#e74c3c" font-size="9"
-                 font-family="monospace" text-anchor="middle">a ${aAmp.toFixed(0)}µV</text>`;
-      // implicit time tick on x-axis
-      html += `<line x1="${ax}" y1="${PAD.top+ph}" x2="${ax}" y2="${PAD.top+ph+5}"
+    let aX = null, aY = null, aRaw = null;
+    if (aImp != null) {
+      aRaw = sampleAt(t, preMs + aImp);
+      aX = tx(preMs + aImp); aY = ty(aRaw);
+      html += `<circle cx="${aX}" cy="${aY}" r="4" fill="none" stroke="#e74c3c" stroke-width="1.5"/>`;
+      let aLy = aY + 9;
+      if (aLy > PAD.top + ph - 4) aLy = aY - 16;
+      labeled(aX - 6, aLy, `a-trough ${aRaw.toFixed(0)}µV`, '#e74c3c', 'end');
+      html += `<line x1="${aX}" y1="${PAD.top+ph}" x2="${aX}" y2="${PAD.top+ph+5}"
                  stroke="#e74c3c" stroke-width="1" opacity="0.7"/>`;
-      html += `<text x="${ax}" y="${PAD.top+ph+14}" fill="#e74c3c" font-size="8"
+      html += `<text x="${aX}" y="${PAD.top+ph+14}" fill="#e74c3c" font-size="8"
                  font-family="monospace" text-anchor="middle">${aImp}ms</text>`;
     }
 
-    // Annotate b-wave peak
+    // Annotate b-wave peak — dot placed at the REAL sampled trace value,
+    // NEVER at ty(bAmp). bAmp (b_wave_amplitude_uv) is a peak-to-trough
+    // DISTANCE, not a height, and is shown only via the bracket below.
     const bAmp = features.b_wave_amplitude_uv;
     const bImp = features.b_wave_implicit_time_ms;
-    if (bAmp != null && bImp != null) {
-      const bx = tx(preMs + bImp), by = ty(bAmp);
-      html += `<circle cx="${bx}" cy="${by}" r="4" fill="none" stroke="#2ecc71" stroke-width="1.5"/>`;
-      html += `<text x="${bx}" y="${by - 7}" fill="#2ecc71" font-size="9"
-                 font-family="monospace" text-anchor="middle">b ${bAmp.toFixed(0)}µV</text>`;
-      html += `<line x1="${bx}" y1="${PAD.top+ph}" x2="${bx}" y2="${PAD.top+ph+5}"
+    let bX = null, bY = null, bRaw = null;
+    if (bImp != null) {
+      bRaw = sampleAt(t, preMs + bImp);
+      bX = tx(preMs + bImp); bY = ty(bRaw);
+      html += `<circle cx="${bX}" cy="${bY}" r="4" fill="none" stroke="#2ecc71" stroke-width="1.5"/>`;
+      let bLy = bY - 12;
+      if (bLy < PAD.top + 4) bLy = bY + 18;
+      labeled(bX, bLy, `b-peak ${bRaw.toFixed(0)}µV`, '#2ecc71', 'middle');
+      html += `<line x1="${bX}" y1="${PAD.top+ph}" x2="${bX}" y2="${PAD.top+ph+5}"
                  stroke="#2ecc71" stroke-width="1" opacity="0.7"/>`;
-      html += `<text x="${bx}" y="${PAD.top+ph+14}" fill="#2ecc71" font-size="8"
+      html += `<text x="${bX}" y="${PAD.top+ph+14}" fill="#2ecc71" font-size="8"
                  font-family="monospace" text-anchor="middle">${bImp}ms</text>`;
+    }
+
+    // Annotate PhNR (Photopic Negative Response) — only drawn when a real
+    // measured timestamp is supplied (features.phnr_implicit_time_ms).
+    // Never fabricated: omitted entirely if the pipeline hasn't provided one.
+    const pAmp = features.phnr_amp_uv;
+    const pImp = features.phnr_implicit_time_ms;
+    if (pImp != null && pAmp != null) {
+      const pRaw = sampleAt(t, preMs + pImp);
+      const pX = tx(preMs + pImp), pY = ty(pRaw);
+      html += `<circle cx="${pX}" cy="${pY}" r="4" fill="none" stroke="#a86ddb" stroke-width="1.5"/>`;
+      // Always placed BELOW the dot -- "above" can collide with the
+      // B-Wave Amp bracket when PhNR sits close in time to the b-peak.
+      let pLy = pY + 16;
+      if (pLy > PAD.top + ph - 4) pLy = pY - 10;
+      labeled(pX + 6, pLy, `PhNR ${pRaw.toFixed(0)}µV`, '#a86ddb', 'middle');
+      html += `<line x1="${pX}" y1="${PAD.top+ph}" x2="${pX}" y2="${PAD.top+ph+5}"
+                 stroke="#a86ddb" stroke-width="1" opacity="0.7"/>`;
+      html += `<text x="${pX}" y="${PAD.top+ph+14}" fill="#a86ddb" font-size="8"
+                 font-family="monospace" text-anchor="middle">${pImp}ms</text>`;
+    }
+
+    // ISCEV-style bracket for the derived clinical B-Wave Amplitude
+    // (a-trough to b-peak distance). The bracket's LEG sits at the
+    // a-trough's own x-position, and its LABEL is placed in the
+    // pre-stimulus shaded region -- the one part of the chart guaranteed
+    // to contain no waveform data -- instead of to the right, where it
+    // used to cover the post-peak decay and PhNR marker.
+    if (bAmp != null && aY != null && bY != null && aX != null) {
+      const bracketX = aX;
+      const yLo2 = Math.min(aY, bY), yHi2 = Math.max(aY, bY);
+      html += `<line x1="${bracketX}" y1="${yLo2}" x2="${bracketX}" y2="${yHi2}"
+                 stroke="rgba(255,255,255,0.55)" stroke-width="1"/>`;
+      html += `<line x1="${bracketX-3}" y1="${yLo2}" x2="${bracketX+3}" y2="${yLo2}"
+                 stroke="rgba(255,255,255,0.55)" stroke-width="1"/>`;
+      html += `<line x1="${bracketX-3}" y1="${yHi2}" x2="${bracketX+3}" y2="${yHi2}"
+                 stroke="rgba(255,255,255,0.55)" stroke-width="1"/>`;
+      // Fixed near the top of the shaded pre-stimulus region rather than
+      // the bracket's vertical midpoint -- the midpoint can coincide with
+      // the flat pre-stimulus baseline trace itself, which caused the
+      // label to render directly on top of the signal in some cases.
+      const labelY = PAD.top + 18;
+      const labelText = `B-Wave Amp ${bAmp.toFixed(1)}µV`;
+      const labelXEnd = xFlash - 6; // right-aligned, just before the flash line
+      html += `<line x1="${Math.min(labelXEnd + 4, bracketX - 4)}" y1="${labelY}"
+                 x2="${bracketX - 4}" y2="${labelY}"
+                 stroke="rgba(255,255,255,0.4)" stroke-width="0.8" stroke-dasharray="2,2"/>`;
+      html += `<text x="${labelXEnd}" y="${labelY+3}" fill="rgba(255,255,255,0.85)"
+                 font-size="9" font-family="monospace" font-weight="bold" text-anchor="end">${labelText}</text>`;
     }
 
     // Y-axis labels (µV)
@@ -2541,9 +2781,13 @@
                font-family="monospace" text-anchor="middle"
                transform="rotate(-90,10,${H/2})">µV</text>`;
 
-    // X-axis label
-    html += `<text x="${PAD.left + pw/2}" y="${H-4}" fill="rgba(255,255,255,0.35)"
-               font-size="8" font-family="monospace" text-anchor="middle">Time (ms)</text>`;
+    // X-axis: flash-relative endpoint labels + axis title
+    html += `<text x="${PAD.left}" y="${PAD.top+ph+28}" fill="rgba(255,255,255,0.35)"
+               font-size="8" font-family="monospace" text-anchor="start">${relMs(tMin).toFixed(0)}</text>`;
+    html += `<text x="${PAD.left+pw}" y="${PAD.top+ph+28}" fill="rgba(255,255,255,0.35)"
+               font-size="8" font-family="monospace" text-anchor="end">${relMs(tMax).toFixed(0)}</text>`;
+    html += `<text x="${PAD.left + pw/2}" y="${PAD.top+ph+28}" fill="rgba(255,255,255,0.35)"
+               font-size="8" font-family="monospace" text-anchor="middle">Time (ms, relative to flash)</text>`;
 
     svg.innerHTML = html;
 
@@ -2626,19 +2870,34 @@
     document.getElementById('resGrade').textContent     = audit.grade || '—';
     document.getElementById('resGradeDesc').textContent = audit.description || '';
 
-    // PhNR card — LA 3 only, raw amplitude, no traffic light
+    // PhNR card — LA 3 only, raw amplitude (signed), no traffic light
     const phnrCard     = document.getElementById('resPhnrCard');
+    const phnrWarning  = document.getElementById('resPhnrWarning');
+    const phnrValueEl  = document.getElementById('resPhnr');
     const phnrRaw      = (data.features || {}).phnr_amp_uv;
+    const phnrAtypical = (data.features || {}).phnr_polarity_atypical === true;
     const protocolUsed = (data.features || {}).protocol || '';
     if (protocolUsed === 'LA 3') {
       if (phnrRaw != null && !isNaN(phnrRaw)) {
-        document.getElementById('resPhnr').textContent = '−' + Number(phnrRaw).toFixed(1) + ' µV';
+        // phnr_amp_uv is now signed at source (v2.4.1): negative = typical
+        // below-baseline deflection, positive = atypical above-baseline.
+        // Number().toFixed() already supplies the minus sign for negative
+        // values; an explicit '+' is added for positive values so the
+        // direction is never ambiguous.
+        const signedVal = Number(phnrRaw);
+        const sign = signedVal > 0 ? '+' : '';
+        phnrValueEl.textContent = sign + signedVal.toFixed(1) + ' µV';
+        phnrValueEl.style.color = phnrAtypical ? 'var(--red)' : '';
+        phnrWarning.style.display = phnrAtypical ? '' : 'none';
       } else {
-        document.getElementById('resPhnr').textContent = 'Not detected';
+        phnrValueEl.textContent = 'Not detected';
+        phnrValueEl.style.color = '';
+        phnrWarning.style.display = 'none';
       }
       phnrCard.style.display = '';
     } else {
       phnrCard.style.display = 'none';
+      phnrWarning.style.display = 'none';
     }
 
     // Draw waveform
@@ -2648,6 +2907,14 @@
   ergForm.addEventListener('submit', async function(e) {
     e.preventDefault();
     clearAlerts();
+
+    if (!validateRecordingDate(true)) {
+      const dateField = document.getElementById('recordingDate');
+      showError('Recording date is missing or invalid. Please correct the highlighted field before continuing.');
+      dateField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      dateField.focus();
+      return;
+    }
 
     const flashVal = parseFloat(flashInput.value);
     if (isNaN(flashVal) || flashVal < 0) {
@@ -2685,13 +2952,14 @@
     const formData = new FormData();
     formData.append('file',           fileToUpload);
     formData.append('patient_id',     pid || 'UNKNOWN');
+    formData.append('recording_date', document.getElementById('recordingDate').value);
     formData.append('age_group',      document.getElementById('ageGroup').value);
     formData.append('protocol',       document.querySelector('input[name="protocol"]:checked').value);
     formData.append('electrode_type', document.querySelector('input[name="electrode"]:checked').value);
     formData.append('pre_stimulus_ms',document.getElementById('preStimulus').value);
     formData.append('flash_duration_ms', flashInput.value);
     formData.append('apply_notch',    document.getElementById('notchToggle').checked ? 'true' : 'false');
-    formData.append('notch_consent',  document.getElementById('notchConsent').checked ? 'true' : 'false');
+    formData.append('notch_consent',  document.getElementById('notchToggle').checked ? 'true' : 'false');
     formData.append('extract_ops',    document.getElementById('opToggle').checked ? 'true' : 'false');
 
     submitBtn.disabled = true;
@@ -2742,8 +3010,38 @@
     }
   });
 
-  document.getElementById('printReport').addEventListener('click', function() {
-    window.print();
+  document.getElementById('downloadClinicalPdf').addEventListener('click', async function() {
+    if (!window._lastResult) { showError('No result available. Please run an analysis first.'); return; }
+    const fhir = window._lastResult.fhir_observation;
+    const reportId = fhir && fhir.id;
+    if (!reportId) { showError('Report ID not available in this result.'); return; }
+
+    const btn = this;
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Generating PDF…';
+
+    try {
+      const response = await fetch('/api/v1/report-pdf/' + encodeURIComponent(reportId));
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        showError(err.message || 'Could not generate the clinical PDF (HTTP ' + response.status + ').');
+        return;
+      }
+      const blob = await response.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'ERG_Clinical_Report_' + reportId + '.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      showSuccess('Clinical PDF report downloaded.');
+    } catch (err) {
+      showError('Could not reach the server to generate the PDF. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
   });
 
   document.getElementById('runAnother').addEventListener('click', function() {
@@ -2753,6 +3051,14 @@
     uploadZone.classList.remove('has-file');
     resultPanel.classList.remove('visible');
     clearAlerts();
+
+    // Clinical safety: recording date must be re-entered for every new
+    // recording, never silently carried over from the previous analysis.
+    const dateField = document.getElementById('recordingDate');
+    dateField.value = '';
+    dateField.classList.remove('field-invalid');
+    document.getElementById('recordingDateError').classList.remove('visible');
+
     updateSubmit();
     const uploadSection = document.getElementById('upload');
     uploadSection.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -2815,10 +3121,25 @@
         const proto = (ft.protocol || '');
         if (proto !== 'LA 3') return [];
         const pv = ft.phnr_amp_uv;
-        const pvStr = (pv != null && !isNaN(pv))
-          ? '−' + Number(pv).toFixed(1) + ' µV'
-          : 'Not detected';
-        return ['PhNR amplitude  : ' + pvStr + '  [LA 3 — ref. range under development]'];
+        const atypical = ft.phnr_polarity_atypical === true;
+        // phnr_amp_uv is signed at source (v2.4.1): negative = typical
+        // below-baseline deflection, positive = atypical above-baseline.
+        let pvStr = 'Not detected';
+        if (pv != null && !isNaN(pv)) {
+          const sign = pv > 0 ? '+' : '';
+          pvStr = sign + Number(pv).toFixed(1) + ' µV';
+        }
+        const lines = ['PhNR amplitude  : ' + pvStr + '  [LA 3 — ref. range under development]'];
+        if (atypical) {
+          lines.push('  *** DATA QUALITY WARNING: atypical positive polarity ***');
+          lines.push('  PhNR is defined as a negative deflection in all published normative and');
+          lines.push('  pathological data. A positive reading is NOT a valid alternate clinical');
+          lines.push('  state. Likely causes: electrode polarity inversion, baseline drift/noise,');
+          lines.push('  or another feature (b-wave tail / i-wave / OP ringing) dominating the');
+          lines.push('  search window instead of a true PhNR. Verify electrode connection and');
+          lines.push('  signal quality before clinical interpretation.');
+        }
+        return lines;
       })()),
       '',
       '── LAYER 3: SIGNAL QUALITY AUDIT ───────────────────────────────────',
