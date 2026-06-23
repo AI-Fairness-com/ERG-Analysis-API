@@ -12,10 +12,14 @@ import tempfile
 import traceback
 import importlib.util
 import threading
+import uuid
+from collections import OrderedDict
 
 import numpy as np
 from flask import Flask, request, Response, send_file
 from flask_cors import CORS
+
+from erg_report_generator import generate_clinical_report_pdf
 
 # ── 0. JSON encoder that handles all numpy / Python types ─────────────────────
 
@@ -127,6 +131,48 @@ CORS(app)
 
 PIPELINE_TIMEOUT_S = 60
 
+# ── Result cache for PDF report generation (Option B) ─────────────────────
+# Stores the last N analysis results in memory, keyed by report_id, so the
+# "Download Clinical PDF" button can produce a PDF identical to the result
+# the user is currently looking at, without re-uploading the CSV. This is a
+# local, single-user demo server — a simple bounded dict is sufficient.
+RESULT_CACHE = OrderedDict()
+RESULT_CACHE_MAX = 20  # oldest entries evicted beyond this
+
+
+def _cache_put(report_id, full_report, waveform, meta):
+    RESULT_CACHE[report_id] = {
+        "full_report": full_report,
+        "waveform": waveform,
+        "meta": meta,
+        "ts": time.time(),
+    }
+    RESULT_CACHE.move_to_end(report_id)
+    while len(RESULT_CACHE) > RESULT_CACHE_MAX:
+        RESULT_CACHE.popitem(last=False)
+
+
+def _format_recording_date(date_str):
+    """
+    Validate and format the recording_date form field for clinical display.
+    The HTML <input type="date"> guarantees YYYY-MM-DD or empty string on
+    submission in any standards-compliant browser, but this is server-side
+    state that ends up in a clinical PDF — it must never trust the client
+    alone. Returns a human-readable date string, or a clear placeholder
+    if the value is missing, malformed, or in the future.
+    """
+    from datetime import datetime as _dt
+
+    if not date_str:
+        return "Not provided"
+    try:
+        parsed = _dt.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        return "Invalid date submitted"
+    if parsed.date() > _dt.now().date():
+        return "Invalid date submitted (future date)"
+    return parsed.strftime("%d %B %Y")
+
 
 @app.route("/", methods=["GET"])
 def serve_ui():
@@ -150,6 +196,7 @@ def analyse():
 
     csv_file        = request.files["file"]
     patient_id      = request.form.get("patient_id", "UNKNOWN")
+    recording_date  = request.form.get("recording_date", "")  # YYYY-MM-DD from HTML date input
     age_group       = request.form.get("age_group",  "≤35y")   # Baker stratum
     protocol        = request.form.get("protocol",   "DA 3")
     electrode_type  = request.form.get("electrode_type", "contact_lens")
@@ -289,6 +336,42 @@ def analyse():
                 },
             })
 
+            # Cache for on-demand PDF generation (Option B — see RESULT_CACHE above).
+            # Use the FHIR observation id as the cache key; the front end already
+            # has access to this via window._lastResult.fhir_observation.id.
+            report_id = fhir_observation.get("id")
+            if report_id:
+                a_wave_t = None
+                b_wave_t = None
+                if features.get("a_wave_implicit_time_ms") is not None:
+                    a_wave_t = pre_stimulus_ms + features["a_wave_implicit_time_ms"]
+                if features.get("b_wave_implicit_time_ms") is not None:
+                    b_wave_t = pre_stimulus_ms + features["b_wave_implicit_time_ms"]
+
+                cache_waveform = sanitise({
+                    "time_ms":         waveform_t,
+                    "amplitude_uv":    waveform_sig,
+                    "op_signal":       waveform_op,
+                    "pre_stimulus_ms": pre_stimulus_ms,
+                    "fs_hz":           float(fs_hz),
+                    "a_wave": (
+                        {"time_ms": a_wave_t, "amp_uv": features.get("a_wave_amplitude_uv")}
+                        if a_wave_t is not None else None
+                    ),
+                    "b_wave": (
+                        {"time_ms": b_wave_t, "amp_uv": features.get("b_wave_amplitude_uv")}
+                        if b_wave_t is not None else None
+                    ),
+                })
+                cache_meta = {
+                    "patient_id":   patient_id,
+                    "age_stratum":  age_group,
+                    "protocol":     protocol,
+                    "electrode":    electrode_type,
+                    "recording_date": _format_recording_date(recording_date),
+                }
+                _cache_put(report_id, result["data"], cache_waveform, cache_meta)
+
         except Exception as exc:
             error["exc"] = str(exc)
             error["tb"]  = traceback.format_exc()
@@ -316,6 +399,62 @@ def analyse():
         return safe_jsonify({"message": error["exc"]}, 500)
 
     return safe_jsonify(result["data"], 200)
+
+
+@app.route("/api/v1/report-pdf/<report_id>", methods=["GET"])
+def report_pdf(report_id):
+    """
+    Generate and return the professional clinical PDF report for a previously
+    analysed recording. Relies on RESULT_CACHE populated by /api/v1/analyse —
+    see Option B in the report-redesign discussion: the PDF reflects exactly
+    what the user saw on screen, with no re-upload required.
+    """
+    cached = RESULT_CACHE.get(report_id)
+    if cached is None:
+        return safe_jsonify({
+            "message": (
+                "No cached result found for this report. Results are kept in "
+                "memory only and are cleared on server restart, or evicted "
+                "once more than 20 newer analyses have been run. Please "
+                "re-run the analysis and download the PDF again."
+            )
+        }, 404)
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            pdf_path = tmp.name
+
+        generate_clinical_report_pdf(
+            pdf_path,
+            cached["full_report"],
+            cached["waveform"],
+            cached["meta"],
+        )
+
+        safe_patient = "".join(
+            c for c in str(cached["meta"].get("patient_id", "UNKNOWN"))
+            if c.isalnum() or c in ("-", "_")
+        ) or "UNKNOWN"
+        download_name = f"ERG_Clinical_Report_{safe_patient}_{report_id}.pdf"
+
+        response = send_file(
+            pdf_path,
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=download_name,
+        )
+        # Clean up the temp file once the response has been sent.
+        @response.call_on_close
+        def _cleanup():
+            try:
+                os.remove(pdf_path)
+            except OSError:
+                pass
+        return response
+
+    except Exception as exc:
+        traceback.print_exc()
+        return safe_jsonify({"message": f"PDF generation failed: {exc}"}, 500)
 
 
 # ── 3. Entry point ────────────────────────────────────────────────────────────
