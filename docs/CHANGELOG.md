@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.4.0] — 2026-06-18
 
 PhNR display release. Pipeline file and HTML renamed to match version.
-No new synthetic validation scenarios introduced; v2.3.2 13/13 pass inherited.
+Comprehensive 41-case synthetic validation completed 23 June 2026 — 30/41 PASS (conditional).
+All 11 non-pass outcomes attributable to CSV generator calibration defects; zero API pipeline bugs identified.
+v2.3.2 13/13 pass also inherited.
 
 ### Added
 
@@ -60,6 +62,18 @@ No new synthetic validation scenarios introduced; v2.3.2 13/13 pass inherited.
 - Early Glaucoma demo (LA 3, Gold Foil, 36–59y): PhNR card visible, `−9.3 µV`
   displayed, no Z-score assigned, traffic light driven by b-wave implicit time
   Z = +4.05 (RED) — PhNR correctly excluded from traffic light logic ✅
+  - **Comprehensive synthetic validation — Run 1 (22 Jun 2026):** 41 synthetic CSVs covering
+  all five ISCEV 2022 protocols (DA 0.01, DA 3, DA 10, LA 3, LA 30 Hz), three Baker et al.
+  (2025) age strata (≤35y, 36–59y, ≥60y), four electrode types (Gold Foil, DTL, ERG-Jet,
+  HK-Loop), six disease patterns, seven boundary Z-score cases, and four signal quality /
+  artefact scenarios. Result: 11/41 PASS. Generator defects G1–G5 and test-run error T2
+  identified. Zero API pipeline bugs. ⚠️ CONDITIONAL
+- **Comprehensive synthetic validation — Run 2 (23 Jun 2026):** 30 corrected CSVs generated
+  by `ERG_CSV_Generator_v2_4_corrected.py` (fixes: G1 b_abs calibration, G2 LA3 b_w, G3
+  flicker model, G4 DA001 amplitude, G5 ≥60y a_IT). Combined two-run result: 30/41 PASS.
+  Outstanding generator defects: G3 LA 30Hz flicker model, G6 DA10 a_IT norms, G7 LA3 a_IT
+  norms, A1 Grade D noise model. Full audit: `validation/VALIDATION_REPORT_v2_4_0_FINAL.docx`.
+  OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42 ⚠️ CONDITIONAL
 
 ---
 
