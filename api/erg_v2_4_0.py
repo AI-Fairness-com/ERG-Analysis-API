@@ -920,6 +920,34 @@ class ERGFeatureExtractor:
 
         features = {'protocol': protocol}
 
+        # ── Step 2.5: Signal orientation auto-detection ──────────────────
+        # ISCEV physiology: the a-wave is a negative deflection and the
+        # b-wave is positive. Some recording systems invert the amplifier
+        # output, producing a mirror-image waveform. Detect this by summing
+        # the post-stimulus signal in the 0–30 ms window: if the sum is
+        # positive (dominant positive peak where the a-trough should be),
+        # the signal polarity is inverted. Multiply by -1 to correct, and
+        # set the audit flag for Layer 4 and FHIR reporting.
+        #
+        # The 0–30 ms window is chosen because:
+        #   - It covers the a-wave trough for all five ISCEV protocols
+        #   - It precedes the b-wave peak (≥28 ms for all protocols)
+        #   - Pre-stimulus samples are excluded (flash_onset_sample offset)
+        #
+        # Traffic light is NOT affected by this correction. An AMBER
+        # annotation is added to the Layer 4 audit output only.
+        inverted_polarity_detected = False
+        post_stim_signal = signal[flash_onset_sample:]
+        window_30ms_samples = min(int(30.0 * fs_hz / 1000), len(post_stim_signal))
+
+        if window_30ms_samples > 0:
+            window_sum = float(np.sum(post_stim_signal[:window_30ms_samples]))
+            if window_sum > 0:
+                signal = signal * -1.0
+                inverted_polarity_detected = True
+
+        features['inverted_polarity_detected'] = inverted_polarity_detected
+
 
         awave_bwave = self.extract_awave_bwave(signal, fs_hz, protocol, flash_onset_sample, flash_duration_ms)
         features.update(awave_bwave)
@@ -1492,6 +1520,14 @@ class ERGReportGenerator:
                 'zscore_available'   : electrode in ZSCORE_SUPPORTED_ELECTRODES,
                 'filter_log'         : filter_log,
                 'processing_time_ms' : processing_time_ms,
+                # ── Step 2.5: Signal orientation audit flag ──────────
+                'inverted_polarity_detected': features.get(
+                    'inverted_polarity_detected', False),
+                'inverted_polarity_warning': (
+                    'Inverted polarity detected and corrected automatically. '
+                    'Verify recording electrode orientation before clinical use.'
+                    if features.get('inverted_polarity_detected', False) else None
+                ),
             },
         }
 
@@ -2498,6 +2534,18 @@ class ERGFHIRGenerator:
                         "text": note_text
                     }]
                 })
+
+        # ── Step 2.5: FHIR note for inverted polarity ────────────────────
+        if features.get('inverted_polarity_detected', False):
+            observation.setdefault('note', []).append({
+                "text": (
+                    "Signal orientation auto-correction applied: dominant positive "
+                    "deflection detected in 0-30 ms post-stimulus window, indicating "
+                    "inverted amplifier polarity. Signal multiplied by -1 prior to "
+                    "feature extraction. Verify electrode orientation before clinical use. "
+                    "ERG Analysis API v2.4.0 Step 2.5."
+                )
+            })
 
         return observation
 
