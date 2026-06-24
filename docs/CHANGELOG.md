@@ -58,13 +58,14 @@ v2.3.2 13/13 pass also inherited.
   Gold Foil + broadband LA 3 stimulus in published literature as of June 2026;
   see Frishman et al. 2018 ISCEV extended protocol)
 
-### Validation
+### Tier 1 — Synthetic Validation (22–23 June 2026)
 
 - Early DR demo (DA 3, Gold Foil, ≤35y): 13/13 inherited pass confirmed ✅
 - Early Glaucoma demo (LA 3, Gold Foil, 36–59y): PhNR card visible, `−9.3 µV`
   displayed, no Z-score assigned, traffic light driven by b-wave implicit time
   Z = +4.05 (RED) — PhNR correctly excluded from traffic light logic ✅
-  - **Comprehensive synthetic validation — Run 1 (22 Jun 2026):** 41 synthetic CSVs covering
+  
+- **Comprehensive synthetic validation — Run 1 (22 Jun 2026):** 41 synthetic CSVs covering
   all five ISCEV 2022 protocols (DA 0.01, DA 3, DA 10, LA 3, LA 30 Hz), three Baker et al.
   (2025) age strata (≤35y, 36–59y, ≥60y), four electrode types (Gold Foil, DTL, ERG-Jet,
   HK-Loop), six disease patterns, seven boundary Z-score cases, and four signal quality /
@@ -76,7 +77,6 @@ v2.3.2 13/13 pass also inherited.
   Outstanding generator defects: G3 LA 30Hz flicker model, G6 DA10 a_IT norms, G7 LA3 a_IT
   norms, A1 Grade D noise model. Full audit: `validation/VALIDATION_REPORT_v2_4_0_FINAL.pdf`.
   OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42 ⚠️ CONDITIONAL
-
 - **Comprehensive synthetic validation — Run 3 (23 Jun 2026):** 10 corrected CSVs submitted
   (`ERG_CSV_Generator_v2_4_2.py`, fixes: G6 DA10 a_it, G7 LA3 a_it for le35/36to59/dtl,
   A1/S03 DA3 ge60 a_it). Result: 7/10 PASS. Cumulative: 37/41. Remaining failures:
@@ -95,6 +95,39 @@ v2.3.2 13/13 pass also inherited.
 - Generator: `ERG_CSV_Generator_v2_4_2.py` — all defects G1–G7 and A1/S03 RESOLVED
 - Report: `VALIDATION_REPORT_v2_4_0_COMPLETE.docx` committed to `/validation/`
 - OSF pre-registration updated: https://doi.org/10.17605/OSF.IO/6WA42
+
+### Tier 2 — Code Hardening (24 June 2026)
+
+- **[T2-A]** Normative data externalised from hardcoded dict to
+  `data/normative_data_baker2025.json` (schema_version 1.0, 96 µ/σ entries,
+  Baker et al. 2025 DOI 10.1007/s10633-025-10009-2). Pipeline loads via
+  Colab-safe `_find_norm_json()` with three-candidate path search
+  (`__file__`-relative, cwd/data/, cwd flat); raises `FileNotFoundError`
+  with full path list if not found.
+- **[T2-B/T2-F]** pytest suite added: `tests/conftest.py`,
+  `tests/test_pipeline.py` (14 tests: T-CSV-01/02, T-FILT-01, T-WAVE-01/02,
+  T-ZSCORE-01/02, T-TL-01/02, T-FHIR-01/02, T-DTL-01, T-ORIENT-01/02,
+  T-ELEC-01), `tests/test_regression.py` (8 tests: T-REG-01–08 anchored to
+  `S_Normal_DA3_GoldFoil_le35.csv`). 23/23 PASS · 0.06s.
+- **[T2-C]** DTL Deming regression correction implemented. Baker (2025)
+  Table 2 coefficients loaded from `electrode_transform` block in normative
+  JSON. `_apply_dtl_transform()` applies inversion
+  `GFE_equiv = (STE − intercept) / slope` for amplitude parameters when
+  `electrode == dtl_fiber`. Peak times transferred without adjustment per
+  paper (bias ≤ 1.6 ms, slope ~1 for all components).
+- **[T2-D]** Signal orientation auto-detection added to `extract_all_features()`.
+  Sums post-stimulus signal in 0–30 ms window; if sum > 0, multiplies signal
+  by −1 and sets `inverted_polarity_detected = True`. **Protocol restriction:**
+  DA 0.01, DA 3, DA 10 only — LA 3 and LA 30 Hz explicitly skipped (b-wave
+  rising flank dominates 0–30 ms window in normal photopic signals, producing
+  false positives). Layer 4 warning and FHIR note added when flag fires.
+- **[T2-E]** ISCEV post-stimulus fix: `ERG_CSV_Generator_v2_4_2.py`
+  `TOTAL_MS` extended from 300 → 350 ms (50 ms pre + 300 ms post, ISCEV 2022
+  minimum). N_SAMPLES 600 → 700. Verification harness updated to expect 700
+  samples / 349.5 ms. DTL generator amplitude entries (seeds 80, 81) scaled to
+  STE scale using Baker Table 2 Deming forward transform so pipeline inversion
+  returns GF-equivalent and Z ≈ 0. Re-validation 30/30 PASS; all submissions
+  show `Post-stimulus OK: true (300 ms)`.
 ---
 
 ## [2.3.2] — 2026-06-16
