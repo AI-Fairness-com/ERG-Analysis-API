@@ -15,7 +15,7 @@ _*A Practical Guide from Clinical Fundamentals to Intelligent Decision Support*"
 
 **Current Version: 2.4.0** | Release Date: 18 June 2026
 
-- **V2.4.0**: PhNR amplitude extraction added for LA 3 protocol (raw µV, negative sign convention); PhNR displayed in result panel, Layer 2 clinical summary, Layer 4 technical audit, FHIR bundle, and .txt report; PhNR Z-score and traffic light classification deferred pending validated normative dataset; pipeline file renamed to `erg_v2_4_0.py`; HTML renamed to `ERG_API_v2_4.html`. Comprehensive 41-case synthetic validation completed 23 June 2026 — 30/41 PASS (conditional); all failures attributable to CSV generator calibration defects; zero API pipeline bugs identified. Released 18 June 2026; validation updated 23 June 2026.
+- **V2.4.0**: PhNR amplitude extraction added for LA 3 protocol (raw µV, negative sign convention); PhNR displayed in result panel, Layer 2 clinical summary, Layer 4 technical audit, FHIR bundle, and .txt report; PhNR Z-score and traffic light classification deferred pending validated normative dataset; pipeline file renamed to `erg_v2_4_0.py`; HTML renamed to `ERG_API_v2_4.html`. Comprehensive 41-case synthetic validation completed 23 June 2026 — **41/41 PASS COMPLETE**; all generator defects G1–G7 and A1/S03 resolved in `ERG_CSV_Generator_v2_4_2.py`; zero API pipeline bugs identified. Released 18 June 2026; validation completed 23 June 2026.
 - **V2.3.2**: 18 defects resolved (3 blocking, 2 critical, 6 significant, 5 minor, 2 additional blocking); Baker et al. (2025) N=407 normative data integrated with all 48 µ/σ values verified; electrode gating architecture (Gold Foil and DTL supported; Contact Lens and Skin UNAVAILABLE with positive flag); LA 30 Hz b-wave extraction bug fixed; synthetic validation 13/13 passed; external validation cleared. Released 16 June 2026.
 - **V2.3.1**: Initial ISCEV 2022 compliant release; OculusGraphy 2020 technical validation (149 files; 100% success). Released May 2026.
 
@@ -42,9 +42,8 @@ This project provides a complete, reproducible pipeline for:
 | `/tests` | Unit tests for filters, features, and API endpoints |
 | `/docs` | Documentation including CHANGELOG.md and validation reports |
 | `/synthetic_validation` | Synthetic dataset generator and validation manifest (v2.3.2 inherited); v2.4.0 comprehensive 41-case datasets and corrected generator |
-| `/validation` | v2.4.0 validation reports — `VALIDATION_REPORT_v2_4_0_comprehensive.docx` (22 Jun 2026, conditional) and `VALIDATION_REPORT_v2_4_0_FINAL.docx` (23 Jun 2026, supersedes) |
-| **Comprehensive Synthetic v2.4.0 — Run 1** | 41 synthetic CSVs — 5 protocols × 3 age strata × 4 electrodes (22 Jun 2026) | 11/41 PASS — generator defects G1–G5 identified | ⚠️ CONDITIONAL |
-| **Comprehensive Synthetic v2.4.0 — Run 2** | 30 corrected CSVs — `ERG_CSV_Generator_v2_4_corrected.py` (23 Jun 2026) | 30/41 PASS combined — G3/G6/G7/A1 generator defects outstanding; zero API bugs identified | ⚠️ CONDITIONAL |
+| `/validation` | v2.4.0 validation reports — `VALIDATION_REPORT_v2_4_0_COMPLETE.docx` (23 Jun 2026, **41/41 PASS — current**); `VALIDATION_REPORT_v2_4_0_FINAL.docx` (23 Jun 2026, 30/41 conditional, superseded); `VALIDATION_REPORT_v2_4_0_comprehensive.docx` (22 Jun 2026, superseded) |
+| `/synthetic_validation` | Synthetic dataset generators and validation manifests; v2.3.2 inherited (13/13); v2.4.0 comprehensive 41-case dataset — Run 1 (11/41), Run 2 (30/41), Runs 3–5 final (41/41); `ERG_CSV_Generator_v2_4_2.py` (all defects G1–G7 resolved) |
 
 ## Quick Start
 
@@ -65,6 +64,7 @@ This project provides a complete, reproducible pipeline for:
 
 | Validation Type | Dataset | Result | Status |
 |:---|:---|:---|:---|
+| **Synthetic (Internal v2.4.0 — comprehensive)** | 41 cases × 5 protocols × 3 age strata × Gold Foil + DTL | 41/41 PASS | ✅ COMPLETE |
 | **Synthetic (Internal v2.3.2 — inherited by v2.4.0)** | 12 scenarios × 5 protocols × 4 electrode types | 13/13 runs passed | ✅ PASS |
 | **Technical (External)** | OculusGraphy 2020 (n=149) | 100% processing success | ✅ PASS |
 | **Normative integration** | Baker et al. 2025 (N=407) | All 48 µ/σ values verified < 0.02 tolerance | ✅ PASS |
@@ -84,7 +84,7 @@ internal synthetic validation (23 June 2026).
 - Full report: `validation/VALIDATION_REPORT_v2_4_0_COMPLETE.docx`
 - Pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
 
-See `validation/VALIDATION_REPORT_v2_4_0_FINAL.docx` for the full 41-case audit table, root cause analysis, and outstanding actions. OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
+See `validation/VALIDATION_REPORT_v2_4_0_COMPLETE.docx` for the full 41-case audit table, root cause analysis for all generator defects, and Tier 1 sign-off checklist. OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
 
 ## Electrode Support
 
