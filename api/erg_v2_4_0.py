@@ -356,7 +356,8 @@ class ERGAudit:
     def run_full_audit(self, signal_uv: np.ndarray, fs_hz: float,
                        electrode_type: str = 'contact_lens',
                        prestimulus_samples: int = 0,
-                       age_group: str = None) -> Dict[str, Any]:
+                       age_group: str = None,
+                       flash_duration_ms: float = 1.0) -> Dict[str, Any]:
 
         signal_clean = np.nan_to_num(signal_uv)
         prestimulus_ms = prestimulus_samples * 1000.0 / fs_hz if prestimulus_samples > 0 else 0
@@ -364,6 +365,16 @@ class ERGAudit:
 
         total_duration_ms = len(signal_uv) * 1000.0 / fs_hz
         iscev_compliance = validate_iscev_requirements(fs_hz, prestimulus_ms, total_duration_ms)
+        iscev_compliance['flash_duration_ms'] = flash_duration_ms
+        iscev_compliance['flash_duration_noncompliant'] = (
+            flash_duration_ms >= self.config.ISCEV_FLASH_MAX_DURATION_MS
+        )
+        if iscev_compliance['flash_duration_noncompliant']:
+            iscev_compliance['warnings'].append(
+                f"Flash duration {flash_duration_ms:.1f} ms >= ISCEV maximum "
+                f"{self.config.ISCEV_FLASH_MAX_DURATION_MS} ms (Page 4, Col 2, Para 2)"
+            )
+            iscev_compliance['overall_compliant'] = False
         snr_db = calculate_snr(signal_clean, fs_hz, prestimulus_samples)
         snr_status, snr_msg = self.config.get_electrode_snr_status(electrode_type, snr_db)
 
@@ -1095,6 +1106,11 @@ class ERGReportGenerator:
         _norm_path = _find_norm_json()
         with open(_norm_path, "r", encoding="utf-8") as _f:
             _norm = json.load(_f)
+        assert _norm.get("schema_version") == "1.0", (
+            f"Unexpected normative JSON schema version: {_norm.get('schema_version')}. "
+            f"Expected '1.0'. Replace data/normative_data_baker2025.json with the "
+            f"correct v1.0 file or update the pipeline for the new schema."
+        )
 
         # Convert JSON {mu, sigma} dicts back to (mu, sigma) tuples that
         # the rest of the pipeline expects, preserving None for inapplicable
@@ -1123,9 +1139,10 @@ class ERGReportGenerator:
         # Normal range: 1.8–3.5
         # Modelled as mean=2.65, sd=0.425 so that ±2SD ≈ [1.8, 3.5]
         # Applied to DA 3 protocol only; same for both supported electrodes
+        # Loaded from normative_data_baker2025.json ba_ratio block (T3-B F6)
         # ----------------------------------------------------------------
-        self.BA_RATIO_MEAN = 2.65
-        self.BA_RATIO_SD   = 0.425
+        self.BA_RATIO_MEAN = _norm["ba_ratio"]["mean"]
+        self.BA_RATIO_SD   = _norm["ba_ratio"]["sigma"]
 
         # ----------------------------------------------------------------
         # DTL DEMING REGRESSION TRANSFORMS — Tier 2 Step 2.4
@@ -1276,6 +1293,10 @@ class ERGReportGenerator:
             if electrode == 'dtl_fiber':
                 raw_val = abs(self._apply_dtl_transform(protocol, 'a_amp', raw_val))
                 dtl_correction_applied = True
+                # T3-B F4: LA 3 a_amp Deming r²=0.68 is borderline (<0.70)
+                # Flag for Layer 4 audit trail and regulatory transparency
+                if protocol == 'LA 3':
+                    z_scores['_la3_a_amp_dtl_r2_borderline'] = True
             if sd > 0:
                 z_scores['a_wave_amplitude'] = self.calculate_z_score(raw_val, mean, sd)
 
@@ -1443,6 +1464,36 @@ class ERGReportGenerator:
         # ── Z-scores and traffic light ──────────────────────────────
         z_scores      = self.compute_z_scores(features, electrode, protocol, age_years)
         traffic_light = self.generate_traffic_light(z_scores)
+
+        # ── T3-C B4: LA 30 Hz absolute lower-bound floor ────────────
+        # Gaussian ±2SD lower bound for LA 30 Hz b_amp ge60 = 29.8 µV;
+        # any value < 20.0 µV is clinically significant regardless of Z-score
+        # and must not be silently GREEN.
+        if (protocol == 'LA 30 Hz'
+                and traffic_light.get('signal') == 'GREEN'
+                and features.get('b_wave_amplitude_uv') is not None
+                and not isinstance(features.get('b_wave_amplitude_uv'), float)
+                    is False  # guard NaN
+                and features.get('b_wave_amplitude_uv') < 20.0):
+            import math as _math
+            if not _math.isnan(features['b_wave_amplitude_uv']):
+                traffic_light = {
+                    'signal'          : 'AMBER',
+                    'color'           : '🟡',
+                    'message'         : (
+                        f'LA 30 Hz flicker b-wave amplitude '
+                        f'{features["b_wave_amplitude_uv"]:.1f} µV is below the '
+                        f'absolute safety floor of 20.0 µV (T3-C B4). '
+                        f'Clinically significant flicker amplitude reduction; '
+                        f'specialist review recommended.'
+                    ),
+                    'confidence'      : 0.85,
+                    'max_z_score'     : traffic_light.get('max_z_score'),
+                    'worst_parameter' : 'b_wave_amplitude',
+                    'worst_z_score'   : traffic_light.get('worst_z_score'),
+                    '_floor_override' : True,
+                    '_floor_rule'     : 'LA30Hz_b_amp_floor_20uV',
+                }
 
         # ── Key findings (only for supported electrodes) ────────────
         key_findings = []
@@ -2315,7 +2366,8 @@ class ERGFHIRGenerator:
     }
 
     # Custom code system URL
-    ERG_CODE_SYSTEM = "https://github.com/AI-Fairness-com/ERG-Analysis-API/CodeSystem"
+    ERG_CODE_SYSTEM = "https://ai-fairness.com/fhir/CodeSystem/erg-api"
+    ERG_CODE_SYSTEM_VERSION = "2.4.0"
 
     # SNOMED CT codes for interpretation
     SNOMED_INTERPRETATION = {
@@ -2878,7 +2930,8 @@ def run_pipeline(b):
                         signal_uv, fs_hz,
                         electrode_type=electrode_widget.value,
                         prestimulus_samples=prestimulus_samples,
-                        age_group=age_group_widget.value
+                        age_group=age_group_widget.value,
+                        flash_duration_ms=flash_duration_widget.value
                     )
 
                     print(f"✓ Audit complete: Grade {audit_result['quality']['grade']}")
