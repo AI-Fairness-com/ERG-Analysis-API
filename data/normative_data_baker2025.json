@@ -1,0 +1,627 @@
+{
+  "version": "baker2025",
+  "schema_version": "1.0",
+  "doi": "10.1007/s10633-025-10009-2",
+  "citation": "Baker RA, Leo SM, Clowes WIN, et al. ISCEV standard full-field ERG reference limits from 407 healthy subjects. Doc Ophthalmol. 2025;150(2):47-64.",
+  "n_subjects": 407,
+  "age_strata": [
+    "le35",
+    "36to59",
+    "ge60"
+  ],
+  "age_strata_labels": {
+    "le35": "<=35y",
+    "36to59": "36-59y",
+    "ge60": ">=60y"
+  },
+  "electrodes": [
+    "gold_foil",
+    "dtl_fiber"
+  ],
+  "electrode_note": "DTL Fiber currently shares Gold Foil normative values. Deming regression correction (Baker 2025 Table 2) deferred to Tier 2 Step 2.4.",
+  "parameters": [
+    "a_amp",
+    "a_imp",
+    "b_amp",
+    "b_imp"
+  ],
+  "parameter_units": {
+    "a_amp": "uV",
+    "a_imp": "ms",
+    "b_amp": "uV",
+    "b_imp": "ms"
+  },
+  "null_convention": "null indicates parameter not applicable for this protocol",
+  "ba_ratio": {
+    "mean": 2.65,
+    "sigma": 0.425,
+    "protocol": "DA 3",
+    "note": "Normal range 1.8-3.5; modelled as mean=2.65 SD=0.425 so +-2SD approx [1.8,3.5]. DA 3 only."
+  },
+  "protocols": {
+    "DA 0.01": {
+      "gold_foil": {
+        "le35": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 203.85,
+            "sigma": 40.99
+          },
+          "b_imp": {
+            "mu": 84.65,
+            "sigma": 6.17
+          }
+        },
+        "36to59": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 189.48,
+            "sigma": 38.42
+          },
+          "b_imp": {
+            "mu": 90.33,
+            "sigma": 7.6
+          }
+        },
+        "ge60": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 185.53,
+            "sigma": 46.36
+          },
+          "b_imp": {
+            "mu": 97.29,
+            "sigma": 7.81
+          }
+        }
+      },
+      "dtl_fiber": {
+        "le35": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 203.85,
+            "sigma": 40.99
+          },
+          "b_imp": {
+            "mu": 84.65,
+            "sigma": 6.17
+          }
+        },
+        "36to59": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 189.48,
+            "sigma": 38.42
+          },
+          "b_imp": {
+            "mu": 90.33,
+            "sigma": 7.6
+          }
+        },
+        "ge60": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 185.53,
+            "sigma": 46.36
+          },
+          "b_imp": {
+            "mu": 97.29,
+            "sigma": 7.81
+          }
+        }
+      }
+    },
+    "DA 3": {
+      "gold_foil": {
+        "le35": {
+          "a_amp": {
+            "mu": 175.7,
+            "sigma": 30.93
+          },
+          "a_imp": {
+            "mu": 14.98,
+            "sigma": 0.65
+          },
+          "b_amp": {
+            "mu": 281.45,
+            "sigma": 53.29
+          },
+          "b_imp": {
+            "mu": 51.41,
+            "sigma": 3.18
+          }
+        },
+        "36to59": {
+          "a_amp": {
+            "mu": 157.86,
+            "sigma": 31.63
+          },
+          "a_imp": {
+            "mu": 15.69,
+            "sigma": 0.68
+          },
+          "b_amp": {
+            "mu": 272.0,
+            "sigma": 51.91
+          },
+          "b_imp": {
+            "mu": 51.45,
+            "sigma": 2.9
+          }
+        },
+        "ge60": {
+          "a_amp": {
+            "mu": 141.46,
+            "sigma": 35.25
+          },
+          "a_imp": {
+            "mu": 16.08,
+            "sigma": 0.82
+          },
+          "b_amp": {
+            "mu": 259.25,
+            "sigma": 62.43
+          },
+          "b_imp": {
+            "mu": 52.45,
+            "sigma": 3.02
+          }
+        }
+      },
+      "dtl_fiber": {
+        "le35": {
+          "a_amp": {
+            "mu": 175.7,
+            "sigma": 30.93
+          },
+          "a_imp": {
+            "mu": 14.98,
+            "sigma": 0.65
+          },
+          "b_amp": {
+            "mu": 281.45,
+            "sigma": 53.29
+          },
+          "b_imp": {
+            "mu": 51.41,
+            "sigma": 3.18
+          }
+        },
+        "36to59": {
+          "a_amp": {
+            "mu": 157.86,
+            "sigma": 31.63
+          },
+          "a_imp": {
+            "mu": 15.69,
+            "sigma": 0.68
+          },
+          "b_amp": {
+            "mu": 272.0,
+            "sigma": 51.91
+          },
+          "b_imp": {
+            "mu": 51.45,
+            "sigma": 2.9
+          }
+        },
+        "ge60": {
+          "a_amp": {
+            "mu": 141.46,
+            "sigma": 35.25
+          },
+          "a_imp": {
+            "mu": 16.08,
+            "sigma": 0.82
+          },
+          "b_amp": {
+            "mu": 259.25,
+            "sigma": 62.43
+          },
+          "b_imp": {
+            "mu": 52.45,
+            "sigma": 3.02
+          }
+        }
+      }
+    },
+    "DA 10": {
+      "gold_foil": {
+        "le35": {
+          "a_amp": {
+            "mu": 202.99,
+            "sigma": 34.59
+          },
+          "a_imp": {
+            "mu": 11.99,
+            "sigma": 0.98
+          },
+          "b_amp": {
+            "mu": 291.01,
+            "sigma": 50.92
+          },
+          "b_imp": {
+            "mu": 51.82,
+            "sigma": 3.08
+          }
+        },
+        "36to59": {
+          "a_amp": {
+            "mu": 188.6,
+            "sigma": 35.09
+          },
+          "a_imp": {
+            "mu": 12.83,
+            "sigma": 1.07
+          },
+          "b_amp": {
+            "mu": 283.69,
+            "sigma": 50.41
+          },
+          "b_imp": {
+            "mu": 51.94,
+            "sigma": 3.04
+          }
+        },
+        "ge60": {
+          "a_amp": {
+            "mu": 170.81,
+            "sigma": 39.57
+          },
+          "a_imp": {
+            "mu": 13.42,
+            "sigma": 1.09
+          },
+          "b_amp": {
+            "mu": 275.75,
+            "sigma": 62.12
+          },
+          "b_imp": {
+            "mu": 52.21,
+            "sigma": 3.32
+          }
+        }
+      },
+      "dtl_fiber": {
+        "le35": {
+          "a_amp": {
+            "mu": 202.99,
+            "sigma": 34.59
+          },
+          "a_imp": {
+            "mu": 11.99,
+            "sigma": 0.98
+          },
+          "b_amp": {
+            "mu": 291.01,
+            "sigma": 50.92
+          },
+          "b_imp": {
+            "mu": 51.82,
+            "sigma": 3.08
+          }
+        },
+        "36to59": {
+          "a_amp": {
+            "mu": 188.6,
+            "sigma": 35.09
+          },
+          "a_imp": {
+            "mu": 12.83,
+            "sigma": 1.07
+          },
+          "b_amp": {
+            "mu": 283.69,
+            "sigma": 50.41
+          },
+          "b_imp": {
+            "mu": 51.94,
+            "sigma": 3.04
+          }
+        },
+        "ge60": {
+          "a_amp": {
+            "mu": 170.81,
+            "sigma": 39.57
+          },
+          "a_imp": {
+            "mu": 13.42,
+            "sigma": 1.09
+          },
+          "b_amp": {
+            "mu": 275.75,
+            "sigma": 62.12
+          },
+          "b_imp": {
+            "mu": 52.21,
+            "sigma": 3.32
+          }
+        }
+      }
+    },
+    "LA 30 Hz": {
+      "gold_foil": {
+        "le35": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 92.6,
+            "sigma": 29.11
+          },
+          "b_imp": {
+            "mu": 25.5,
+            "sigma": 0.89
+          }
+        },
+        "36to59": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 80.72,
+            "sigma": 22.96
+          },
+          "b_imp": {
+            "mu": 26.0,
+            "sigma": 1.28
+          }
+        },
+        "ge60": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 71.13,
+            "sigma": 20.64
+          },
+          "b_imp": {
+            "mu": 26.45,
+            "sigma": 1.48
+          }
+        }
+      },
+      "dtl_fiber": {
+        "le35": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 92.6,
+            "sigma": 29.11
+          },
+          "b_imp": {
+            "mu": 25.5,
+            "sigma": 0.89
+          }
+        },
+        "36to59": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 80.72,
+            "sigma": 22.96
+          },
+          "b_imp": {
+            "mu": 26.0,
+            "sigma": 1.28
+          }
+        },
+        "ge60": {
+          "a_amp": null,
+          "a_imp": null,
+          "b_amp": {
+            "mu": 71.13,
+            "sigma": 20.64
+          },
+          "b_imp": {
+            "mu": 26.45,
+            "sigma": 1.48
+          }
+        }
+      }
+    },
+    "LA 3": {
+      "gold_foil": {
+        "le35": {
+          "a_amp": {
+            "mu": 26.39,
+            "sigma": 6.73
+          },
+          "a_imp": {
+            "mu": 14.03,
+            "sigma": 0.53
+          },
+          "b_amp": {
+            "mu": 124.93,
+            "sigma": 36.06
+          },
+          "b_imp": {
+            "mu": 28.77,
+            "sigma": 1.0
+          }
+        },
+        "36to59": {
+          "a_amp": {
+            "mu": 23.81,
+            "sigma": 6.35
+          },
+          "a_imp": {
+            "mu": 14.3,
+            "sigma": 0.63
+          },
+          "b_amp": {
+            "mu": 108.9,
+            "sigma": 27.32
+          },
+          "b_imp": {
+            "mu": 29.05,
+            "sigma": 1.1
+          }
+        },
+        "ge60": {
+          "a_amp": {
+            "mu": 22.33,
+            "sigma": 5.82
+          },
+          "a_imp": {
+            "mu": 14.4,
+            "sigma": 0.64
+          },
+          "b_amp": {
+            "mu": 96.31,
+            "sigma": 27.73
+          },
+          "b_imp": {
+            "mu": 29.55,
+            "sigma": 1.26
+          }
+        }
+      },
+      "dtl_fiber": {
+        "le35": {
+          "a_amp": {
+            "mu": 26.39,
+            "sigma": 6.73
+          },
+          "a_imp": {
+            "mu": 14.03,
+            "sigma": 0.53
+          },
+          "b_amp": {
+            "mu": 124.93,
+            "sigma": 36.06
+          },
+          "b_imp": {
+            "mu": 28.77,
+            "sigma": 1.0
+          }
+        },
+        "36to59": {
+          "a_amp": {
+            "mu": 23.81,
+            "sigma": 6.35
+          },
+          "a_imp": {
+            "mu": 14.3,
+            "sigma": 0.63
+          },
+          "b_amp": {
+            "mu": 108.9,
+            "sigma": 27.32
+          },
+          "b_imp": {
+            "mu": 29.05,
+            "sigma": 1.1
+          }
+        },
+        "ge60": {
+          "a_amp": {
+            "mu": 22.33,
+            "sigma": 5.82
+          },
+          "a_imp": {
+            "mu": 14.4,
+            "sigma": 0.64
+          },
+          "b_amp": {
+            "mu": 96.31,
+            "sigma": 27.73
+          },
+          "b_imp": {
+            "mu": 29.55,
+            "sigma": 1.26
+          }
+        }
+      }
+    }
+  },
+  "electrode_transform": {
+    "source": "Baker et al. (2025) Table 2. DOI: 10.1007/s10633-025-10009-2",
+    "direction": "STE_equivalent = slope * GFE_measured + intercept",
+    "applies_to": "amplitude parameters only (a_amp, b_amp). Peak times transferred without adjustment.",
+    "transform": {
+      "DA 0.01": {
+        "b_amp": {
+          "slope": 0.46,
+          "intercept": 24.38,
+          "r2": 0.73,
+          "n": 46,
+          "method": "Deming"
+        },
+        "a_amp": null,
+        "a_imp": null,
+        "b_imp": null
+      },
+      "DA 3": {
+        "a_amp": {
+          "slope": 0.56,
+          "intercept": 8.24,
+          "r2": 0.79,
+          "n": 49,
+          "method": "Deming"
+        },
+        "b_amp": {
+          "slope": 0.48,
+          "intercept": 36.75,
+          "r2": 0.73,
+          "n": 47,
+          "method": "Deming"
+        },
+        "a_imp": null,
+        "b_imp": null
+      },
+      "DA 10": {
+        "a_amp": {
+          "slope": 0.55,
+          "intercept": 9.93,
+          "r2": 0.74,
+          "n": 50,
+          "method": "Deming"
+        },
+        "b_amp": {
+          "slope": 0.48,
+          "intercept": 37.92,
+          "r2": 0.72,
+          "n": 49,
+          "method": "Deming"
+        },
+        "a_imp": null,
+        "b_imp": null
+      },
+      "LA 30 Hz": {
+        "a_amp": null,
+        "b_amp": {
+          "slope": 0.73,
+          "intercept": -9.54,
+          "r2": 0.85,
+          "n": 52,
+          "method": "Deming"
+        },
+        "a_imp": null,
+        "b_imp": null
+      },
+      "LA 3": {
+        "a_amp": {
+          "slope": 0.55,
+          "intercept": 1.15,
+          "r2": 0.68,
+          "n": 52,
+          "method": "Deming",
+          "note": "Borderline r2=0.68"
+        },
+        "b_amp": {
+          "slope": 0.65,
+          "intercept": -3.0,
+          "r2": 0.81,
+          "n": 52,
+          "method": "Deming"
+        },
+        "a_imp": null,
+        "b_imp": null
+      }
+    }
+  }
+}
