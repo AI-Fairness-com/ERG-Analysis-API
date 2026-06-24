@@ -960,6 +960,8 @@ print("=" * 60)
 
 from datetime import datetime
 from typing import Dict, Any, List, Tuple
+import json
+import pathlib
 import numpy as np
 
 
@@ -1019,114 +1021,42 @@ class ERGReportGenerator:
         self.config = config or CONFIG
 
         # ----------------------------------------------------------------
-        # BAKER 2025 REFERENCE RANGES
-        # Format: (mean_µ, sd_σ) computed from N=407 individual-level data
-        # Electrode: silver thread (fornix) + gold foil → STE scale
-        # Amplitudes in µV (absolute values); implicit times in ms
-        # DA 0.01 has no measurable a-wave → a_amp and a_imp set to None
-        # LA 30 Hz is a flicker response → a_amp and a_imp set to None
+        # BAKER 2025 REFERENCE RANGES — loaded from external JSON file
+        # Tier 2 Step 2.1: externalised from hardcoded dict to
+        # data/normative_data_baker2025.json (schema_version 1.0).
+        # Fallback: if file is not found, raises FileNotFoundError with
+        # a clear message so the error is never silent.
         # ----------------------------------------------------------------
+        _norm_path = pathlib.Path(__file__).parent / "data" / "normative_data_baker2025.json"
+        if not _norm_path.exists():
+            raise FileNotFoundError(
+                f"Normative data file not found: {_norm_path}\n"
+                "Ensure data/normative_data_baker2025.json is present in the "
+                "repository root alongside erg_v2_4_0.py."
+            )
+        with open(_norm_path, "r", encoding="utf-8") as _f:
+            _norm = json.load(_f)
+
+        # Convert JSON {mu, sigma} dicts back to (mu, sigma) tuples that
+        # the rest of the pipeline expects, preserving None for inapplicable
+        # parameters (DA 0.01 a-wave, LA 30Hz a-wave).
+        def _to_tuple(v):
+            if v is None:
+                return None
+            return (v["mu"], v["sigma"])
+
         self.REFERENCE_RANGES = {
-
-            # ── DA 0.01 (rod-driven b-wave only) ──────────────────────
-            'DA 0.01': {
-                'gold_foil': {
-                    'le35':   {'a_amp': None, 'a_imp': None,
-                               'b_amp': (203.85, 40.99), 'b_imp': (84.65, 6.17)},
-                    '36to59': {'a_amp': None, 'a_imp': None,
-                               'b_amp': (189.48, 38.42), 'b_imp': (90.33, 7.60)},
-                    'ge60':   {'a_amp': None, 'a_imp': None,
-                               'b_amp': (185.53, 46.36), 'b_imp': (97.29, 7.81)},
-                },
-                'dtl_fiber': {
-                    'le35':   {'a_amp': None, 'a_imp': None,
-                               'b_amp': (203.85, 40.99), 'b_imp': (84.65, 6.17)},
-                    '36to59': {'a_amp': None, 'a_imp': None,
-                               'b_amp': (189.48, 38.42), 'b_imp': (90.33, 7.60)},
-                    'ge60':   {'a_amp': None, 'a_imp': None,
-                               'b_amp': (185.53, 46.36), 'b_imp': (97.29, 7.81)},
-                },
-            },
-
-            # ── DA 3 (maximal combined response) ──────────────────────
-            'DA 3': {
-                'gold_foil': {
-                    'le35':   {'a_amp': (175.70, 30.93), 'a_imp': (14.98, 0.65),
-                               'b_amp': (281.45, 53.29), 'b_imp': (51.41, 3.18)},
-                    '36to59': {'a_amp': (157.86, 31.63), 'a_imp': (15.69, 0.68),
-                               'b_amp': (272.00, 51.91), 'b_imp': (51.45, 2.90)},
-                    'ge60':   {'a_amp': (141.46, 35.25), 'a_imp': (16.08, 0.82),
-                               'b_amp': (259.25, 62.43), 'b_imp': (52.45, 3.02)},
-                },
-                'dtl_fiber': {
-                    'le35':   {'a_amp': (175.70, 30.93), 'a_imp': (14.98, 0.65),
-                               'b_amp': (281.45, 53.29), 'b_imp': (51.41, 3.18)},
-                    '36to59': {'a_amp': (157.86, 31.63), 'a_imp': (15.69, 0.68),
-                               'b_amp': (272.00, 51.91), 'b_imp': (51.45, 2.90)},
-                    'ge60':   {'a_amp': (141.46, 35.25), 'a_imp': (16.08, 0.82),
-                               'b_amp': (259.25, 62.43), 'b_imp': (52.45, 3.02)},
-                },
-            },
-
-            # ── DA 10 (cone-rod maximal) ───────────────────────────────
-            'DA 10': {
-                'gold_foil': {
-                    'le35':   {'a_amp': (202.99, 34.59), 'a_imp': (11.99, 0.98),
-                               'b_amp': (291.01, 50.92), 'b_imp': (51.82, 3.08)},
-                    '36to59': {'a_amp': (188.60, 35.09), 'a_imp': (12.83, 1.07),
-                               'b_amp': (283.69, 50.41), 'b_imp': (51.94, 3.04)},
-                    'ge60':   {'a_amp': (170.81, 39.57), 'a_imp': (13.42, 1.09),
-                               'b_amp': (275.75, 62.12), 'b_imp': (52.21, 3.32)},
-                },
-                'dtl_fiber': {
-                    'le35':   {'a_amp': (202.99, 34.59), 'a_imp': (11.99, 0.98),
-                               'b_amp': (291.01, 50.92), 'b_imp': (51.82, 3.08)},
-                    '36to59': {'a_amp': (188.60, 35.09), 'a_imp': (12.83, 1.07),
-                               'b_amp': (283.69, 50.41), 'b_imp': (51.94, 3.04)},
-                    'ge60':   {'a_amp': (170.81, 39.57), 'a_imp': (13.42, 1.09),
-                               'b_amp': (275.75, 62.12), 'b_imp': (52.21, 3.32)},
-                },
-            },
-
-            # ── LA 30 Hz (photopic flicker, peak amplitude only) ───────
-            'LA 30 Hz': {
-                'gold_foil': {
-                    'le35':   {'a_amp': None, 'a_imp': None,
-                               'b_amp': (92.60, 29.11), 'b_imp': (25.50, 0.89)},
-                    '36to59': {'a_amp': None, 'a_imp': None,
-                               'b_amp': (80.72, 22.96), 'b_imp': (26.00, 1.28)},
-                    'ge60':   {'a_amp': None, 'a_imp': None,
-                               'b_amp': (71.13, 20.64), 'b_imp': (26.45, 1.48)},
-                },
-                'dtl_fiber': {
-                    'le35':   {'a_amp': None, 'a_imp': None,
-                               'b_amp': (92.60, 29.11), 'b_imp': (25.50, 0.89)},
-                    '36to59': {'a_amp': None, 'a_imp': None,
-                               'b_amp': (80.72, 22.96), 'b_imp': (26.00, 1.28)},
-                    'ge60':   {'a_amp': None, 'a_imp': None,
-                               'b_amp': (71.13, 20.64), 'b_imp': (26.45, 1.48)},
-                },
-            },
-
-            # ── LA 3 (photopic single-flash) ───────────────────────────
-            'LA 3': {
-                'gold_foil': {
-                    'le35':   {'a_amp': (26.39, 6.73), 'a_imp': (14.03, 0.53),
-                               'b_amp': (124.93, 36.06), 'b_imp': (28.77, 1.00)},
-                    '36to59': {'a_amp': (23.81, 6.35), 'a_imp': (14.30, 0.63),
-                               'b_amp': (108.90, 27.32), 'b_imp': (29.05, 1.10)},
-                    'ge60':   {'a_amp': (22.33, 5.82), 'a_imp': (14.40, 0.64),
-                               'b_amp': (96.31, 27.73),  'b_imp': (29.55, 1.26)},
-                },
-                'dtl_fiber': {
-                    'le35':   {'a_amp': (26.39, 6.73), 'a_imp': (14.03, 0.53),
-                               'b_amp': (124.93, 36.06), 'b_imp': (28.77, 1.00)},
-                    '36to59': {'a_amp': (23.81, 6.35), 'a_imp': (14.30, 0.63),
-                               'b_amp': (108.90, 27.32), 'b_imp': (29.05, 1.10)},
-                    'ge60':   {'a_amp': (22.33, 5.82), 'a_imp': (14.40, 0.64),
-                               'b_amp': (96.31, 27.73),  'b_imp': (29.55, 1.26)},
-                },
-            },
+            proto: {
+                elec: {
+                    stratum: {
+                        param: _to_tuple(val)
+                        for param, val in params.items()
+                    }
+                    for stratum, params in strata.items()
+                }
+                for elec, strata in electrodes.items()
+            }
+            for proto, electrodes in _norm["protocols"].items()
         }
 
         # ----------------------------------------------------------------
@@ -1138,6 +1068,19 @@ class ERGReportGenerator:
         self.BA_RATIO_MEAN = 2.65
         self.BA_RATIO_SD   = 0.425
 
+        # ----------------------------------------------------------------
+        # DTL DEMING REGRESSION TRANSFORMS — Tier 2 Step 2.4
+        # Source: Baker et al. (2025) Table 2. DOI 10.1007/s10633-025-10009-2
+        # Loaded from data/normative_data_baker2025.json at startup.
+        # Applied to AMPLITUDE parameters only when electrode == dtl_fiber.
+        # Peak times are NOT transformed (slope ~1, intercept ~0, bias ≤1.6ms).
+        # Direction: STE_equivalent = slope * GFE_measured + intercept
+        # Z = (STE_equivalent - mu_gf) / sigma_gf
+        # ----------------------------------------------------------------
+        self.ELECTRODE_TRANSFORM = _norm.get("electrode_transform", {}).get(
+            "transform", {}
+        )
+
     # ----------------------------------------------------------------
     # INTERNAL HELPERS
     # ----------------------------------------------------------------
@@ -1148,6 +1091,45 @@ class ERGReportGenerator:
         if isinstance(electrode_type, dict):
             electrode_type = electrode_type.get('value', 'gold_foil')
         return str(electrode_type).strip().lower()
+
+    def _apply_dtl_transform(self,
+                             protocol: str,
+                             param: str,
+                             gf_measured: float) -> float:
+        """
+        Convert a DTL Fiber (silver thread) measured amplitude to its
+        Gold Foil equivalent using Baker et al. (2025) Table 2 Deming
+        regression coefficients loaded from normative_data_baker2025.json.
+
+        Formula: STE_equivalent = slope * GFE_measured + intercept
+        (direction: STE = f(GFE), so inversion gives GFE_equivalent from STE)
+
+        Wait — the paper transforms GF -> STE to include GF data in the STE
+        reference range.  For clinical Z-scoring we have a STE/DTL measurement
+        and want to compare against GF norms.  We therefore INVERT the model:
+            GFE_equivalent = (STE_measured - intercept) / slope
+        This is mathematically equivalent and consistent with the paper's intent.
+
+        Applies to amplitude parameters (a_amp, b_amp) only.
+        Returns the original value unchanged if no transform is defined.
+
+        Audit flag: sets self._dtl_transform_applied = True for Layer 4 logging.
+        """
+        proto_transforms = self.ELECTRODE_TRANSFORM.get(protocol, {})
+        param_transform  = proto_transforms.get(param)
+
+        if param_transform is None:
+            return gf_measured  # no transform available (e.g. a_amp for DA 0.01)
+
+        slope     = param_transform["slope"]
+        intercept = param_transform["intercept"]
+
+        if slope == 0:
+            return gf_measured  # guard against division by zero (should never occur)
+
+        # Invert: GFE_equivalent = (STE_measured - intercept) / slope
+        gfe_equivalent = (gf_measured - intercept) / slope
+        return gfe_equivalent
 
     @staticmethod
     def _age_stratum(age_years) -> str:
@@ -1222,14 +1204,21 @@ class ERGReportGenerator:
 
         z_scores = {}
 
+        # ── DTL Deming regression flag ──────────────────────────────
+        # Will be set True if any amplitude parameter is transformed.
+        dtl_correction_applied = False
+
         # ── a-wave amplitude (absolute value) ──────────────────────
         if (ref.get('a_amp') is not None
                 and 'a_wave_amplitude_uv' in features
                 and features['a_wave_amplitude_uv'] is not None):
             mean, sd = ref['a_amp']
+            raw_val  = abs(features['a_wave_amplitude_uv'])
+            if electrode == 'dtl_fiber':
+                raw_val = abs(self._apply_dtl_transform(protocol, 'a_amp', raw_val))
+                dtl_correction_applied = True
             if sd > 0:
-                z_scores['a_wave_amplitude'] = self.calculate_z_score(
-                    abs(features['a_wave_amplitude_uv']), mean, sd)
+                z_scores['a_wave_amplitude'] = self.calculate_z_score(raw_val, mean, sd)
 
         # ── a-wave implicit time ────────────────────────────────────
         if (ref.get('a_imp') is not None
@@ -1245,9 +1234,12 @@ class ERGReportGenerator:
                 and 'b_wave_amplitude_uv' in features
                 and features['b_wave_amplitude_uv'] is not None):
             mean, sd = ref['b_amp']
+            raw_val  = features['b_wave_amplitude_uv']
+            if electrode == 'dtl_fiber':
+                raw_val = self._apply_dtl_transform(protocol, 'b_amp', raw_val)
+                dtl_correction_applied = True
             if sd > 0:
-                z_scores['b_wave_amplitude'] = self.calculate_z_score(
-                    features['b_wave_amplitude_uv'], mean, sd)
+                z_scores['b_wave_amplitude'] = self.calculate_z_score(raw_val, mean, sd)
 
         # ── b-wave implicit time ────────────────────────────────────
         if (ref.get('b_imp') is not None
@@ -1264,6 +1256,10 @@ class ERGReportGenerator:
                 and features['ba_ratio'] is not None):
             z_scores['ba_ratio'] = self.calculate_z_score(
                 features['ba_ratio'], self.BA_RATIO_MEAN, self.BA_RATIO_SD)
+
+        # ── Audit flag for Layer 4 ──────────────────────────────────
+        if dtl_correction_applied:
+            z_scores['_dtl_deming_correction_applied'] = True
 
         return z_scores
 
