@@ -537,5 +537,92 @@
         }
       }
     }
+  },
+  "electrode_transform": {
+    "source": "Baker et al. (2025) Table 2. DOI: 10.1007/s10633-025-10009-2",
+    "direction": "STE_equivalent = slope * GFE_measured + intercept",
+    "applies_to": "amplitude parameters only (a_amp, b_amp). Peak times transferred without adjustment \u2014 slope ~1, intercept ~0, bias <= 1.6ms for all components.",
+    "regression_method_note": "Deming regression used for r2 < 0.95; simple linear regression for r2 >= 0.95 (DA 3 a_imp, LA 30Hz b_imp). Peak time components: no transformation applied.",
+    "transform": {
+      "DA 0.01": {
+        "b_amp": {
+          "slope": 0.46,
+          "intercept": 24.38,
+          "r2": 0.73,
+          "n": 46,
+          "method": "Deming"
+        },
+        "a_amp": null,
+        "a_imp": null,
+        "b_imp": null
+      },
+      "DA 3": {
+        "a_amp": {
+          "slope": 0.56,
+          "intercept": 8.24,
+          "r2": 0.79,
+          "n": 49,
+          "method": "Deming"
+        },
+        "b_amp": {
+          "slope": 0.48,
+          "intercept": 36.75,
+          "r2": 0.73,
+          "n": 47,
+          "method": "Deming"
+        },
+        "a_imp": null,
+        "b_imp": null
+      },
+      "DA 10": {
+        "a_amp": {
+          "slope": 0.55,
+          "intercept": 9.93,
+          "r2": 0.74,
+          "n": 50,
+          "method": "Deming"
+        },
+        "b_amp": {
+          "slope": 0.48,
+          "intercept": 37.92,
+          "r2": 0.72,
+          "n": 49,
+          "method": "Deming"
+        },
+        "a_imp": null,
+        "b_imp": null
+      },
+      "LA 30 Hz": {
+        "a_amp": null,
+        "b_amp": {
+          "slope": 0.73,
+          "intercept": -9.54,
+          "r2": 0.85,
+          "n": 52,
+          "method": "Deming"
+        },
+        "a_imp": null,
+        "b_imp": null
+      },
+      "LA 3": {
+        "a_amp": {
+          "slope": 0.55,
+          "intercept": 1.15,
+          "r2": 0.68,
+          "n": 52,
+          "method": "Deming",
+          "note": "Borderline r2=0.68 < 0.70; included per Baker et al. given interdependence of ERG components and successful validation of all other components"
+        },
+        "b_amp": {
+          "slope": 0.65,
+          "intercept": -3.0,
+          "r2": 0.81,
+          "n": 52,
+          "method": "Deming"
+        },
+        "a_imp": null,
+        "b_imp": null
+      }
+    }
   }
 }
