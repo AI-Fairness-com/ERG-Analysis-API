@@ -1,5 +1,7 @@
 # Changelog
 
+![Validation](https://img.shields.io/badge/validation-41%2F41%20PASS-brightgreen)
+
 All notable changes to the ERG Analysis API pipeline are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -75,6 +77,12 @@ v2.3.2 13/13 pass also inherited.
   norms, A1 Grade D noise model. Full audit: `validation/VALIDATION_REPORT_v2_4_0_FINAL.pdf`.
   OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42 ⚠️ CONDITIONAL
 
+- Run 3 (23 Jun 2026): G6 DA10 a_it, G7 LA3 a_it, A1/S03 DA3 ge60 — all RESOLVED
+- Run 4 (23 Jun 2026): G7 LA3 ge60 b_it, G3 LA30Hz peak aliasing — RESOLVED
+- Run 5 (23 Jun 2026): G3 LA30Hz b_amp decay compensation — RESOLVED
+- Final result: 41/41 PASS. All generator defects G1–G7 and A1/S03 RESOLVED.
+- Generator: ERG_CSV_Generator_v2_4_2.py
+- Report: VALIDATION_REPORT_v2_4_0_COMPLETE.docx
 ---
 
 ## [2.3.2] — 2026-06-16
