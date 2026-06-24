@@ -128,6 +128,29 @@ v2.3.2 13/13 pass also inherited.
   STE scale using Baker Table 2 Deming forward transform so pipeline inversion
   returns GF-equivalent and Z ≈ 0. Re-validation 30/30 PASS; all submissions
   show `Post-stimulus OK: true (300 ms)`.
+
+## [2.4.0-tier3-complete] — 2026-06-24
+
+### Tier 3 — Clinical & Regulatory (complete)
+
+**Documents added** (`docs/regulatory/`)
+- T3-A_ISCEV_Compliance_Checklist_v1_0.docx — 25 items; 14 PASS, 3 AMBER (remediated), 1 FAIL (remediated)
+- T3-B_Normative_Traceability_Matrix_v1_0.docx — full Baker 2025 cross-walk; 8 findings; 3 AMBER (remediated)
+- T3-C_Bias_Fairness_Audit_v1_0.docx — age stratification, DTL correction, traffic light symmetry; 2 AMBER (remediated)
+- T3-D_Intended_Use_Statement_v1_0.docx — intended use statement, 5 contraindications, 9 limitations, OSF pre-reg cross-walk
+- T3-E_Regulatory_Readiness_Summary_v1_0.docx — RAG table 18 requirements; verdict: READY FOR TIER 4
+
+### Code patches applied to erg_v2_4_0.py
+- G1: version comment corrected to v2.4.0
+- A6: flash duration runtime validation added to ERGAudit.run_full_audit()
+- E5: FHIR CodeSystem URI updated to versioned ai-fairness.com URI
+- F1: schema_version assertion added at normative JSON load time
+- F6: BA_RATIO_MEAN and BA_RATIO_SD loaded from JSON (single source of truth)
+- F4: _la3_a_amp_dtl_r2_borderline flag added to Layer 4 audit
+- B4: LA 30 Hz b_amp absolute floor (20 µV → minimum AMBER) in generate_full_report()
+
+### Code patches applied to erg_report_generator.py
+- D5: paediatric age group disclaimer block added to PDF report
 ---
 
 ## [2.3.2] — 2026-06-16
