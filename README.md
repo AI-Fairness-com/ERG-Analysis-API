@@ -3,7 +3,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Pipeline Version](https://img.shields.io/badge/pipeline-v2.4.0-lightgreen.svg)](https://github.com/AI-Fairness-com/ERG-Analysis-API/blob/main/docs/CHANGELOG.md)
-[![Validation](https://img.shields.io/badge/v2.4.0%20validation-30%2F41%20conditional-yellow.svg)](https://github.com/AI-Fairness-com/ERG-Analysis-API/blob/main/validation/VALIDATION_REPORT_v2_4_0_FINAL.docx)
+![Validation](https://img.shields.io/badge/validation-41%2F41%20PASS-brightgreen)
 
 
 **Full-field ERG signal processing, machine learning classification, and clinical decision support API.**
@@ -69,6 +69,20 @@ This project provides a complete, reproducible pipeline for:
 | **Technical (External)** | OculusGraphy 2020 (n=149) | 100% processing success | ✅ PASS |
 | **Normative integration** | Baker et al. 2025 (N=407) | All 48 µ/σ values verified < 0.02 tolerance | ✅ PASS |
 | **Sensitivity (External)** | Real pathology recordings | Planned for V3.0 | ⏳ PENDING |
+
+## Validation
+
+ERG Analysis API v2.4.0 has achieved **41/41 PASS** on comprehensive 
+internal synthetic validation (23 June 2026).
+
+- 41 synthetic test cases covering all five ISCEV 2022 protocols, three 
+  Baker et al. (2025) age strata, Gold Foil and DTL Fiber electrodes, 
+  disease patterns, boundary cases, and signal quality scenarios
+- All generator defects G1–G7 and A1/S03 resolved in 
+  `ERG_CSV_Generator_v2_4_2.py`
+- Zero API pipeline bugs identified
+- Full report: `validation/VALIDATION_REPORT_v2_4_0_COMPLETE.docx`
+- Pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
 
 See `validation/VALIDATION_REPORT_v2_4_0_FINAL.docx` for the full 41-case audit table, root cause analysis, and outstanding actions. OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
 
