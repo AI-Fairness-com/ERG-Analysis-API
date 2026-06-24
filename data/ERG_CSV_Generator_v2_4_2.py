@@ -54,14 +54,14 @@ import os
 # ─────────────────────────────────────────────────────────────────────────────
 FS          = 2000
 DT          = 1000.0 / FS        # 0.5 ms
-TOTAL_MS    = 300.0
-N_SAMPLES   = int(TOTAL_MS / DT) # 600
+TOTAL_MS    = 350.0               # Step 2.6: 50ms pre + 300ms post (ISCEV 2022 minimum)
+N_SAMPLES   = int(TOTAL_MS / DT) # 700
 PRE_MS      = 50.0
 FLASH_IDX   = int(PRE_MS / DT)   # 100
 MASTER_SEED = 42
 
-T_FULL = np.arange(0, TOTAL_MS, DT)          # 0.0 … 299.5 ms, len=600
-T_POST = T_FULL[FLASH_IDX:] - PRE_MS         # 0.0 … 249.5 ms, len=500
+T_FULL = np.arange(0, TOTAL_MS, DT)          # 0.0 … 349.5 ms, len=700
+T_POST = T_FULL[FLASH_IDX:] - PRE_MS         # 0.0 … 299.5 ms, len=600 — ISCEV compliant
 
 # Baker et al. (2025) DA 3 <=35y derived normative values
 # Used exclusively for boundary test parameter derivation.
@@ -403,9 +403,13 @@ def generate_corrected(output_dir='synthetic_validation_v2_4_corrected'):
     print(f'  OK  {fn}')
 
     # ── G1+G2: Electrode coverage cases (seeds 80,81,83) ────────────────────
-    # DTL DA3 (seed 80) — scotopic with Gold Foil norms
+    # DTL DA3 (seed 80) — scotopic with STE-scale amplitudes
+    # Baker (2025) Table 2 Deming: STE = slope*GFE + intercept
+    #   DA3 a_amp: slope=0.56, intercept=8.24  -> STE_a = 0.56*143.6 + 8.24 = 88.66uV
+    #   DA3 b_amp: slope=0.48, intercept=36.75 -> STE_b = 0.48*282.7 + 36.75 = 172.45uV
+    # Pipeline Deming inversion returns GF-equivalent -> Z≈0 as expected.
     r = rng(80)
-    sig = _scotopic(r, 143.6, 15.0, 282.7, 53.0,
+    sig = _scotopic(r, 88.66, 15.0, 172.45, 53.0,
                     noise_sd=4.5, op_amp=5.0)
     df  = _assemble(sig, r, 4.5)
     fn  = 'S_Normal_DA3_dtl_le35.csv'
@@ -413,10 +417,14 @@ def generate_corrected(output_dir='synthetic_validation_v2_4_corrected'):
     generated.append(fn)
     print(f'  OK  {fn}')
 
-    # DTL LA3 (seed 81) — photopic with G2 fix
+    # DTL LA3 (seed 81) — photopic with STE-scale amplitudes
     # G7 FIX: a_it 15.0->14.03ms (Baker LA3 le35 a_imp mu)
+    # Baker (2025) Table 2 Deming:
+    #   LA3 a_amp: slope=0.55, intercept=1.15  -> STE_a = 0.55*30.0 + 1.15 = 17.65uV
+    #   LA3 b_amp: slope=0.65, intercept=-3.00 -> STE_b = 0.65*123.0 - 3.00 = 76.95uV
+    # Pipeline Deming inversion returns GF-equivalent -> Z≈0 as expected.
     r = rng(81)
-    sig = _photopic(r, 30.0, 14.03, 123.0, 29.0,
+    sig = _photopic(r, 17.65, 14.03, 76.95, 29.0,
                     phnr_amp=30.0, phnr_it=68.0, noise_sd=3.0)
     df  = _assemble(sig, r, 3.0)
     fn  = 'S_Normal_LA3_dtl_le35.csv'
@@ -446,7 +454,7 @@ def verify(output_dir, generated):
     """
     Structural sanity checks on every generated file.
     V1  dt = 0.5 ms (fs = 2000 Hz)
-    V2  600 samples, time range 0.0-299.5 ms
+    V2  700 samples, time range 0.0-349.5 ms (Step 2.6: 350ms total, 300ms post-stimulus)
     V3  Pre-stimulus SD < 50 uV (relaxed to accommodate HighNoise)
     V4  Post-stimulus a-wave is negative (skip DA001, LA30Hz)
     V5  b-wave peak > 5 uV (skip DA001, LA30Hz)
@@ -477,10 +485,10 @@ def verify(output_dir, generated):
                 issues.append(f'V1: dt={dts.mean():.4f}ms')
 
             # V2
-            if len(df) != 600:
-                issues.append(f'V2: {len(df)} samples != 600')
+            if len(df) != 700:
+                issues.append(f'V2: {len(df)} samples != 700')
             if not (np.isclose(df['Time_ms'].iloc[0], 0.0) and
-                    np.isclose(df['Time_ms'].iloc[-1], 299.5)):
+                    np.isclose(df['Time_ms'].iloc[-1], 349.5)):
                 issues.append(f'V2: time range wrong')
 
             # V3 pre-stim SD
