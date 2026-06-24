@@ -929,22 +929,34 @@ class ERGFeatureExtractor:
         # the signal polarity is inverted. Multiply by -1 to correct, and
         # set the audit flag for Layer 4 and FHIR reporting.
         #
+        # PROTOCOL RESTRICTION: Only applied to DA protocols (DA 0.01, DA 3,
+        # DA 10) where a large negative a-wave physiologically dominates the
+        # 0–30 ms post-stimulus window. For LA 3 and LA 30 Hz the b-wave
+        # rising flank dominates this window even in correctly oriented signals
+        # (b-peak at 25–30 ms), so the sum > 0 criterion produces false positives.
+        #
         # The 0–30 ms window is chosen because:
-        #   - It covers the a-wave trough for all five ISCEV protocols
-        #   - It precedes the b-wave peak (≥28 ms for all protocols)
+        #   - It covers the a-wave trough for all DA protocols
+        #   - It precedes the DA b-wave peak (≥45 ms for all DA protocols)
         #   - Pre-stimulus samples are excluded (flash_onset_sample offset)
         #
         # Traffic light is NOT affected by this correction. An AMBER
         # annotation is added to the Layer 4 audit output only.
         inverted_polarity_detected = False
-        post_stim_signal = signal[flash_onset_sample:]
-        window_30ms_samples = min(int(30.0 * fs_hz / 1000), len(post_stim_signal))
-
-        if window_30ms_samples > 0:
-            window_sum = float(np.sum(post_stim_signal[:window_30ms_samples]))
-            if window_sum > 0:
-                signal = signal * -1.0
-                inverted_polarity_detected = True
+        _DA_PROTOCOLS = {'DA 0.01', 'DA 3', 'DA 10', 'DA3', 'DA10', 'DA001'}
+        _protocol_upper = protocol.upper().replace(' ', '').replace('.', '')
+        _is_da_protocol = any(
+            protocol.upper().replace(' ', '') == p.upper().replace(' ', '')
+            for p in _DA_PROTOCOLS
+        )
+        if _is_da_protocol:
+            post_stim_signal = signal[flash_onset_sample:]
+            window_30ms_samples = min(int(30.0 * fs_hz / 1000), len(post_stim_signal))
+            if window_30ms_samples > 0:
+                window_sum = float(np.sum(post_stim_signal[:window_30ms_samples]))
+                if window_sum > 0:
+                    signal = signal * -1.0
+                    inverted_polarity_detected = True
 
         features['inverted_polarity_detected'] = inverted_polarity_detected
 
@@ -1055,13 +1067,32 @@ class ERGReportGenerator:
         # Fallback: if file is not found, raises FileNotFoundError with
         # a clear message so the error is never silent.
         # ----------------------------------------------------------------
-        _norm_path = pathlib.Path(__file__).parent / "data" / "normative_data_baker2025.json"
-        if not _norm_path.exists():
-            raise FileNotFoundError(
-                f"Normative data file not found: {_norm_path}\n"
-                "Ensure data/normative_data_baker2025.json is present in the "
-                "repository root alongside erg_v2_4_0.py."
+        import os as _os
+
+        def _find_norm_json():
+            candidates = []
+            try:
+                candidates.append(
+                    pathlib.Path(__file__).resolve().parent / "data" / "normative_data_baker2025.json"
+                )
+            except NameError:
+                pass
+            candidates.append(
+                pathlib.Path(_os.getcwd()) / "data" / "normative_data_baker2025.json"
             )
+            candidates.append(
+                pathlib.Path(_os.getcwd()) / "normative_data_baker2025.json"
+            )
+            for p in candidates:
+                if p.exists():
+                    return p
+            raise FileNotFoundError(
+                "normative_data_baker2025.json not found. Searched:\n"
+                + "\n".join(f"  {p}" for p in candidates)
+                + "\nPlace the file in a 'data/' subfolder of your working directory."
+            )
+
+        _norm_path = _find_norm_json()
         with open(_norm_path, "r", encoding="utf-8") as _f:
             _norm = json.load(_f)
 
