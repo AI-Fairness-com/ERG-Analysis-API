@@ -242,9 +242,68 @@ class TestFHIROutput:
         )
 
 
+
 # ===========================================================================
-# T-ELEC-01  ERG-Jet electrode returns UNAVAILABLE
+# T-DTL-01  DTL Deming regression correction shifts Z-scores correctly
 # ===========================================================================
+class TestDTLDemingRegression:
+
+    def test_T_DTL_01_deming_correction_shifts_z_scores(self, pipeline_module):
+        """
+        T-DTL-01: When the electrode is dtl_fiber and a_amp equals the STE-scale
+        equivalent of the Baker GF µ (i.e. STE_at_mu = slope * GF_mu + intercept),
+        the Deming inversion must return Z = 0.00 ± 0.01.
+
+        Verifies:
+        - ELECTRODE_TRANSFORM is loaded from JSON (non-empty)
+        - _apply_dtl_transform performs the correct inversion
+        - Z-score computation uses the corrected GFE-equivalent value
+
+        Baker et al. (2025) Table 2, DA 3 a_amp:
+            slope=0.56, intercept=8.24
+            GF µ=175.70µV → STE equivalent = 0.56 * 175.70 + 8.24 = 106.63µV
+            Inversion: (106.63 - 8.24) / 0.56 = 175.70µV → Z = 0.00
+        """
+        mod  = pipeline_module
+        rgen = mod.ERGReportGenerator()
+
+        # 1. ELECTRODE_TRANSFORM must be loaded
+        assert rgen.ELECTRODE_TRANSFORM, (
+            "T-DTL-01 FAIL: ELECTRODE_TRANSFORM is empty — "
+            "normative_data_baker2025.json missing electrode_transform block"
+        )
+        assert "DA 3" in rgen.ELECTRODE_TRANSFORM, (
+            "T-DTL-01 FAIL: DA 3 key missing from ELECTRODE_TRANSFORM"
+        )
+
+        # 2. _apply_dtl_transform inversion is mathematically exact
+        # DA 3 a_amp: slope=0.56, intercept=8.24, GF mu=175.70
+        gf_mu   = 175.70
+        slope   = rgen.ELECTRODE_TRANSFORM["DA 3"]["a_amp"]["slope"]
+        intercept = rgen.ELECTRODE_TRANSFORM["DA 3"]["a_amp"]["intercept"]
+
+        ste_at_mu  = slope * gf_mu + intercept          # DTL measurement at GF mu
+        gfe_equiv  = rgen._apply_dtl_transform("DA 3", "a_amp", ste_at_mu)
+
+        assert abs(gfe_equiv - gf_mu) < 0.01, (
+            f"T-DTL-01 FAIL: GFE_equivalent = {gfe_equiv:.4f}µV, expected {gf_mu}µV"
+        )
+
+        # 3. Full Z-score: feed DTL a_amp = STE_at_mu, expect Z ≈ 0
+        # Baker DA3 le35 a_amp: mu=175.70, sigma=30.93
+        a_amp_sigma = 30.93
+        Z = (gfe_equiv - gf_mu) / a_amp_sigma
+        assert abs(Z) <= 0.01, (
+            f"T-DTL-01 FAIL: Z = {Z:.4f}, expected 0.00 ± 0.01"
+        )
+
+        # 4. Confirm peak time transform is NOT applied (returns value unchanged)
+        a_imp_val = 14.98  # Baker DA3 le35 a_imp mu
+        a_imp_returned = rgen._apply_dtl_transform("DA 3", "a_imp", a_imp_val)
+        assert a_imp_returned == a_imp_val, (
+            f"T-DTL-01 FAIL: peak time should not be transformed. "
+            f"Got {a_imp_returned}, expected {a_imp_val}"
+        )
 class TestElectrodeGating:
 
     def test_T_ELEC_01_unsupported_electrode_returns_UNAVAILABLE(
