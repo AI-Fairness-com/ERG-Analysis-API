@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Code Banner Strip</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:#FFFFFF;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  padding:60px 40px;
+}
+.banner{
+  width:auto;
+  border-radius:8px;
+  overflow:hidden;
+  box-shadow:0 4px 24px rgba(0,0,0,0.18);
+  background:#2D5040;
+  display:inline-block;
+  white-space:nowrap;
+}
+/* .headline removed — header text is gone */
+canvas{
+  display:block;
+}
+</style>
+</head>
+<body>
+<div class="banner">
+  <!-- Both .headline divs removed entirely, only canvas remains -->
+  <div style="opacity:0.5;">
+    <canvas id="c"></canvas>
+  </div>
+</div>
+<script>
+const canvas   = document.getElementById('c');
+const ctx      = canvas.getContext('2d');
+const DPR      = window.devicePixelRatio || 1;
+
+const FONT_SIZE     = 14;
+const LINE_H        = 24;
+const PADDING_X     = 20;
+const VISIBLE_LINES = 3;
+const CANVAS_H      = VISIBLE_LINES * LINE_H + 16;
+
+// Resize now uses a fixed width (falls back to 820px) because headlines are removed.
+function resize(){
+  const w = 820; // fixed width, matches typical banner size; canvas adapts
+  canvas.width        = w * DPR;
+  canvas.height       = CANVAS_H * DPR;
+  canvas.style.width  = w + 'px';
+  canvas.style.height = CANVAS_H + 'px';
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(DPR, DPR);
+}
+window.addEventListener('resize', resize);
+requestAnimationFrame(()=>requestAnimationFrame(()=>resize()));
+
+// We no longer query .headline; use fixed width for consistency.
+const W = ()=> 820;
+
+const LINES = [
+  "void audit_fairness(struct model_info *model) {",
+  "    if (model->bias_score > THRESHOLD) {",
+  "        for (i = 0; i < model->n_groups; i++)",
+  "            flag_disparity(model->groups[i]);",
+  "    }",
+  "}",
+  "EXPORT_SYMBOL(audit_fairness);",
+  "mod.protected_attr = True",
+  "mod.demographic_parity = True",
+  "mod.equalised_odds = False",
+  'if operation == "DETECT_BIAS":',
+  "    fdk.use_health   = True",
+  "    fdk.use_justice  = True",
+  "    fdk.use_finance  = False",
+  "ob.active = fairness_checker",
+  "ob.select = 1",
+  "context.pipeline.active = bias_detector",
+  'print("flagged: " + str(disparity_score))',
+  "for (i = 0; i < dataset->n_rows; i++) {",
+  "    unsigned int score = compute_fairness(dataset->rows[i]);",
+  "    if (score < FAIR_THRESHOLD)",
+  "        remediate(&dataset->rows[i], score);",
+  "kfree(model_info);",
+  "EXPORT_SYMBOL(bias_clean);",
+  "/* run FDK across all 7 domains */",
+  "struct result *fdk_run(gid_t *groups, int n_groups) {",
+  "    int i; unsigned int parity;",
+  "    for (i = 0; i < n_groups; i++) {",
+  "        parity = equalised_odds(groups[i]);",
+  "    }",
+  "    return build_report(parity);",
+  "}",
+  "if (copyto_report(output, fdk_result, len))",
+  "    return -EFAULT;",
+  "const char *erg_analyse(float *csv_data, int n_samples) {",
+  "    float a_wave = detect_awave(csv_data, n_samples);",
+  "    float b_wave = detect_bwave(csv_data, n_samples);",
+  "    return iscev_report(a_wave, b_wave);",
+  "}",
+  "unsigned int count = model->n_features;",
+  "int i;",
+  "/* BiasClean v3 — audit first, mitigate second */",
+  "return audit_status;",
+  "if (audit_status != DEPLOY_READY)",
+  "    return -ENOTREADY;",
+];
+
+const PAL = [
+  '#00E5CC','#00D4BB','#00BFFF','#1E90FF','#4488FF',
+  '#FF69B4','#FF4499','#FF80CC','#FF1493',
+  '#FF8C00','#FFA040','#FF6347','#FF4500',
+  '#FFFFFF','#DDDDDD',
+  '#00FF88','#66FF99','#00CC66',
+  '#9966FF','#BB88FF','#CC44FF',
+  '#FFFF00','#FFD700','#FFC300',
+  '#FF3333','#FF6666',
+  '#00FFFF','#44FFEE',
+];
+
+const CHAR_COLS = LINES.map((line,li)=>
+  line.split('').map((_,ci)=> PAL[(li*997+ci*31+7) % PAL.length])
+);
+
+const FONT       = `${FONT_SIZE}px "Courier New","Lucida Console",monospace`;
+const CHAR_DELAY = 28;
+const LINE_PAUSE = 280;
+
+let completed   = [];
+let current     = null;
+let nextIdx     = 0;
+let lastT       = 0;
+let cursorOn    = true;
+let cursorT     = 0;
+
+function next(){
+  const li = nextIdx % LINES.length;
+  current = { li, shown: 0, done: false };
+  nextIdx++;
+}
+
+function drawLine(li, nChars, x, y, alpha){
+  const txt = LINES[li];
+  const cols = CHAR_COLS[li];
+  ctx.globalAlpha = alpha;
+  let cx = x;
+  for(let i=0; i<Math.min(nChars,txt.length); i++){
+    ctx.fillStyle = cols[i];
+    ctx.fillText(txt[i], cx, y);
+    cx += ctx.measureText(txt[i]).width;
+  }
+  ctx.globalAlpha = 1;
+  return cx;
+}
+
+function draw(ts){
+  requestAnimationFrame(draw);
+  const w = W();
+  if(w < 1) return;
+
+  // Dark background
+  ctx.fillStyle = '#2D5040';
+  ctx.fillRect(0,0,w,CANVAS_H);
+
+  const gl = ctx.createRadialGradient(0,CANVAS_H/2,0, 0,CANVAS_H/2,w*0.25);
+  gl.addColorStop(0,'rgba(15,80,50,0.25)');
+  gl.addColorStop(1,'rgba(15,80,50,0)');
+  ctx.fillStyle=gl; ctx.fillRect(0,0,w,CANVAS_H);
+
+  const go = ctx.createRadialGradient(0,CANVAS_H,0, 0,CANVAS_H,w*0.3);
+  go.addColorStop(0,'rgba(193,138,11,0.10)');
+  go.addColorStop(1,'rgba(193,138,11,0)');
+  ctx.fillStyle=go; ctx.fillRect(0,0,w,CANVAS_H);
+
+  ctx.font = FONT;
+  if(!current) next();
+
+  // Advance typing
+  if(!current.done){
+    if(ts - lastT > CHAR_DELAY){
+      current.shown++;
+      lastT = ts;
+      if(current.shown >= LINES[current.li].length){
+        current.done = true; lastT = ts;
+      }
+    }
+  } else {
+    if(ts - lastT > LINE_PAUSE){
+      completed.push({ li: current.li });
+      if(completed.length > VISIBLE_LINES - 1)
+        completed = completed.slice(completed.length - (VISIBLE_LINES-1));
+      current = null; lastT = ts;
+    }
+  }
+
+  if(ts - cursorT > 530){ cursorOn = !cursorOn; cursorT = ts; }
+
+  // Completed lines
+  completed.forEach((ln,i)=>{
+    const y = FONT_SIZE + 8 + i * LINE_H;
+    const age = completed.length - i;
+    drawLine(ln.li, Infinity, PADDING_X, y, Math.max(0.25, 1 - age*0.2));
+  });
+
+  // Current typing line
+  if(current){
+    const y    = FONT_SIZE + 8 + completed.length * LINE_H;
+    const endX = drawLine(current.li, current.shown, PADDING_X, y, 1);
+    if(cursorOn){
+      ctx.fillStyle='#00E5CC';
+      ctx.fillRect(endX+1, y - FONT_SIZE+2, 8, FONT_SIZE+2);
+    }
+  }
+}
+
+requestAnimationFrame(draw);
+</script>
+</div>
+</body>
+</html>
