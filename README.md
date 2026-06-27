@@ -11,6 +11,22 @@
 
 **Full-field ERG signal processing, machine learning classification, and clinical decision support API.**
 
+## Project Status
+
+| Tier | Name | Status |
+|:---|:---|:---|
+| **Tier 1** | Synthetic Validation | ✅ Complete — 41/41 PASS |
+| **Tier 2** | Code Hardening | ✅ Complete — pytest 23/23 PASS |
+| **Tier 3** | Clinical & Regulatory | ✅ Complete — T3-A through T3-E signed off |
+| **Tier 4** | External Validation | 🔄 Phase A complete — clinical site TBD |
+| **Tier 5** | Clinical Deployment | ⏳ Pending Tier 4 |
+
+**Current version:** v2.4.0  
+**Normative reference:** Baker et al. (2025) N=407. DOI: [10.1007/s10633-025-10009-2](https://doi.org/10.1007/s10633-025-10009-2)  
+**OSF pre-registration:** [10.17605/OSF.IO/6WA42](https://doi.org/10.17605/OSF.IO/6WA42)  
+**Regulatory package:** [`docs/regulatory/`](docs/regulatory/) (T2–T4 documents)  
+**Charity registration:** AI Fairness CIO — Charity Commission No. 1218464
+
 This repository accompanies the textbook "**Hands-On Electroretinography in the Age of AI**
 _*A Practical Guide from Clinical Fundamentals to Intelligent Decision Support*" (Apress/Springer-Nature, forthcoming (Tavakoli 2027)).
 
@@ -45,7 +61,7 @@ This project provides a complete, reproducible pipeline for:
 | `/tests` | Unit tests for filters, features, and API endpoints |
 | `/docs` | Documentation including CHANGELOG.md and validation reports |
 | `/synthetic_validation` | Synthetic dataset generator and validation manifest (v2.3.2 inherited); v2.4.0 comprehensive 41-case datasets and corrected generator |
-| `/validation` | v2.4.0 validation reports — `VALIDATION_REPORT_v2_4_0_COMPLETE.docx` (23 Jun 2026, **41/41 PASS — current**); `VALIDATION_REPORT_v2_4_0_FINAL.docx` (23 Jun 2026, 30/41 conditional, superseded); `VALIDATION_REPORT_v2_4_0_comprehensive.docx` (22 Jun 2026, superseded) |
+| `/validation` | v2.4.0 validation reports — `T1_Synthetic_Validation_Report_v2_4_0_COMPLETE.docx` (23 Jun 2026, **41/41 PASS — current**); `T1_Synthetic_Validation_Report_v2_4_0_FINAL_superseded.docx` (23 Jun 2026, 30/41 conditional, superseded); `VALIDATION_REPORT_v2_4_0_comprehensive.docx` (22 Jun 2026, superseded) |
 | `/synthetic_validation` | Synthetic dataset generators and validation manifests; v2.3.2 inherited (13/13); v2.4.0 comprehensive 41-case dataset — Run 1 (11/41), Run 2 (30/41), Runs 3–5 final (41/41); `ERG_CSV_Generator_v2_4_2.py` (all defects G1–G7 resolved) |
 
 ## Quick Start
@@ -87,10 +103,12 @@ internal synthetic validation (23 June 2026).
 - All generator defects G1–G7 and A1/S03 resolved in 
   `ERG_CSV_Generator_v2_4_2.py`
 - Zero API pipeline bugs identified
-- Full report: `validation/VALIDATION_REPORT_v2_4_0_COMPLETE.docx`
+- Full report: `validation/T1_Synthetic_Validation_Report_v2_4_0_COMPLETE.docx`
+- Code hardening report: `docs/regulatory/T2_Code_Hardening_Report_v1_0.docx`
+- Regulatory package: `docs/regulatory/` (T3-A through T3-E)
 - Pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
 
-See `validation/VALIDATION_REPORT_v2_4_0_COMPLETE.docx` for the full 41-case audit table, root cause analysis for all generator defects, and Tier 1 sign-off checklist. OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
+See `validation/T1_Synthetic_Validation_Report_v2_4_0_COMPLETE.docx` for the full 41-case audit table, root cause analysis for all generator defects, and Tier 1 sign-off checklist. OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
 
 ## Electrode Support
 
@@ -112,7 +130,7 @@ Pipeline V2.4.0 uses **age-stratified normative reference ranges** from:
 - **Age strata:** ≤35y | 36–59y | ≥60y (Baker 2025 three-stratum framework)
 - **Electrodes:** Silver thread (fornix) + Gold Foil (Deming regression transference, Baker Table 2)
 - **Protocols:** DA 0.01, DA 3, DA 10, LA 3, LA 30 Hz (all five ISCEV 2022 standard protocols)
-- **Parameters:** a-wave amplitude, a-wave implicit time, b-wave amplitude, b-wave implicit time (48 validated µ/σ values)
+- **Parameters:** a-wave amplitude, a-wave implicit time, b-wave amplitude, b-wave implicit time (96 validated µ/σ values across 5 protocols × 3 strata × 2 electrodes)
 - **b/a ratio:** mean 2.65, SD 0.425 (normal range 1.8–3.5, DA 3 only; Chapter 9)
 
 ## Traffic Light Interpretation
@@ -128,7 +146,7 @@ Pipeline V2.4.0 uses **age-stratified normative reference ranges** from:
 
 Each pipeline run generates an HL7 FHIR R4 Observation resource:
 - Top-level ERG code: **LOINC 70943-7**
-- Parameter codes: custom `erg-api:` scheme (`https://github.com/AI-Fairness-com/ERG-Analysis-API/CodeSystem`)
+- Parameter codes: custom `erg-api:` scheme (`https://ai-fairness.com/fhir/CodeSystem/erg-api`, version: 2.4.0)
 - SNOMED CT interpretation codes: Normal (17621005), Borderline (263654007), Abnormal (442257004), Not available (410515003)
 
 ## Citation
@@ -172,4 +190,4 @@ For clinical validation partnerships or dataset access inquiries, please email d
 
 ---
 
-*Hands-On Electroretinography in the Age of AI — Pipeline V2.4.0 — Validation updated 23 June 2026*
+*Hands-On Electroretinography in the Age of AI — Pipeline V2.4.0 — Tiers 1–3 complete; Tier 4 Phase A complete — Updated 25 June 2026*
