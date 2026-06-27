@@ -4,6 +4,9 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Pipeline Version](https://img.shields.io/badge/pipeline-v2.4.0-lightgreen.svg)](https://github.com/AI-Fairness-com/ERG-Analysis-API/blob/main/docs/CHANGELOG.md)
 ![Validation](https://img.shields.io/badge/validation-41%2F41%20PASS-brightgreen)
+![pytest](https://img.shields.io/badge/pytest-23%2F23%20PASS-brightgreen)
+![Tier](https://img.shields.io/badge/tier-4%20prep%20complete-brightgreen)
+![Version](https://img.shields.io/badge/version-v2.4.0-blue)
 
 
 **Full-field ERG signal processing, machine learning classification, and clinical decision support API.**
@@ -62,13 +65,16 @@ This project provides a complete, reproducible pipeline for:
 
 ## Validation Status
 
-| Validation Type | Dataset | Result | Status |
-|:---|:---|:---|:---|
-| **Synthetic (Internal v2.4.0 — comprehensive)** | 41 cases × 5 protocols × 3 age strata × Gold Foil + DTL | 41/41 PASS | ✅ COMPLETE |
-| **Synthetic (Internal v2.3.2 — inherited by v2.4.0)** | 12 scenarios × 5 protocols × 4 electrode types | 13/13 runs passed | ✅ PASS |
-| **Technical (External)** | OculusGraphy 2020 (n=149) | 100% processing success | ✅ PASS |
-| **Normative integration** | Baker et al. 2025 (N=407) | All 48 µ/σ values verified < 0.02 tolerance | ✅ PASS |
-| **Sensitivity (External)** | Real pathology recordings | Planned for V3.0 | ⏳ PENDING |
+| Tier | Type | Dataset | Result | Status |
+|:---|:---|:---|:---|:---|
+| **Tier 1** | Synthetic — Internal v2.4.0 | 41 cases × 5 protocols × 3 age strata × Gold Foil + DTL | 41/41 PASS | ✅ COMPLETE |
+| **Tier 1** | Synthetic — Internal v2.3.2 (inherited) | 12 scenarios × 5 protocols × 4 electrode types | 13/13 runs PASS | ✅ PASS |
+| **Tier 2** | Code Hardening — pytest suite | 23 automated tests (14 pipeline + 9 regression) | 23/23 PASS | ✅ COMPLETE |
+| **Tier 2** | ISCEV re-validation | 30 CSVs at 350 ms post-stimulus | 30/30 PASS | ✅ COMPLETE |
+| **Tier 2** | Normative integration | Baker et al. 2025 (N=407) — 96 µ/σ values | All values verified | ✅ COMPLETE |
+| **Tier 3** | Clinical & Regulatory | ISCEV audit, traceability, bias, intended use, regulatory readiness | T3-A–T3-E signed off | ✅ COMPLETE |
+| **Tier 4** | External Clinical Validation | Prospective real-patient ERG (N≥200, independent site) | Phase A prep complete | 🔄 IN PROGRESS |
+| **Tier 5** | Clinical Deployment | Post Tier 4 completion | — | ⏳ PENDING |
 
 ## Validation
 
