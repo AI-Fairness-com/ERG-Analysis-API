@@ -21,7 +21,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile/tablet interface for point-of-care use
 
 ---
+## [2.4.0-tier4-prep-complete] — 2026-06-25
 
+### Tier 4 Phase A — External Validation Preparation (complete)
+
+**Documents added** (`docs/regulatory/`)
+- T4-A_Validation_Protocol_v1_0.docx — pre-specified SAP; N≥200; Cohen's κ primary endpoint; 5 secondary analyses; pipeline version locked at v2.4.0
+- T4-B_Ethics_Application_Template_v1_0.docx — IRAS-structured ethics application; GDPR basis; consent framework; AI fairness declarations
+- T4-C_Data_Sharing_Agreement_v1_0.docx — GDPR Article 28 processor agreement template; data description; retention/deletion schedule; IP ownership
+- T4-D_Post_Market_Surveillance_Plan_v1_0.docx — 5 KPIs with alert thresholds; Shewhart rolling AUC drift detection; adverse event reporting; annual revalidation schedule
+- T4-E_QMS_Skeleton_v1_0.docx — ISO 13485 / ISO 14971 minimum viable QMS; design history file; 6-hazard risk register; change control log
+- T4-F_Validation_Report_Template_v1_0.docx — pre-formatted validation report shell; CONSORT flow; confusion matrix; outcome tables; regulatory readiness verdict
+
+**Phase B status:** NOT STARTED — commences upon clinical site identification, ethics approval, and DSA execution.
+
+---
+
+## [2.4.0-tier3-complete] — 2026-06-24
+
+### Tier 3 — Clinical & Regulatory (complete)
+
+**Documents added** (`docs/regulatory/`)
+- T2_Code_Hardening_Report_v1_0.docx — 6 work packages; pytest 23/23 PASS; T1 limitations L3/L4/L7 resolved
+- T3-A_ISCEV_Compliance_Checklist_v1_0.docx — 25 items; 14 PASS, 3 AMBER (remediated), 1 FAIL (remediated)
+- T3-B_Normative_Traceability_Matrix_v1_0.docx — full Baker 2025 cross-walk; 8 findings; 3 AMBER (remediated)
+- T3-C_Bias_Fairness_Audit_v1_0.docx — age stratification, DTL correction, traffic light symmetry; 2 AMBER (remediated)
+- T3-D_Intended_Use_Statement_v1_0.docx — intended use statement, 5 contraindications, 9 limitations, OSF pre-reg cross-walk
+- T3-E_Regulatory_Readiness_Summary_v1_0.docx — RAG table 18 requirements; verdict: READY FOR TIER 4
+
+**Code patches applied to erg_v2_4_0.py**
+- G1: version comment corrected to v2.4.0
+- A6: flash duration runtime validation added to ERGAudit.run_full_audit()
+- E5: FHIR CodeSystem URI updated to versioned ai-fairness.com URI
+- F1: schema_version assertion added at normative JSON load time
+- F6: BA_RATIO_MEAN and BA_RATIO_SD loaded from JSON (single source of truth)
+- F4: _la3_a_amp_dtl_r2_borderline flag added to Layer 4 audit
+- B4: LA 30 Hz b_amp absolute floor (20 µV → minimum AMBER) in generate_full_report()
+
+**Code patches applied to erg_report_generator.py**
+- D5: paediatric age group disclaimer block added to PDF report
+
+**Regulatory readiness verdict:** READY FOR TIER 4 (external clinical validation). ML classifiers, external validation, and post-market surveillance plan are deferred to Tier 4.
+
+---
 ## [2.4.0] — 2026-06-18
 
 PhNR display release. Pipeline file and HTML renamed to match version.
