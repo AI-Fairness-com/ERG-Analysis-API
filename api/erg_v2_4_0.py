@@ -433,11 +433,11 @@ class ERGAudit:
         freqs, psd = welch(signal, fs=fs_hz, nperseg=min(1024, len(signal)))
 
         op_mask = (freqs >= self.config.ISCEV_OP_BAND_LOW_HZ) & (freqs <= self.config.OP_BAND_HIGH_HZ)
-        op_band_energy = np.trapezoid(psd[op_mask], freqs[op_mask])
+        op_band_energy = np.trapz(psd[op_mask], freqs[op_mask])
 
         noise_mask = (freqs >= self.config.NOISE_BAND_LOW_HZ) & (freqs <= self.config.NOISE_BAND_HIGH_HZ)
         if np.any(noise_mask):
-            noise_band_energy = np.trapezoid(psd[noise_mask], freqs[noise_mask])
+            noise_band_energy = np.trapz(psd[noise_mask], freqs[noise_mask])
             snr_db = 10 * np.log10((op_band_energy + 1e-30) / (noise_band_energy + 1e-30))
         else:
             noise_band_energy = 0
