@@ -18,3 +18,4 @@ pywavelets==1.5.0
 EMD-signal>=1.6.3
 statsmodels>=0.14.0
 fhir.resources>=7.0.0
+flask-cors==4.0.1
