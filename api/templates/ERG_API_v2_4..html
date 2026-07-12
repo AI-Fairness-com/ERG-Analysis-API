@@ -2974,7 +2974,7 @@
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     try {
-      const response = await fetch('/api/v1/analyse', {
+      const response = await fetch('https://erg-analysis-api-1.onrender.com/api/v1/analyse', {
         method: 'POST',
         body: formData,
         signal: controller.signal
@@ -3024,7 +3024,7 @@
     btn.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Generating PDF…';
 
     try {
-      const response = await fetch('/api/v1/report-pdf/' + encodeURIComponent(reportId));
+      const response = await fetch('https://erg-analysis-api-1.onrender.com/api/v1/report-pdf/' + encodeURIComponent(reportId));
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         showError(err.message || 'Could not generate the clinical PDF (HTTP ' + response.status + ').');
