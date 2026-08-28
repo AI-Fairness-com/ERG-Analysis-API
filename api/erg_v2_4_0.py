@@ -693,7 +693,8 @@ print("=" * 60)
 # FIXED: a-wave forced negative, b-wave forced positive, b-wave after a-wave enforced
 # ============================================================================
 
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks, welch
+import pywt
 
 class ERGFeatureExtractor:
     """ISCEV 2022-Compliant Feature Extraction"""
@@ -808,23 +809,25 @@ class ERGFeatureExtractor:
             'flash_midpoint_correction_ms': correction_ms
         }
 
-    def extract_oscillatory_potentials(self, signal: np.ndarray, fs_hz: float,
+        def extract_oscillatory_potentials(self, signal: np.ndarray, fs_hz: float,
                                         flash_onset_sample: int = 0) -> Dict[str, Any]:
         """
-        Extract Oscillatory Potentials OP1-OP4 from 75-300 Hz filtered signal
-        Per ISCEV 2022: OP4 window 35-65 ms, OP sum = OP2+OP3+OP4 (excludes OP1)
+        Extract Oscillatory Potentials OP2-OP4 from 75-300 Hz filtered signal
+        Per ISCEV 2022: OP4 window 35-65 ms, OP sum = OP2+OP3+OP4.
+        OP1 is not extracted: its trough overlaps the b-wave ascending limb
+        and it is excluded from ISCEV 2022 OP quantification.
         """
 
         # OP search windows (post-flash in ms) per ISCEV 2022
         # OP4 window extended to 35-65 ms (peaks at 50-65 ms in human dark-adapted ERG)
         op_windows = {
-            'OP1': (12, 20),
             'OP2': (20, 28),
             'OP3': (28, 38),
             'OP4': (38, 65)  # Non-overlapping with OP3
         }
 
         ops = {}
+        op2_implicit_ms = np.nan
 
         for op_name, (start_ms, end_ms) in op_windows.items():
             start_idx = flash_onset_sample + int(start_ms * fs_hz / 1000)
@@ -843,6 +846,8 @@ class ERGFeatureExtractor:
                     trough_idx_local = np.argmin(segment[:peak_idx_local+1]) if peak_idx_local > 0 else 0
                     trough_amplitude = segment[trough_idx_local]
                     op_amplitude = peak_amplitude - trough_amplitude
+                    if op_name == 'OP2':
+                        op2_implicit_ms = (start_idx + peak_idx_local - flash_onset_sample) * 1000.0 / fs_hz
                 else:
                     op_amplitude = 0.0
             else:
@@ -850,8 +855,9 @@ class ERGFeatureExtractor:
 
             ops[op_name] = round(float(op_amplitude), 1)
 
-        # OP sum per ISCEV: OP2+OP3+OP4 (excludes OP1)
+        # OP sum per ISCEV: OP2+OP3+OP4
         ops['OP_sum_uv'] = ops.get('OP2', 0) + ops.get('OP3', 0) + ops.get('OP4', 0)
+        ops['OP2_implicit_ms'] = round(float(op2_implicit_ms), 2) if not np.isnan(op2_implicit_ms) else np.nan
 
         return ops
 
@@ -919,8 +925,163 @@ class ERGFeatureExtractor:
                 'phnr_amp_uv': round(phnr_signed, 1),
                 'phnr_polarity_atypical': bool(phnr_signed > 0),
             }
-        else:
+                else:
             return {'phnr_amp_uv': np.nan, 'phnr_polarity_atypical': False}
+
+    def extract_nonlinear_features(self, signal: np.ndarray) -> Dict[str, Any]:
+        """
+        Hurst Exponent and Approximate Entropy of the broadband signal.
+        Per Nair & Joseph (2014, BioMed Research International): both measures
+        are significantly lower (p<0.05) in CSNB, RP, and cone-rod dystrophy
+        vs. healthy controls. The Largest Lyapunov Exponent and Higuchi
+        Fractal Dimension from the same study were NOT statistically
+        significant on their data and are deliberately not implemented here.
+        """
+        x = np.asarray(signal, dtype=float)
+        n = len(x)
+
+        # Hurst exponent via detrended-difference scaling (Nair & Joseph 2014, Eq. 1)
+        if n < 20:
+            hurst = np.nan
+        else:
+            lags = range(2, n // 2)
+            tau = np.array([np.std(x[lag:] - x[:-lag]) for lag in lags])
+            valid = tau > 0
+            if valid.sum() < 2:
+                hurst = np.nan
+            else:
+                log_lags = np.log(np.array(list(lags))[valid])
+                log_tau = np.log(tau[valid])
+                slope, _ = np.polyfit(log_lags, log_tau, 1)
+                hurst = float(slope * 2.0)
+
+        # Approximate entropy (Pincus 1991; m=2, r=0.15*SD per Nair & Joseph 2014)
+        def _phi(m, r):
+            z = np.array([x[i:i + m] for i in range(n - m + 1)])
+            d = np.abs(z[:, None, :] - z[None, :, :]).max(axis=2)
+            c = (d <= r).sum(axis=1) / (n - m + 1)
+            return np.sum(np.log(c)) / (n - m + 1)
+
+        if n < 10:
+            apen = np.nan
+        else:
+            r = 0.15 * np.std(x)
+            apen = float(_phi(2, r) - _phi(3, r)) if r > 0 else np.nan
+
+        return {
+            'hurst_exponent': round(hurst, 4) if not np.isnan(hurst) else np.nan,
+            'approximate_entropy': round(apen, 4) if not np.isnan(apen) else np.nan,
+        }
+
+    def extract_dwt_band_energies(self, signal: np.ndarray, fs_hz: float,
+                                   flash_onset_sample: int = 0,
+                                   wavelet: str = 'morl') -> Dict[str, Any]:
+        """
+        CWT band-energy descriptors at Gauvin et al.'s (2014, BioMed Research
+        International) six statistically-validated frequency/time-window
+        pairs: 20/40 Hz over the a-wave window, 20/40 Hz over the b-wave
+        window, and 80/150 Hz over the OP window. Gauvin proved these six
+        descriptors are non-redundant with classical amplitude/implicit-time
+        measures (p<0.05 differences on ERGs indistinguishable by amplitude
+        or peak time alone).
+        """
+        x = np.asarray(signal, dtype=float)
+        n = len(x)
+        t_ms = (np.arange(n) - flash_onset_sample) * 1000.0 / fs_hz
+        dt = 1.0 / fs_hz
+        central_freq = pywt.central_frequency(wavelet)
+
+        descriptors = {
+            'dwt_20a_uv2': (20.0, (5.0, 30.0)),
+            'dwt_40a_uv2': (40.0, (5.0, 30.0)),
+            'dwt_20b_uv2': (20.0, (20.0, 70.0)),
+            'dwt_40b_uv2': (40.0, (20.0, 70.0)),
+            'dwt_80ops_uv2': (80.0, (10.0, 45.0)),
+            'dwt_150ops_uv2': (150.0, (10.0, 45.0)),
+        }
+
+        out = {}
+        for key, (target_freq_hz, window_ms) in descriptors.items():
+            scale = central_freq * fs_hz / target_freq_hz
+            coeffs, _ = pywt.cwt(x, [scale], wavelet, sampling_period=dt)
+            mag = np.abs(coeffs[0])
+            mask = (t_ms >= window_ms[0]) & (t_ms <= window_ms[1])
+            out[key] = round(float(np.sum(mag[mask] ** 2)), 2) if mask.any() else np.nan
+        return out
+
+    def extract_bwave_derivative_features(self, signal: np.ndarray, fs_hz: float,
+                                           b_wave_implicit_time_ms: float,
+                                           flash_onset_sample: int = 0,
+                                           search_end_ms: float = 150.0) -> Dict[str, Any]:
+        """
+        b-wave descending-limb inflection point (2nd-derivative zero crossing)
+        implicit time and gradient. Per Wood, Margrain & Binns (2014, PLoS
+        ONE), this was the only statistically significant derivative-based
+        parameter pair in early AMD (their a-wave descending inflection was
+        not significant, p=0.097, and is deliberately not implemented here).
+        """
+        if np.isnan(b_wave_implicit_time_ms):
+            return {'b_descending_inflection_ms': np.nan, 'b_descending_gradient_uv_ms': np.nan}
+
+        t_ms = (np.arange(len(signal)) - flash_onset_sample) * 1000.0 / fs_hz
+        mask = (t_ms >= b_wave_implicit_time_ms) & (t_ms <= search_end_ms)
+        if mask.sum() < 5:
+            return {'b_descending_inflection_ms': np.nan, 'b_descending_gradient_uv_ms': np.nan}
+
+        seg_t = t_ms[mask]
+        seg_x = np.asarray(signal)[mask]
+        d1 = np.gradient(seg_x, seg_t)
+        d2 = np.gradient(d1, seg_t)
+        sign_changes = np.where(np.diff(np.sign(d2)))[0]
+        if len(sign_changes) == 0:
+            return {'b_descending_inflection_ms': np.nan, 'b_descending_gradient_uv_ms': np.nan}
+
+        idx = sign_changes[0]
+        return {
+            'b_descending_inflection_ms': round(float(seg_t[idx]), 2),
+            'b_descending_gradient_uv_ms': round(float(d1[idx]), 2),
+        }
+
+    def extract_frequency_domain_features(self, signal: np.ndarray, fs_hz: float,
+                                           protocol: str = 'DA 3',
+                                           fmin: float = 0.0, fmax: float = 300.0,
+                                           fundamental_hz: float = 30.0,
+                                           n_harmonics: int = 3,
+                                           bw_hz: float = 2.0) -> Dict[str, Any]:
+        """
+        Peak PSD frequency and spectral entropy (Behbahani, Ahmadieh & Rajan
+        2021, IEEE Access; Gauvin et al. 2014) on the broadband signal for
+        every protocol. Harmonic ratio at the flicker fundamental and its
+        first two harmonics (Behbahani et al. 2021) is computed only for the
+        LA 30 Hz protocol, matching this pipeline's existing LA-30Hz-only
+        convention for flicker-specific features.
+        """
+        freqs, psd = welch(signal, fs=fs_hz, nperseg=min(256, len(signal)))
+        mask = (freqs >= fmin) & (freqs <= fmax)
+        freqs_m, psd_m = freqs[mask], psd[mask]
+
+        if len(psd_m) == 0 or np.sum(psd_m) == 0:
+            out = {'peak_freq_hz': np.nan, 'spectral_entropy': np.nan}
+        else:
+            peak_freq = float(freqs_m[np.argmax(psd_m)])
+            p_norm = psd_m / np.sum(psd_m)
+            p_norm = p_norm[p_norm > 0]
+            entropy = float(-np.sum(p_norm * np.log(p_norm)) / np.log(len(p_norm))) if len(p_norm) > 1 else np.nan
+            out = {'peak_freq_hz': round(peak_freq, 2), 'spectral_entropy': round(entropy, 4)}
+
+        if protocol.upper().replace(' ', '') in ('LA30HZ', 'LA30'):
+            total_power = np.sum(psd)
+            if total_power > 0:
+                harmonic_power = 0.0
+                for k in range(1, n_harmonics + 1):
+                    f0 = fundamental_hz * k
+                    hmask = (freqs >= f0 - bw_hz) & (freqs <= f0 + bw_hz)
+                    harmonic_power += np.sum(psd[hmask])
+                out['harmonic_ratio'] = round(float(harmonic_power / total_power), 4)
+            else:
+                out['harmonic_ratio'] = np.nan
+
+        return out
 
     def extract_all_features(self, signal: np.ndarray, fs_hz: float,
                              protocol: str = 'DA 3',
@@ -979,15 +1140,40 @@ class ERGFeatureExtractor:
             ops = self.extract_oscillatory_potentials(op_signal, fs_hz, flash_onset_sample)
             features['oscillatory_potentials'] = ops
 
-        # Extract PhNR for LA 3.0 protocol
+                # Extract PhNR for LA 3.0 protocol
         if protocol == 'LA 3':
             if 'b_wave_implicit_time_ms' in features and not np.isnan(features['b_wave_implicit_time_ms']):
                 phnr = self.extract_phnr(signal, fs_hz, features['b_wave_implicit_time_ms'],
                                          flash_onset_sample, noise_rms_uv)
                 features.update(phnr)
+                # PhNR/b-wave ratio (Kirkiewicz, Lubinski & Penkala 2016, Doc
+                # Ophthalmol): AUC 0.78-0.86 across glaucoma stages, statistically
+                # comparable to raw PhNR amplitude alone but normalises inter-
+                # individual variability per Prencipe et al. (2020).
+                b_amp = features.get('b_wave_amplitude_uv', np.nan)
+                phnr_amp = features.get('phnr_amp_uv', np.nan)
+                if not np.isnan(b_amp) and b_amp != 0 and not np.isnan(phnr_amp):
+                    features['phnr_bwave_ratio'] = round(float(phnr_amp / b_amp), 4)
+                else:
+                    features['phnr_bwave_ratio'] = np.nan
             else:
                 features['phnr_amp_uv'] = np.nan
                 features['phnr_polarity_atypical'] = False
+                features['phnr_bwave_ratio'] = np.nan
+
+        # Nonlinear features (Hurst Exponent, Approximate Entropy)
+        features.update(self.extract_nonlinear_features(signal))
+
+        # DWT time-frequency band-energy descriptors (Gauvin et al. 2014)
+        features.update(self.extract_dwt_band_energies(signal, fs_hz, flash_onset_sample))
+
+        # b-wave descending-limb inflection point (Wood et al. 2014)
+        b_implicit = features.get('b_wave_implicit_time_ms', np.nan)
+        features.update(self.extract_bwave_derivative_features(signal, fs_hz, b_implicit, flash_onset_sample))
+
+        # Frequency-domain features (peak frequency, spectral entropy, and
+        # harmonic ratio for LA 30 Hz)
+        features.update(self.extract_frequency_domain_features(signal, fs_hz, protocol))
 
         return features
 
