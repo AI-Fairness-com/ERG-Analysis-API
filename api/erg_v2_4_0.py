@@ -809,7 +809,7 @@ class ERGFeatureExtractor:
             'flash_midpoint_correction_ms': correction_ms
         }
 
-        def extract_oscillatory_potentials(self, signal: np.ndarray, fs_hz: float,
+    def extract_oscillatory_potentials(self, signal: np.ndarray, fs_hz: float,
                                         flash_onset_sample: int = 0) -> Dict[str, Any]:
         """
         Extract Oscillatory Potentials OP2-OP4 from 75-300 Hz filtered signal
