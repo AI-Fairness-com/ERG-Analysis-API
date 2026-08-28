@@ -77,7 +77,7 @@ def sanitise(obj):
 
 # ── 1. Load the pipeline module (strips Colab-only top-level code) ────────────
 
-PIPELINE_PATH = os.path.join(os.path.dirname(__file__), "erg_v2_4_0.py")
+PIPELINE_PATH = os.path.join(os.path.dirname(__file__), "erg_v2_5_0.py")
 
 def _load_pipeline(path: str):
     """Import pipeline, neutralising Colab-only top-level code."""
