@@ -65,7 +65,7 @@ def pipeline_module():
 @pytest.fixture(scope="session")
 def s01_csv_path():
     """Absolute path to the locked regression fixture CSV."""
-    p = _REPO_ROOT / "synthetic_validation" / "S_Normal_DA3_GoldFoil_le35.csv"
+    p = _REPO_ROOT / "data" / "samples" / "S_Normal_DA3_GoldFoil_le35.csv"
     assert p.exists(), f"Regression fixture not found: {p}"
     return str(p)
 
