@@ -50,6 +50,26 @@ Source: Baker et al. (2025); Blueprint Section 2.3
 
 Z-scores are computed against the age-matched normative stratum. Using an age-mismatched reference range will produce systematically incorrect Traffic Light assignments.
 
+### Feature Coverage: Which Parameters Have Normative Z-Scores Today
+
+Source: `data/normative_data_baker2025.json`
+
+The Traffic Light system currently computes Z-scores for **five parameters only**, all sourced from a single matched-methodology cohort (Baker et al. 2025, N=407):
+
+| Parameter | Normative source |
+|---|---|
+| a-wave amplitude | Baker et al. (2025) |
+| a-wave implicit time | Baker et al. (2025) |
+| b-wave amplitude | Baker et al. (2025) |
+| b-wave implicit time | Baker et al. (2025) |
+| b/a ratio | Baker et al. (2025), DA 3 only |
+
+**Every other feature this pipeline extracts is reported as a raw value but does NOT currently contribute to the Green/Amber/Red Traffic Light signal.** This includes the pre-existing OP2/OP3/OP4 amplitudes, OP-sum, OP2 implicit time, and PhNR amplitude, as well as the v2.5.0 additions: Hurst Exponent, Approximate Entropy, the six DWT band-energy descriptors, b-wave descending-limb inflection time and gradient, peak frequency, spectral entropy, harmonic ratio, and the PhNR/b-wave ratio.
+
+This is a deliberate omission, not an oversight. A published normative source exists for the DWT band-energy descriptors specifically (Gauvin, Lina & Lachapelle 2014, *BioMed Research International*), but it was measured with a different wavelet basis (discrete Haar decomposition vs. this pipeline's continuous Morlet-based implementation), a different cohort (N=40, photopic-only), and different acquisition parameters (3413.33 Hz sampling vs. this pipeline's own rate). Because wavelet basis and discretization change the numeric scale of "energy" even for identical underlying signals, importing that paper's published mean/SD values against this pipeline's own output would risk producing **systematically incorrect Z-scores** — a patient-safety concern, not just an academic mismatch (cf. the electrode-impedance methodology-transplant issue documented in the book's own review process).
+
+Establishing genuine normative coverage for these features requires either (a) a literature source measured with this pipeline's exact wavelet parameters and protocol scope, or (b) this project's own normative reference cohort, computed the same way Baker et al. (2025) established the existing five-parameter norms. Until then, these features remain available for raw reporting, SHAP explainability, and Random Forest classifier training, but are excluded from the clinical interpretation layer.
+
 ### Device-Relative Normalization
 
 Source: Chapter 10 §10.3; Blueprint Section 4.5, Step 5
