@@ -106,7 +106,7 @@ Source: Chapter 5 §5.2
 |---------------|-------------------------|
 | a-wave (trough and descent) | 5–30 Hz |
 | b-wave (peak and ascent) | 5–40 Hz |
-| Oscillatory potentials (OP1–OP4) | 75–300 Hz |
+| Oscillatory potentials (OP2–OP4) | 75–300 Hz |
 | PhNR (photopic negative response) | 0.3–5 Hz |
 | 30 Hz flicker steady-state | 30 Hz and harmonics (60, 90, 120 Hz) |
 
