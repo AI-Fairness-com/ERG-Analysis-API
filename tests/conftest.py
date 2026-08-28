@@ -1,5 +1,5 @@
 """
-conftest.py — ERG Analysis API v2.4.0 test configuration
+conftest.py — ERG Analysis API v2.5.0 test configuration
 =========================================================
 Stubs Google Colab and ipywidgets before the pipeline module is imported.
 The pipeline is structured as a single-file notebook (Cells 1-10); Cell 10
@@ -47,10 +47,10 @@ if str(_REPO_ROOT) not in sys.path:
 # ---------------------------------------------------------------------------
 import importlib.util as _ilu
 
-_spec = _ilu.spec_from_file_location("erg_v2_4_0", _REPO_ROOT / "erg_v2_4_0.py")
+_spec = _ilu.spec_from_file_location("erg_v2_5_0", _REPO_ROOT / "api" / "erg_v2_5_0.py")
 _mod = _ilu.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
-sys.modules["erg_v2_4_0"] = _mod
+sys.modules["erg_v2_5_0"] = _mod
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ sys.modules["erg_v2_4_0"] = _mod
 # ---------------------------------------------------------------------------
 @pytest.fixture(scope="session")
 def pipeline_module():
-    """Return the imported erg_v2_4_0 module."""
+    """Return the imported erg_v2_5_0 module."""
     return _mod
 
 
