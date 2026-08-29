@@ -21,6 +21,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile/tablet interface for point-of-care use
 
 ---
+
+## [2.5.0] — 2026-08-29
+
+### Feature set redesign — literature-grounded 25-feature pipeline
+
+The v2.4.0 feature set (11 time-domain, then various STFT/PSD additions) was checked against the peer-reviewed ERG feature-extraction literature during the Chapter 9 review cycle. Most features had no specific citation behind them; several strongly-evidenced features from the literature were missing entirely. This release reconciles both.
+
+**Added (15 features, each backed by a named, cited source):**
+- `phnr_bwave_ratio` — PhNR/b-wave ratio (Kirkiewicz, Lubiński & Penkala 2016)
+- `hurst_exponent`, `approximate_entropy` — nonlinear complexity measures (Nair & Joseph 2014); Largest Lyapunov Exponent and Higuchi Fractal Dimension from the same study were tested and found not significant, and are deliberately not implemented
+- `dwt_20a_uv2`, `dwt_40a_uv2`, `dwt_20b_uv2`, `dwt_40b_uv2`, `dwt_80ops_uv2`, `dwt_160ops_uv2` — six CWT band-energy descriptors at Gauvin, Lina & Lachapelle's (2014) statistically-validated frequency/time-window pairs (their descriptor set was directly tested for redundancy against amplitude/implicit-time and found non-redundant)
+- `b_descending_inflection_ms`, `b_descending_gradient_uv_ms` — b-wave descending-limb derivative features (Wood, Margrain & Binns 2014)
+- `peak_freq_hz`, `spectral_entropy`, `harmonic_ratio` (LA 30 Hz only) — retained frequency-domain features (Behbahani, Ahmadieh & Rajan 2021; Gauvin et al. 2014)
+- `OP2_implicit_ms` — OP2 implicit time, alongside the existing OP2/OP3/OP4 amplitudes
+
+**Removed:**
+- `OP1` amplitude — excluded per ISCEV 2022 convention (its trough overlaps the b-wave ascending limb); this is a compliance correction, not a data-loss regression
+- 16 STFT spectrogram region-statistics features and the STFT-derived OP/b-wave ratio — no specific citation found; superseded by the DWT band-energy descriptors above
+- `power_ratio` (Welch OP/b-wave ratio) and the 4-band PSD split (`psd_vlow`, `psd_bwave`, `psd_transit`, `psd_op`) — redundant with the DWT descriptors, or (for the very-low band specifically) a QC/electrode-drift signal rather than a diagnostic feature
+
+**Net result:** up to 25 features per recording (was 36), 250 raw features per patient pre-selection (was up to 360) — smaller because the new design is hand-curated for non-redundancy, not because coverage was cut.
+
+### Bug fixes
+- `extract_bwave_derivative_features()`: the descending-inflection search started exactly at the b-wave peak, where numerical differentiation could catch leftover rising-limb curvature and return a spuriously positive ("ascending") gradient for a feature defined as descending. Fixed: search now starts 3 ms past the peak and only accepts candidates where the gradient is genuinely negative. Verified across all 30 files in the synthetic validation set — zero wrong-sign results after the fix, several before it.
+- Two indentation errors introduced during manual application of the v2.5.0 feature additions (one nested `def` one level too deep, one `else:` block misaligned) — both caught by direct `ast.parse()` validation and full pipeline execution, not just visual review.
+
+### Test infrastructure
+- `tests/conftest.py` imported the pipeline module from a repo-root path (`erg_v2_4_0.py`) that never existed there — only `api/erg_v2_4_0.py` and `notebooks/erg_v2_4_0.py` did, both now removed. This meant the test suite (`test_pipeline.py`, `test_regression.py`) was failing to collect independent of this release. Fixed to import from `api/erg_v2_5_0.py`.
+- `tests/conftest.py`'s regression fixture path pointed at `synthetic_validation/S_Normal_DA3_GoldFoil_le35.csv`; the file actually lives at `data/samples/`. Fixed.
+- Full suite verified: 23/23 passing under the repo's pinned `numpy==1.26.0` (two of the pipeline's `np.trapz` calls will need `np.trapezoid` if numpy is ever upgraded past 2.0 — not an active bug under the current pin, flagged for awareness).
+
+### Repository cleanup
+- `notebooks/erg_v2_4_0.py` removed — was a stale, independently-drifted snapshot (missing several features already in `api/erg_v2_4_0.py` before this release), not a maintained duplicate.
+- `api/erg_v2_4_0.py` removed; `api/erg_server.py`'s `PIPELINE_PATH` repointed to `api/erg_v2_5_0.py`.
+- `docs/regulatory/` T1, T2, and T3-A through T3-E documents (all describing v2.4.0's validated behavior) moved to `docs/regulatory/archive/v2.4.0/` rather than deleted or relabeled — they remain accurate, signed records of what was actually tested for v2.4.0, and must not be silently reattributed to v2.5.0's different feature set. New T1–T3 documents for v2.5.0 are pending re-validation.
+
+### Documentation
+- `docs/methodology.md`: added an explicit "Feature Coverage" disclosure — only 5 of the pipeline's features (a-wave amp/implicit, b-wave amp/implicit, b/a ratio) currently have normative Z-score/Traffic-Light coverage; the other 20 (including all 15 new features above) are extracted and reported but not yet clinically interpreted, pending either a matched-methodology literature source or the project's own normative cohort. Gauvin et al.'s (2014) own published normative values for the DWT descriptors are not reused directly, since their discrete Haar-wavelet decomposition is not numerically interchangeable with this pipeline's continuous Morlet-based implementation.
+- Chapter 9 of the accompanying textbook rewritten to match this feature set; Figures 9.1 and 9.2 rebuilt accordingly.
+
+---
 ## [2.4.0-tier4-prep-complete] — 2026-06-25
 
 ### Tier 4 Phase A — External Validation Preparation (complete)
