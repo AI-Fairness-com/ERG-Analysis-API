@@ -15,7 +15,7 @@
 
 | Tier | Name | Status |
 |:---|:---|:---|
-| **Tier 1** | Synthetic Validation | ✅ Complete — 41/41 PASS |
+| **Tier 1** | Synthetic Validation | ⚠️ 41/41 PASS on v2.4.0 — pending re-validation on v2.5.0's feature set |
 | **Tier 2** | Code Hardening | ✅ Complete — pytest 23/23 PASS |
 | **Tier 3** | Clinical & Regulatory | ✅ Complete — T3-A through T3-E signed off |
 | **Tier 4** | External Validation | 🔄 Phase A complete — clinical site TBD |
