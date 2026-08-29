@@ -2,11 +2,11 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Pipeline Version](https://img.shields.io/badge/pipeline-v2.4.0-lightgreen.svg)](https://github.com/AI-Fairness-com/ERG-Analysis-API/blob/main/docs/CHANGELOG.md)
-![Validation](https://img.shields.io/badge/validation-41%2F41%20PASS-brightgreen)
+[![Pipeline Version](https://img.shields.io/badge/pipeline-v2.5.0-lightgreen.svg)](https://github.com/AI-Fairness-com/ERG-Analysis-API/blob/main/docs/CHANGELOG.md)
+![Validation](https://img.shields.io/badge/validation-41%2F41%20PASS%20(v2.4.0)-yellow)
 ![pytest](https://img.shields.io/badge/pytest-23%2F23%20PASS-brightgreen)
 ![Tier](https://img.shields.io/badge/tier-4%20prep%20complete-brightgreen)
-![Version](https://img.shields.io/badge/version-v2.4.0-blue)
+![Version](https://img.shields.io/badge/version-v2.5.0-blue)
 
 
 **Full-field ERG signal processing, machine learning classification, and clinical decision support API.**
