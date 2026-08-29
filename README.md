@@ -21,7 +21,7 @@
 | **Tier 4** | External Validation | 🔄 Phase A complete — clinical site TBD |
 | **Tier 5** | Clinical Deployment | ⏳ Pending Tier 4 |
 
-**Current version:** v2.4.0  
+**Current version:** v2.5.0  
 **Normative reference:** Baker et al. (2025) N=407. DOI: [10.1007/s10633-025-10009-2](https://doi.org/10.1007/s10633-025-10009-2)  
 **OSF pre-registration:** [10.17605/OSF.IO/6WA42](https://doi.org/10.17605/OSF.IO/6WA42)  
 **Regulatory package:** [`docs/regulatory/`](docs/regulatory/) (T2–T4 documents)  
@@ -32,7 +32,10 @@ _*A Practical Guide from Clinical Fundamentals to Intelligent Decision Support*"
 
 ## Version Information
 
-**Current Version: 2.4.0** | Release Date: 18 June 2026
+**Current Version: 2.5.0** | Release Date: 29 August 2026
+
+- **V2.5.0**: Feature set redesigned around a literature-reviewed, citation-backed 25-feature pipeline (was 36) — 15 features added (PhNR/b-wave ratio, Hurst Exponent, Approximate Entropy, six DWT band-energy descriptors, b-wave descending-limb derivative features, peak frequency, spectral entropy, harmonic ratio, OP2 implicit time), OP1 removed (ISCEV 2022 compliance correction), STFT region-statistics and PSD-per-band features removed (redundant or unevidenced). Pipeline file renamed `erg_v2_5_0.py`. See `docs/CHANGELOG.md` for full details, including bug fixes, test-infrastructure corrections, and the normative-coverage disclosure added to `docs/methodology.md`. Synthetic validation (41/41) not yet re-run against this feature set — see Tier 1 status above.
+- **V2.4.0**:
 
 - **V2.4.0**: PhNR amplitude extraction added for LA 3 protocol (raw µV, negative sign convention); PhNR displayed in result panel, Layer 2 clinical summary, Layer 4 technical audit, FHIR bundle, and .txt report; PhNR Z-score and traffic light classification deferred pending validated normative dataset; pipeline file renamed to `erg_v2_4_0.py`; HTML renamed to `ERG_API_v2_4.html`. Comprehensive 41-case synthetic validation completed 23 June 2026 — **41/41 PASS COMPLETE**; all generator defects G1–G7 and A1/S03 resolved in `ERG_CSV_Generator_v2_4_2.py`; zero API pipeline bugs identified. Released 18 June 2026; validation completed 23 June 2026.
 - **V2.3.2**: 18 defects resolved (3 blocking, 2 critical, 6 significant, 5 minor, 2 additional blocking); Baker et al. (2025) N=407 normative data integrated with all 48 µ/σ values verified; electrode gating architecture (Gold Foil and DTL supported; Contact Lens and Skin UNAVAILABLE with positive flag); LA 30 Hz b-wave extraction bug fixed; synthetic validation 13/13 passed; external validation cleared. Released 16 June 2026.
@@ -45,7 +48,7 @@ See `docs/CHANGELOG.md` for complete version history.
 This project provides a complete, reproducible pipeline for:
 - **ISCEV-compliant ERG filtering** (Butterworth bandpass, notch Q=50, median)
 - **Time-frequency analysis** (STFT spectrograms, wavelet transforms)
-- **Feature extraction** (time-domain, frequency-domain, STFT statistics)
+- **Feature extraction** (time-domain, PhNR family, nonlinear & CWT time-frequency descriptors, frequency-domain — 25 features/recording, see `docs/CHANGELOG.md` v2.5.0)
 - **Machine learning classification** (Random Forest baseline + Vision Transformer)
 - **SHAP explainability** (feature-level, spectrogram-level, plain-language)
 - **No-code clinical API** (four-layer report: Traffic Light + Clinical Summary + Specialist + Audit)
