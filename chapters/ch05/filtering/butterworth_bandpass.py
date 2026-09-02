@@ -17,7 +17,7 @@ LOWCUT_HZ = 0.3                 # High-pass cutoff (preserves PhNR)
 HIGHCUT_HZ = 300                # Low-pass cutoff (preserves OPs)
 ORDER = 4                       # 4th-order Butterworth
 
-def design_bandpass_filter(lowcut, highcut, fs, order):
+def design_butterworth_bandpass(lowcut, highcut, fs, order):
     """
     Design a Butterworth bandpass filter.
     Returns SOS (second-order sections) for numerical stability.
@@ -33,7 +33,7 @@ def apply_bandpass_filter(signal, fs, lowcut=LOWCUT_HZ, highcut=HIGHCUT_HZ, orde
     Apply zero-phase Butterworth bandpass filter to ERG signal.
     Uses sosfiltfilt (forward-backward) to preserve implicit times.
     """
-    sos = design_bandpass_filter(lowcut, highcut, fs, order)
+    sos = design_butterworth_bandpass(lowcut, highcut, fs, order)
     return sosfiltfilt(sos, signal)
 
 def plot_filter_response(sos, fs, lowcut, highcut):
@@ -60,7 +60,7 @@ def plot_filter_response(sos, fs, lowcut, highcut):
 # Example usage
 if __name__ == "__main__":
     # Design filter
-    sos = design_bandpass_filter(LOWCUT_HZ, HIGHCUT_HZ, FS_HZ, ORDER)
+    sos = design_butterworth_bandpass(LOWCUT_HZ, HIGHCUT_HZ, FS_HZ, ORDER)
     
     # Plot frequency response
     plot_filter_response(sos, FS_HZ, LOWCUT_HZ, HIGHCUT_HZ)
