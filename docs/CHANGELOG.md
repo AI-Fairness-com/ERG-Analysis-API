@@ -21,7 +21,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile/tablet interface for point-of-care use
 
 ---
+## [2.5.1] — 2026-09-02
 
+### Feature set completion — Chapter 9 full-pixel-level review
+
+Chapter 9's citation review (begun in the v2.5.0 cycle) surfaced three more evidenced features and one logic bug during full-text literature verification of every cited source.
+
+**Added (3 features, both from Wood, Margrain & Binns 2014 — same source as the existing b-wave descending-limb pair):**
+- `b_ascending_inflection_ms`, `b_ascending_gradient_uv_ms` — b-wave ascending-limb inflection point (p<0.001 time, p=0.005 gradient in source study; equally significant to the descending-limb pair already implemented, previously omitted)
+- `a_descending_inflection_ms` — a-wave descending-limb inflection time only (p<0.001, AUC 0.68); the matching gradient (p=0.097) remains excluded as not significant
+
+**Net result:** 28 distinct features (was 25), up to 27 per recording (LA 3.0 only — the one protocol where the PhNR bonus and the full nonlinear/derivative set co-occur), 256 raw values per patient pre-selection (was reported as 250, which incorrectly assumed a flat 25-per-recording maximum).
+
+### Bug fixes
+- `extract_all_features()`: the §9.3 block (nonlinear features, DWT band-energy descriptors, all five b/a-wave derivative features — 13 of the pipeline's 28 features) was nested inside `if protocol == 'LA 3':`, meaning these features were silently absent from every protocol except LA 3.0. This was not caught by visual code review; found only by tracing actual indentation in the raw document XML and confirmed by executing the pipeline across all five protocols and inspecting the returned feature keys directly. Fixed: §9.3 now runs unconditionally, at the same level as §9.1, §9.2, and §9.4. Verified: `extract_all_features()` now returns the full §9.3 key set (`hurst_exponent`, all six DWT keys, all five derivative keys) on DA 0.01, DA 3, DA 10, and LA 30 Hz, not just LA 3.
+
+### Citation corrections (full-text verification round)
+- Nair & Joseph (2014a): cohort description corrected. The source paper studies three groups (15 controls, 35 CSNB, 35 cone-rod dystrophy/retinitis pigmentosa), not four — CRD and RP are the same condition under two names within one 35-patient group in that study, not two separate patient groups.
+- Gauvin, Lina & Lachapelle (2014): the non-redundancy claim in §9.3.2 narrowed to accurately reflect what the source paper tested — two example ERG pairs (one distinguishable on the b-wave descriptors, one on the OP descriptors), not a blanket test across all six descriptors.
+- A power-spectrum structure claim (dominant peak ~28–30 Hz, secondary peaks ~75 Hz and ~150 Hz) was co-attributed to Behbahani, Ahmadieh & Rajan (2021) alongside Gauvin et al. (2014); full-text search of the Behbahani paper found no such claim. Citation corrected to Gauvin et al. (2014) alone.
+- Harmonic ratio (`harmonic_ratio`): previously cited to Pescosolido et al. (2015) for a "flicker-ERG changes proportional to DR severity" claim. Full-text review found that paper's actual "directly proportional to severity" statement describes retinal *vascular* reactivity to flickering light (Dynamic Vessel Analyzer), not the flicker-*ERG* electrical waveform this feature measures. Replaced with Fukuo et al. (2016, *Scientific Reports*), which directly measures flicker-ERG amplitude and implicit time against DR severity across 166 eyes.
+- OP1 exclusion rationale corrected: the source code and Chapter 9 previously stated OP1 is "excluded from ISCEV 2022's own OP quantification convention." ISCEV 2022 does not define an OP1–OP4 numbering scheme at all — it describes "typically three main positive peaks, often followed by a fourth peak that is smaller," with no formal peak-labeling convention. The OP1–OP4 numbering this pipeline uses follows the wider ERG literature, not an ISCEV rule.
+- Two citations remain at abstract-level verification only (full text not yet available at time of writing), disclosed explicitly in Chapter 9: Kizawa et al. (2006), backing `OP2_implicit_ms`; Nair & Joseph (2014b, *Biomedical Signal Processing and Control* — a different paper from 2014a above), backing `spectral_entropy`.
+
+### Documentation
+- `docs/methodology.md` Feature Coverage disclosure updated to include the 3 new derivative features among those without normative Z-score coverage.
+- Chapter 9 of the accompanying textbook finalized; pipeline code pushed to `chapters/ch09/ch09_complete.py`.
+
+---
 ## [2.5.0] — 2026-08-29
 
 ### Feature set redesign — literature-grounded 25-feature pipeline
