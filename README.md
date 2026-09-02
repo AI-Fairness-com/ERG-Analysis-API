@@ -51,7 +51,7 @@ See `docs/CHANGELOG.md` for complete version history.
 This project provides a complete, reproducible pipeline for:
 - **ISCEV-compliant ERG filtering** (Butterworth bandpass, notch Q=50, median)
 - **Time-frequency analysis** (STFT spectrograms, wavelet transforms)
-- **Feature extraction** (time-domain, PhNR family, nonlinear & CWT time-frequency descriptors, frequency-domain — 28 features total, 25–27 per recording depending on protocol, see `docs/CHANGELOG.md` v2.5.1)`
+- **Feature extraction** (time-domain, PhNR family, nonlinear & CWT time-frequency descriptors, frequency-domain — 28 features total, 25–27 per recording depending on protocol, see `docs/CHANGELOG.md` v2.5.1)
 - **Machine learning classification** (Random Forest baseline + Vision Transformer)
 - **SHAP explainability** (feature-level, spectrogram-level, plain-language)
 - **No-code clinical API** (four-layer report: Traffic Light + Clinical Summary + Specialist + Audit)
@@ -60,7 +60,7 @@ This project provides a complete, reproducible pipeline for:
 
 | Directory | Contents |
 |:---|:---|
-| `/chapters` | Complete Python code for all 19 textbook chapters |`
+| `/chapters` | Complete Python code for all 19 textbook chapters |
 | `/api` | Flask/FastAPI application for no-code clinical decision support |
 | `/data` | De-identified sample ERG recordings + normative reference data |
 | `/notebooks` | Interactive Jupyter notebooks including `ERG_V2_4_0.ipynb` |
