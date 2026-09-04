@@ -201,7 +201,7 @@ def validate_windows(X_sweeps: np.ndarray,
 
     Notes
     -----
-    On the project dataset (Robson et al. 2025, N=407), 'hamming' achieved
+    On the project dataset (Baker et al., 2025, N=407), 'hamming' achieved
     the highest macro AUC-ROC and is the locked default in STFT_CONFIG.
     Re-run this function if the training set changes materially.
     """
