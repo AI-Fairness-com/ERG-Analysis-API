@@ -257,19 +257,18 @@ def extract_phnr(signal_uv:    np.ndarray,
 
     win_amp = signal_uv[mask]
     if len(win_amp) >= 5:
-        smoothed    = np.mean(sliding_window_view(win_amp, 5), axis=1)
-        phnr_trough = float(np.min(smoothed))
+        smoothed = np.mean(sliding_window_view(win_amp, 5), axis=1)
     else:
-        phnr_trough = float(np.min(win_amp))
+        smoothed = win_amp
 
-    if phnr_trough >= 0:
-        return {'phnr_amp_uv': np.nan}
+    seg_min, seg_max = float(np.min(smoothed)), float(np.max(smoothed))
+    phnr_signed = seg_min if abs(seg_min) >= abs(seg_max) else seg_max
+    phnr_magnitude = abs(phnr_signed)
+    if phnr_magnitude < 2.0 * noise_rms_uv:
+        return {'phnr_amp_uv': np.nan, 'phnr_polarity_atypical': False}
 
-    phnr_amp = abs(phnr_trough)
-    if phnr_amp < 2.0 * noise_rms_uv:
-        return {'phnr_amp_uv': np.nan}
-
-    return {'phnr_amp_uv': round(phnr_amp, 2)}
+    return {'phnr_amp_uv': round(phnr_signed, 2),
+            'phnr_polarity_atypical': bool(phnr_signed > 0)}
 
 
 def extract_oscillatory_potentials(op_signal_uv: np.ndarray,
