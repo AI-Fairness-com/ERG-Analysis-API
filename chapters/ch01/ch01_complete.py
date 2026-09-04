@@ -180,7 +180,7 @@ print(f"b/a amplitude ratio:  {b_amplitude / abs(a_amplitude):.2f}")
 print("="*60)
 
 # Clinical interpretation note
-if b_amplitude / abs(a_amplitude) > 1.5:
+if b_amplitude / abs(a_amplitude) > 1.0:
     print("✓ Interpretation: Normal waveform (b-wave > a-wave)")
 else:
     print("⚠ Interpretation: Reduced b/a ratio – consider inner retinal pathology")
