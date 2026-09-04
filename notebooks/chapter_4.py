@@ -292,10 +292,12 @@ def add_snr_overlay(ax:           plt.Axes,
     snr     = s_pk2pk / n_rms if n_rms > 0 else 0.0
     snr_db  = 20 * np.log10(snr) if snr > 0 else -99.0
 
-    # Electrode-specific Pass thresholds (Chapter 2, Section 2.3).
+    # Electrode-specific PASS and WARNING thresholds (Chapter 2, Section 2.3).
     thresholds = {'contact_lens': 8, 'gold_foil': 6, 'dtl': 4, 'skin': 3}
-    pass_thr   = thresholds.get(electrode.lower().replace(' ', '_'), 4)
-    warn_thr   = pass_thr * 0.625
+    warn_thresholds = {'contact_lens': 4.0, 'gold_foil': 3.0, 'dtl': 2.5, 'skin': 1.5}
+    key = electrode.lower().replace(' ', '_')
+    pass_thr = thresholds.get(key, 4)
+    warn_thr = warn_thresholds.get(key, 2.5)
 
     flag = 'PASS' if snr >= pass_thr else ('WARNING' if snr >= warn_thr else 'FAIL')
     col  = {'PASS': '#2E7D32', 'WARNING': '#F9A825', 'FAIL': '#C62828'}[flag]
