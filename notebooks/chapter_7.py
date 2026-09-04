@@ -25,11 +25,11 @@ Implements three complementary frequency-domain analyses:
 
 DWT level-to-frequency mapping at fs = 2000 Hz (db4, 6-level):
   D1  500–1000 Hz  Electronic noise (excluded from feature vector)
-  D2  250–500 Hz   Upper OP band (OP1–OP2)
-  D3  125–250 Hz   Lower OP band (OP3–OP4)
-  D4   62.5–125 Hz Transition band
-  D5  31.25–62.5 Hz b-wave ascending limb
-  D6  15.6–31.25 Hz b-wave main body / a-wave onset
+  D2   250–500 Hz    Above OP band (minimal clinical content)
+  D3   125–250 Hz    Upper OP band (OP1–OP2)
+  D4   62.5–125 Hz   Lower OP band (OP3–OP4) / transition
+  D5   31.25–62.5 Hz b-wave ascending limb
+  D6   15.6–31.25 Hz b-wave main body / a-wave onset
   A6   0–15.6 Hz   Slow components: baseline trend, PhNR, slow b-wave return
 
 Repository : https://github.com/AI-Fairness-com/ERG-Analysis-API
@@ -301,8 +301,7 @@ def compute_dwt(signal_uv: np.ndarray,
         coefficients.
     level : int, optional
         Decomposition depth. Defaults to min(max_possible, 6) per §7.4.2.
-        Do not exceed 6 at fs ≥ 1000 Hz: deeper levels produce sub-bands
-        below the 0.3 Hz ISCEV high-pass cutoff.
+        Do not exceed 6 at fs ≥ 1000 Hz: deeper levels only isolate progressively narrower low-frequency bands (level 7's approximation band is already 0–7.8 Hz) that carry no clinically distinct information beyond what A6 already captures.
 
     Returns
     -------
