@@ -100,7 +100,7 @@ def update_plot(noise_uV, electrode_id):
             print("="*60)
             print(f"ELECTRODE: {name}")
             print(f"  • Signal capture efficiency: {efficiency*100:.0f}%")
-            print(f"  • Threshold(this project,§2.3: PASS ≥ {pass_th}, WARNING {warn_low}-{warn_high}, FAIL < {warn_low}")
+            print(f"  • Threshold(this project,§2.3): PASS ≥ {pass_th}, WARNING {warn_low}-{warn_high}, FAIL < {warn_low}")
 
             print(f"\nTrue retinal signal: {TRUE_BIOLOGICAL_SIGNAL_AMP} µV")
             print(f"Recorded amplitude: {recorded_amp:.0f} µV ({efficiency*100:.0f}% of true)")
