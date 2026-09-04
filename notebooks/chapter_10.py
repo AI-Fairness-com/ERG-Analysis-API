@@ -33,8 +33,7 @@ Implements the five-stage dataset preparation pipeline:
 
 Locked constants (ISCEV 2022 / project specification):
   Traffic Light thresholds  : GREEN |Z| ≤ 2.0, AMBER 2.0 < |Z| ≤ 3.0, RED |Z| > 3.0
-  Normative dataset         : Robson et al. (2025) N=407
-                              DOI: 10.1007/s10633-025-10009-2
+  Normative dataset         : Baker et al., (2025) N=407
   Age strata (Baker groups) : ≤35 y, 36–59 y, ≥60 y
   Split ratio               : 70% train / 20% val / 10% test (patient-level)
   Minimum kappa             : 0.60 (Cohen's kappa for inter-rater labelling)
@@ -66,7 +65,7 @@ N_FOLDS         = 5
 # Baker three-strata age groups (Chapter 15 / normative framework)
 AGE_GROUPS      = ('≤35y', '36–59y', '≥60y')
 
-# Electrode ISCEV minimum b-wave references (Esakowitz et al. 1993; Robson et al. 2025)
+# Electrode ISCEV minimum b-wave references (Esakowitz et al., 1993; Baker et al., 2025)
 ISCEV_MIN_BWAVE = {
     'contact_lens': 150.0,
     'gold_foil'   :  90.0,
