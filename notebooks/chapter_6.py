@@ -246,12 +246,18 @@ def screen_sweep(sweep_uv:   np.ndarray,
       electrode_mv – electrode movement detector result dict
     """
     amp_ceilings = {
-        'contact_lens': 500, 'gold_foil': 450,
-        'dtl': 350, 'dtl_fiber': 350, 'skin': 250,
+        'contact_lens': 1600, 'gold_foil': 900,
+        'dtl': 540, 'dtl_fiber': 540, 'skin': 200,
     }
-    ceil = amp_ceilings.get(electrode.lower().replace(' ', '_'), 400)
+    slope_ceilings = {
+        'contact_lens': 1150, 'gold_foil': 670,
+        'dtl': 420, 'dtl_fiber': 420, 'skin': 190,
+    }
+    key = electrode.lower().replace(' ', '_')
+    ceil = amp_ceilings.get(key, 540)
+    slope_ceil = slope_ceilings.get(key, 420)
 
-    b = detect_blink(sweep_uv, fs_hz, amp_ceiling_uv=ceil)
+    b = detect_blink(sweep_uv, fs_hz, amp_ceiling_uv=ceil, slope_uv_per_50ms=slope_ceil)
     e = detect_emg(sweep_uv, fs_hz, pre_samples)
     m = detect_electrode_movement(sweep_uv, fs_hz)
 
