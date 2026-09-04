@@ -279,7 +279,7 @@ def extract_oscillatory_potentials(op_signal_uv: np.ndarray,
     """Extract OP2, OP3, OP4 amplitudes and OP2 implicit time.
 
     Uses the 75–300 Hz bandpass-filtered signal (Chapter 5 output).
-    OP1 is excluded per ISCEV 2022 (trough overlaps b-wave ascending limb).
+    OP1 is excluded because its trough overlaps the b-wave ascending limb; ISCEV 2022 does not define an OP1–OP4 numbering scheme.
     Returns NaN for any OP that cannot be reliably identified.
 
     Parameters
