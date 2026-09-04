@@ -333,7 +333,7 @@ class NormativeReference:
         Z = (x − μ_norm) / σ_norm
 
     where μ_norm and σ_norm are the normative mean and SD for the matching
-    electrode type, protocol, and Baker age group from Robson et al. (2025)
+    electrode type, protocol, and Baker age group from Baker et al., (2025)
     N=407 dataset.
 
     Traffic Light thresholds (locked):
