@@ -267,8 +267,8 @@ def normalise_amplitude(a_measured:     float,
 
     Method 3 – ISCEV relative criteria (fallback)
         Expresses the measured amplitude as a fraction of the ISCEV minimum
-        acceptable b-wave for the electrode type (Esakowitz et al. 1993;
-        Robson et al. 2025). Increased uncertainty; use only when Methods 1
+        acceptable b-wave for the electrode type (Esakowitz et al., 1993;
+        Baker et al., 2025). Increased uncertainty; use only when Methods 1
         and 2 are unavailable.
 
     Parameters
