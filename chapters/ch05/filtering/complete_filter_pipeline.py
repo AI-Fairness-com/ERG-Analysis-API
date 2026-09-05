@@ -85,16 +85,18 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=None,
     dict - Original recording with added keys:
            'filtered_uv' : filtered signal array
            'filter_log' : list of processing steps
-           'hw_cutoff_ok' : bool, whether hardware allows full band
+           'hw_cutoff_ok' : bool, whether hardware allows full low-pass band
+           'hw_highpass_ok' : bool, whether hardware allows full high-pass band
     """
     # Extract signal and parameters
     sig = recording['amplitude_uv'].copy()
     fs = recording['fs_hz']
     hw_lp = recording.get('hardware_lowpass_hz', 300.0)
+    hw_hp = recording.get('hardware_highpass_hz', 0.3)
     
     log = []
     
-    # Check hardware bandwidth constraint
+    # Check hardware bandwidth constraint (low-pass side)
     hw_cutoff_ok = hw_lp >= lowpass_hz
     effective_lp = min(lowpass_hz, hw_lp * 0.95)
     
@@ -102,6 +104,15 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=None,
         log.append(f'WARNING: hardware cutoff {hw_lp} Hz < requested {lowpass_hz} Hz. '
                    f'Software low-pass set to {effective_lp:.1f} Hz. '
                    f'OP features may be unreliable.')
+
+    # Check hardware bandwidth constraint (high-pass side)
+    hw_highpass_ok = hw_hp <= highpass_hz
+    effective_hp = max(highpass_hz, hw_hp * 1.05)
+
+    if not hw_highpass_ok:
+        log.append(f'WARNING: hardware high-pass {hw_hp} Hz > requested {highpass_hz} Hz. '
+                   f'Software high-pass set to {effective_hp:.1f} Hz. '
+                   f'PhNR features may be unreliable.')
     
     # Step 1: Median filter (spike removal)
     if apply_median:
@@ -119,8 +130,8 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=None,
         log.append(f'Notch filter skipped: no significant mains interference at {notch_hz} Hz')
     
     # Step 3: Butterworth bandpass
-    sig = apply_bandpass_filter(sig, fs, highpass_hz, effective_lp, filter_order)
-    log.append(f'Butterworth bandpass: order={filter_order}, {highpass_hz}-{effective_lp:.1f} Hz '
+    sig = apply_bandpass_filter(sig, fs, effective_hp, effective_lp, filter_order)
+    log.append(f'Butterworth bandpass: order={filter_order}, {effective_hp:.1f}-{effective_lp:.1f} Hz '
                f'(zero-phase, sosfiltfilt)')
     
     # Return enriched recording
@@ -128,6 +139,7 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=None,
     result['filtered_uv'] = sig
     result['filter_log'] = log
     result['hw_cutoff_ok'] = hw_cutoff_ok
+    result['hw_highpass_ok'] = hw_highpass_ok
     
     return result
 
