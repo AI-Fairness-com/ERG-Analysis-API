@@ -62,22 +62,29 @@ def detect_mains_interference(signal_uv, fs_hz, notch_hz=50.0, threshold_db=6.0)
 # Complete Pipeline Function
 # ============================================================================
 
-def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=None,
+def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=False,
                                notch_hz=50.0, highpass_hz=0.3, lowpass_hz=300.0,
                                filter_order=4, notch_q=30.0):
     """
     Apply the complete ERG filter pipeline in the correct sequence:
     1. Median filter (spike removal) - must come first
-    2. Notch filter (mains interference) - applied only if detected
-    3. Butterworth bandpass (ISCEV 0.3-300 Hz)
-    
+    2. Notch filter (mains interference) - OFF by default (ISCEV 2022: "Such
+       filters should not be used"); applied only if the caller explicitly
+       passes apply_notch=True, which is the deliberate action ISCEV's
+       guidance implies is needed before overriding the default.
+    3. Butterworth bandpass (ISCEV 0.3-300 Hz or hardware-limited)
+
     Parameters:
-    recording : dict - Must contain 'amplitude_uv' and 'fs_hz' keys
+    recording : dict - Must contain 'amplitude_uv' and 'fs_hz' keys.
+                Optional: 'hardware_lowpass_hz', 'hardware_highpass_hz',
+                'prestimulus_uv' (used for the ISCEV pre-stimulus baseline
+                duration check below; omit to skip that check).
     apply_median : bool - Whether to apply median filter
-    apply_notch : bool or None - If None, auto-detect; if True/False, force on/off
+    apply_notch : bool - Off by default per ISCEV 2022 guidance. Caller
+                  must explicitly pass True to apply a notch filter.
     notch_hz : float - Mains frequency (50.0 or 60.0 Hz)
-    highpass_hz : float - Butterworth high-pass cutoff (default 0.3)
-    lowpass_hz : float - Butterworth low-pass cutoff (default 300.0)
+    highpass_hz : float - Butterworth high-pass cutoff (default 0.3, ISCEV target)
+    lowpass_hz : float - Butterworth low-pass cutoff (default 300.0, ISCEV target)
     filter_order : int - Butterworth filter order (default 4)
     notch_q : float - Notch filter quality factor (default 30.0)
     
@@ -87,19 +94,37 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=None,
            'filter_log' : list of processing steps
            'hw_cutoff_ok' : bool, whether hardware allows full low-pass band
            'hw_highpass_ok' : bool, whether hardware allows full high-pass band
+           'iscev_compliance' : dict of compliance flags (sampling_rate_ok,
+                                 prestimulus_ok, bandwidth_ok, notch_applied)
+           'notch_applied' : bool, whether a notch filter was actually applied
+           'mains_detected' : bool, whether mains interference was detected
+                               (independent of whether notch was applied)
     """
     # Extract signal and parameters
     sig = recording['amplitude_uv'].copy()
     fs = recording['fs_hz']
     hw_lp = recording.get('hardware_lowpass_hz', 300.0)
     hw_hp = recording.get('hardware_highpass_hz', 0.3)
-    
+
     log = []
-    
+
+    # ISCEV 2022: digitize at >= 1 kHz per channel
+    iscev_sampling_compliant = fs >= 1000.0
+    if not iscev_sampling_compliant:
+        log.append(f'WARNING: Sampling rate {fs} Hz is below ISCEV minimum 1000 Hz. '
+                    'Implicit time measurements may be unreliable.')
+
+    # ISCEV 2022: stored records need >= 20 ms pre-stimulus baseline
+    prestimulus_samples_needed = int(0.020 * fs)
+    has_prestimulus = len(recording.get('prestimulus_uv', [])) >= prestimulus_samples_needed
+    if not has_prestimulus:
+        log.append('WARNING: Pre-stimulus baseline < 20 ms (ISCEV minimum). '
+                    'Filter transient may affect early waveform features.')
+
     # Check hardware bandwidth constraint (low-pass side)
     hw_cutoff_ok = hw_lp >= lowpass_hz
     effective_lp = min(lowpass_hz, hw_lp * 0.95)
-    
+
     if not hw_cutoff_ok:
         log.append(f'WARNING: hardware cutoff {hw_lp} Hz < requested {lowpass_hz} Hz. '
                    f'Software low-pass set to {effective_lp:.1f} Hz. '
@@ -113,34 +138,51 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=None,
         log.append(f'WARNING: hardware high-pass {hw_hp} Hz > requested {highpass_hz} Hz. '
                    f'Software high-pass set to {effective_hp:.1f} Hz. '
                    f'PhNR features may be unreliable.')
-    
+
     # Step 1: Median filter (spike removal)
     if apply_median:
         sig = apply_median_filter(sig, kernel_samples=5)
         log.append('Median filter applied: kernel=5 samples (5 ms at 1000 Hz)')
-    
-    # Step 2: Notch filter (mains interference)
-    if apply_notch is None:
-        apply_notch = detect_mains_interference(sig, fs, notch_hz)
-    
+
+    # Step 2: Notch filter (mains interference) -- OFF by default (ISCEV 2022)
+    mains_detected = detect_mains_interference(sig, fs, notch_hz)
+    if mains_detected:
+        log.append(f'Detection: {notch_hz} Hz mains interference present. '
+                     'ISCEV 2022 advises against notch filters due to waveform distortion.')
+
+    notch_applied = False
     if apply_notch:
         sig = apply_notch_filter(sig, fs, notch_hz, notch_q)
-        log.append(f'Notch filter applied: {notch_hz} Hz, Q={notch_q}')
+        notch_applied = True
+        log.append(f'NOTCH APPLIED: {notch_hz} Hz, Q={notch_q} (caller overrode ISCEV default). '
+                     'Output waveform may be distorted.')
     else:
-        log.append(f'Notch filter skipped: no significant mains interference at {notch_hz} Hz')
-    
+        log.append('Notch filter: OFF (ISCEV 2022 compliant default)')
+        if mains_detected:
+            log.append(f'  -> {notch_hz} Hz interference remains in signal; '
+                         'consider post-acquisition removal if clinically justified.')
+
     # Step 3: Butterworth bandpass
     sig = apply_bandpass_filter(sig, fs, effective_hp, effective_lp, filter_order)
     log.append(f'Butterworth bandpass: order={filter_order}, {effective_hp:.1f}-{effective_lp:.1f} Hz '
                f'(zero-phase, sosfiltfilt)')
-    
+
     # Return enriched recording
     result = recording.copy()
     result['filtered_uv'] = sig
     result['filter_log'] = log
     result['hw_cutoff_ok'] = hw_cutoff_ok
     result['hw_highpass_ok'] = hw_highpass_ok
-    
+    result['notch_applied'] = notch_applied
+    result['mains_detected'] = mains_detected
+    result['iscev_compliance'] = {
+        'sampling_rate_ok': iscev_sampling_compliant,
+        'prestimulus_ok': has_prestimulus,
+        'bandwidth_ok': hw_cutoff_ok and hw_highpass_ok,
+        'notch_applied': notch_applied,
+        'notch_iscev_compliant': not notch_applied,
+    }
+
     return result
 
 
