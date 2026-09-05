@@ -426,6 +426,7 @@ def extract_time_domain_features(broadband_uv:   np.ndarray,
                                   noise_rms_uv:   float,
                                   hardware_lowpass_hz:  float = 300.0,
                                   hardware_highpass_hz: float = 0.3,
+                                  flash_duration_ms:     float = 0.0,
                                   fs:             float = FS_HZ) -> dict:
     """Extract all ISCEV time-domain features for one ERG recording.
 
@@ -454,6 +455,11 @@ def extract_time_domain_features(broadband_uv:   np.ndarray,
         Hardware high-pass cutoff for this recording (Chapter 5 metadata,
         default 0.3 matches the ISCEV target). Passed to the PhNR
         extractor for the same purpose.
+    flash_duration_ms : float
+        Stimulus flash duration in ms (device metadata, default 0.0 matches
+        a near-instantaneous xenon flashtube, per ISCEV 2022). Passed to
+        the a-wave and b-wave extractors for the ISCEV flash-midpoint
+        implicit-time correction.
     fs : float
         Sampling rate in Hz.
 
@@ -464,11 +470,13 @@ def extract_time_domain_features(broadband_uv:   np.ndarray,
     features = {}
 
     a = extract_a_wave(broadband_uv, time_ms, protocol,
-                       hardware_lowpass_hz=hardware_lowpass_hz)
+                       hardware_lowpass_hz=hardware_lowpass_hz,
+                       flash_duration_ms=flash_duration_ms)
     features.update(a)
 
     b = extract_b_wave(broadband_uv, time_ms, protocol,
-                       a_time_ms=a['a_implicit_ms'])
+                       a_time_ms=a['a_implicit_ms'],
+                       flash_duration_ms=flash_duration_ms)
     features.update(b)
 
     features['ba_ratio'] = compute_ba_ratio(b['b_amp_uv'], a['a_amp_uv'])
@@ -760,10 +768,12 @@ def extract_all_features(patient_recordings: dict,
             nrms = noise_rms_by_eye.get(eye, {}).get(protocol, 5.0)
             hw_lp = float(rec.get('hardware_lowpass_hz', 300.0))
             hw_hp = float(rec.get('hardware_highpass_hz', 0.3))
+            flash_ms = float(rec.get('flash_duration_ms', 0.0))
 
             td = extract_time_domain_features(amp, op_s, t, protocol, nrms,
                                               hardware_lowpass_hz=hw_lp,
                                               hardware_highpass_hz=hw_hp,
+                                              flash_duration_ms=flash_ms,
                                               fs=fs)
             features.update({f'{prefix}_{k}': v for k, v in td.items()})
 
