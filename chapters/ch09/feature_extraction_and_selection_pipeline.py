@@ -72,6 +72,15 @@ FS_HZ         = 2000.0   # pipeline sampling rate (Chapter 3)
 PROTOCOLS     = ('DA 0.01', 'DA 3.0', 'DA 10.0', 'LA 3.0', 'LA 30 Hz')
 EYES          = ('RE', 'LE')
 
+# ISCEV 2022 flash-duration constants -- kept separate deliberately:
+# ISCEV_FLASH_MAX_DURATION_MS is the absolute ceiling ISCEV allows for any
+# stimulus flash. FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS is the (much lower)
+# duration above which ISCEV requires implicit time to be measured from the
+# flash midpoint rather than flash onset. These answer different questions
+# and must not share one constant.
+ISCEV_FLASH_MAX_DURATION_MS = 5.0
+FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS = 1.0
+
 FREQUENCY_BANDS = {
     'vlow'   : (0.3,   1),
     'bwave'  : (1,    30),
@@ -103,6 +112,7 @@ def extract_a_wave(signal_uv:    np.ndarray,
                    time_ms:      np.ndarray,
                    protocol:     str,
                    hardware_lowpass_hz: float = 300.0,
+                   flash_duration_ms: float = 0.0,
                    search_start: float = 5.0,
                    search_end:   float = 40.0) -> dict:
     """Extract a-wave amplitude and implicit time from a broadband ERG sweep.
@@ -119,13 +129,19 @@ def extract_a_wave(signal_uv:    np.ndarray,
     hardware_lowpass_hz : float
         Hardware low-pass cutoff for this recording (Chapter 5 metadata).
         Used only to set a_wave_mar_technical when no a-wave is detected.
+    flash_duration_ms : float
+        Stimulus flash duration in ms. Per ISCEV 2022, flashes longer than
+        FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS (1 ms) require implicit time
+        to be measured from the flash midpoint rather than flash onset.
     search_start, search_end : float
         Post-stimulus search window in ms.
 
     Returns
     -------
     dict with keys: a_amp_uv (float or NaN), a_implicit_ms (float or NaN),
-                    a_wave_mar_technical (bool, only meaningful when NaN).
+                    a_wave_mar_technical (bool, only meaningful when NaN),
+                    flash_midpoint_correction_applied (bool),
+                    flash_midpoint_correction_ms (float).
 
     Notes
     -----
@@ -140,6 +156,11 @@ def extract_a_wave(signal_uv:    np.ndarray,
     frequency ceiling of Chen, Zheng and Lei, 2013) to distinguish a
     MAR-technical absence from a MNAR-physiological one.
     """
+    correction_ms = (flash_duration_ms / 2.0
+                     if flash_duration_ms >= FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS
+                     else 0.0)
+    correction_applied = correction_ms > 0.0
+
     if protocol.strip().upper() in ('DA 0.01', 'LA 30 HZ'):
         return {'a_amp_uv': np.nan, 'a_implicit_ms': np.nan}
 
@@ -154,7 +175,7 @@ def extract_a_wave(signal_uv:    np.ndarray,
     window_time = time_ms[mask]
     a_local_idx = int(np.argmin(window_amp))
     a_amp_raw   = float(window_amp[a_local_idx])
-    a_time      = float(window_time[a_local_idx])
+    a_time      = float(window_time[a_local_idx]) - correction_ms
 
     # a-wave must be a negative deflection
     if a_amp_raw >= 0:
@@ -165,13 +186,16 @@ def extract_a_wave(signal_uv:    np.ndarray,
     baseline_mean = float(signal_uv[baseline_mask].mean()) if baseline_mask.any() else 0.0
     a_amp_uv      = abs(a_amp_raw - baseline_mean)
 
-    return {'a_amp_uv': round(a_amp_uv, 2), 'a_implicit_ms': round(a_time, 2)}
+    return {'a_amp_uv': round(a_amp_uv, 2), 'a_implicit_ms': round(a_time, 2),
+            'flash_midpoint_correction_applied': correction_applied,
+            'flash_midpoint_correction_ms': correction_ms}
 
 
 def extract_b_wave(signal_uv:  np.ndarray,
                    time_ms:    np.ndarray,
                    protocol:   str,
                    a_time_ms:  float = np.nan,
+                   flash_duration_ms: float = 0.0,
                    search_end: float = 150.0) -> dict:
     """Extract b-wave amplitude (trough-to-peak, ISCEV 2022) and implicit time.
 
@@ -184,15 +208,27 @@ def extract_b_wave(signal_uv:  np.ndarray,
     protocol : str
         ISCEV protocol string.
     a_time_ms : float
-        a-wave implicit time (ms). Pass np.nan for DA 0.01 (no a-wave);
-        the baseline-to-peak convention is then used.
+        a-wave implicit time (ms), already flash-midpoint corrected if
+        applicable. Pass np.nan for DA 0.01 (no a-wave); the
+        baseline-to-peak convention is then used.
+    flash_duration_ms : float
+        Stimulus flash duration in ms. Per ISCEV 2022, flashes longer than
+        FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS (1 ms) require implicit time
+        to be measured from the flash midpoint rather than flash onset.
     search_end : float
         End of b-wave search window in ms post-stimulus.
 
     Returns
     -------
-    dict with keys: b_amp_uv (float or NaN), b_implicit_ms (float or NaN).
+    dict with keys: b_amp_uv (float or NaN), b_implicit_ms (float or NaN),
+                    flash_midpoint_correction_applied (bool),
+                    flash_midpoint_correction_ms (float).
     """
+    correction_ms = (flash_duration_ms / 2.0
+                     if flash_duration_ms >= FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS
+                     else 0.0)
+    correction_applied = correction_ms > 0.0
+
     b_search_start = 20.0 if np.isnan(a_time_ms) else a_time_ms
 
     mask = (time_ms >= b_search_start) & (time_ms <= search_end)
@@ -203,7 +239,7 @@ def extract_b_wave(signal_uv:  np.ndarray,
     window_time = time_ms[mask]
     b_local_idx = int(np.argmax(window_amp))
     b_amp_raw   = float(window_amp[b_local_idx])
-    b_time      = float(window_time[b_local_idx])
+    b_time      = float(window_time[b_local_idx]) - correction_ms
 
     if b_amp_raw <= 0:
         return {'b_amp_uv': np.nan, 'b_implicit_ms': np.nan}
@@ -221,7 +257,9 @@ def extract_b_wave(signal_uv:  np.ndarray,
     if b_amp_uv <= 0:
         return {'b_amp_uv': np.nan, 'b_implicit_ms': np.nan}
 
-    return {'b_amp_uv': round(b_amp_uv, 2), 'b_implicit_ms': round(b_time, 2)}
+    return {'b_amp_uv': round(b_amp_uv, 2), 'b_implicit_ms': round(b_time, 2),
+            'flash_midpoint_correction_applied': correction_applied,
+            'flash_midpoint_correction_ms': correction_ms}
 
 
 def compute_ba_ratio(b_amp_uv: float, a_amp_uv: float) -> float:
