@@ -102,6 +102,7 @@ _STFT_CFG = {
 def extract_a_wave(signal_uv:    np.ndarray,
                    time_ms:      np.ndarray,
                    protocol:     str,
+                   hardware_lowpass_hz: float = 300.0,
                    search_start: float = 5.0,
                    search_end:   float = 40.0) -> dict:
     """Extract a-wave amplitude and implicit time from a broadband ERG sweep.
@@ -115,25 +116,39 @@ def extract_a_wave(signal_uv:    np.ndarray,
     protocol : str
         ISCEV protocol string ('DA 0.01', 'DA 3.0', 'DA 10.0',
         'LA 3.0', 'LA 30 Hz').
+    hardware_lowpass_hz : float
+        Hardware low-pass cutoff for this recording (Chapter 5 metadata).
+        Used only to set a_wave_mar_technical when no a-wave is detected.
     search_start, search_end : float
         Post-stimulus search window in ms.
 
     Returns
     -------
-    dict with keys: a_amp_uv (float or NaN), a_implicit_ms (float or NaN).
+    dict with keys: a_amp_uv (float or NaN), a_implicit_ms (float or NaN),
+                    a_wave_mar_technical (bool, only meaningful when NaN).
 
     Notes
     -----
-    DA 0.01, LA 3.0, and LA 30 Hz do not generate a measurable a-wave;
-    NaN is returned immediately for these protocols.
+    DA 0.01 and LA 30 Hz do not generate a measurable a-wave; NaN is
+    returned immediately for these protocols. LA 3.0 does have a
+    scorable a-wave (ISCEV 2022: measured baseline-to-trough alongside
+    DA 3.0 and DA 10.0) and is no longer excluded here.
     Amplitude is reported as absolute value (ISCEV 2022: baseline-to-trough).
+    When no a-wave is detected, hardware_lowpass_hz is compared against a
+    protocol-specific threshold (30 Hz dark-adapted, 35 Hz LA 3.0 -- this
+    project's own convention, margined above the measured human a-b wave
+    frequency ceiling of Chen, Zheng and Lei, 2013) to distinguish a
+    MAR-technical absence from a MNAR-physiological one.
     """
-    if protocol.strip().upper() in ('DA 0.01', 'LA 3.0', 'LA 30 HZ'):
+    if protocol.strip().upper() in ('DA 0.01', 'LA 30 HZ'):
         return {'a_amp_uv': np.nan, 'a_implicit_ms': np.nan}
+
+    lowpass_threshold = 35.0 if protocol.strip().upper() == 'LA 3.0' else 30.0
 
     mask = (time_ms >= search_start) & (time_ms <= search_end)
     if not mask.any():
-        return {'a_amp_uv': np.nan, 'a_implicit_ms': np.nan}
+        return {'a_amp_uv': np.nan, 'a_implicit_ms': np.nan,
+                'a_wave_mar_technical': hardware_lowpass_hz < lowpass_threshold}
 
     window_amp  = signal_uv[mask]
     window_time = time_ms[mask]
@@ -143,7 +158,8 @@ def extract_a_wave(signal_uv:    np.ndarray,
 
     # a-wave must be a negative deflection
     if a_amp_raw >= 0:
-        return {'a_amp_uv': np.nan, 'a_implicit_ms': np.nan}
+        return {'a_amp_uv': np.nan, 'a_implicit_ms': np.nan,
+                'a_wave_mar_technical': hardware_lowpass_hz < lowpass_threshold}
 
     baseline_mask = time_ms < 0
     baseline_mean = float(signal_uv[baseline_mask].mean()) if baseline_mask.any() else 0.0
@@ -223,6 +239,7 @@ def extract_phnr(signal_uv:    np.ndarray,
                  time_ms:      np.ndarray,
                  b_time_ms:    float,
                  noise_rms_uv: float,
+                 hardware_highpass_hz: float = 0.3,
                  search_start: float = 60.0,
                  search_end:   float = 200.0) -> dict:
     """Extract PhNR amplitude from a LA 3.0 broadband-filtered sweep.
@@ -237,23 +254,34 @@ def extract_phnr(signal_uv:    np.ndarray,
         b-wave implicit time (ms). PhNR search starts after this.
     noise_rms_uv : float
         Pre-stimulus noise RMS from Chapter 2 quality pipeline.
+    hardware_highpass_hz : float
+        Hardware high-pass cutoff for this recording (Chapter 5 metadata).
+        Used only to set phnr_mar_technical when no PhNR is detected.
     search_start, search_end : float
         PhNR search window bounds in ms post-stimulus.
 
     Returns
     -------
-    dict with key: phnr_amp_uv (float or NaN).
+    dict with keys: phnr_amp_uv (float or NaN),
+                    phnr_mar_technical (bool, only meaningful when NaN).
 
     Notes
     -----
-    PhNR must exceed 2× noise RMS to be considered reliable (§9.1.4).
+    PhNR must exceed 2x noise RMS to be considered reliable. This
+    multiplier is this project's own convention (see Chapter 11 §11.1.2),
+    not an ISCEV-specified value; no peer-reviewed automated PhNR
+    detectability threshold was found during this book's review.
+    When no PhNR is detected, hardware_highpass_hz is compared against
+    the ISCEV-specified 0.3 Hz target (Frishman et al., 2018) to
+    distinguish a MAR-technical absence from a MNAR-physiological one.
     A 5-point moving average is applied before trough detection to reduce
     false detections from noise.
     """
     effective_start = max(search_start, b_time_ms + 5.0)
     mask = (time_ms >= effective_start) & (time_ms <= search_end)
     if not mask.any():
-        return {'phnr_amp_uv': np.nan}
+        return {'phnr_amp_uv': np.nan,
+                'phnr_mar_technical': hardware_highpass_hz > 0.3}
 
     win_amp = signal_uv[mask]
     if len(win_amp) >= 5:
@@ -265,7 +293,8 @@ def extract_phnr(signal_uv:    np.ndarray,
     phnr_signed = seg_min if abs(seg_min) >= abs(seg_max) else seg_max
     phnr_magnitude = abs(phnr_signed)
     if phnr_magnitude < 2.0 * noise_rms_uv:
-        return {'phnr_amp_uv': np.nan, 'phnr_polarity_atypical': False}
+        return {'phnr_amp_uv': np.nan, 'phnr_polarity_atypical': False,
+                'phnr_mar_technical': hardware_highpass_hz > 0.3}
 
     return {'phnr_amp_uv': round(phnr_signed, 2),
             'phnr_polarity_atypical': bool(phnr_signed > 0)}
@@ -273,23 +302,27 @@ def extract_phnr(signal_uv:    np.ndarray,
 
 def extract_oscillatory_potentials(op_signal_uv: np.ndarray,
                                     time_ms:      np.ndarray,
+                                    hardware_lowpass_hz: float = 300.0,
                                     min_prom_uv:  float = 5.0,
                                     min_dist_ms:  float = 8.0,
                                     fs:           float = FS_HZ) -> dict:
     """Extract OP2, OP3, OP4 amplitudes and OP2 implicit time.
 
-    Uses the 75–300 Hz bandpass-filtered signal (Chapter 5 output).
-    OP1 is excluded because its trough overlaps the b-wave ascending limb; ISCEV 2022 does not define an OP1–OP4 numbering scheme.
+    Uses the 75-300 Hz bandpass-filtered signal (Chapter 5 output).
+    OP1 is excluded because its trough overlaps the b-wave ascending limb; ISCEV 2022 does not define an OP1-OP4 numbering scheme.
     Returns NaN for any OP that cannot be reliably identified.
 
     Parameters
     ----------
     op_signal_uv : np.ndarray
-        OP-isolated (75–300 Hz) filtered ERG in µV.
+        OP-isolated (75-300 Hz) filtered ERG in uV.
     time_ms : np.ndarray
         Time axis in ms.
+    hardware_lowpass_hz : float
+        Hardware low-pass cutoff for this recording (Chapter 5 metadata).
+        Used only to set op_mar_technical when no OPs are detected.
     min_prom_uv : float
-        Minimum peak prominence in µV.
+        Minimum peak prominence in uV.
     min_dist_ms : float
         Minimum inter-peak distance in ms.
     fs : float
@@ -298,11 +331,14 @@ def extract_oscillatory_potentials(op_signal_uv: np.ndarray,
     Returns
     -------
     dict with keys: op2_amp_uv, op3_amp_uv, op4_amp_uv,
-                    op_sum_uv, op2_implicit_ms.
+                    op_sum_uv, op2_implicit_ms,
+                    op_mar_technical (bool, only meaningful when all NaN).
     """
+    op_mar_technical = hardware_lowpass_hz < 300.0
     _nan_result = {k: np.nan for k in
                    ['op2_amp_uv', 'op3_amp_uv', 'op4_amp_uv',
                     'op_sum_uv', 'op2_implicit_ms']}
+    _nan_result['op_mar_technical'] = op_mar_technical
 
     post_mask = (time_ms >= 0) & (time_ms <= 100)
     if not post_mask.any():
