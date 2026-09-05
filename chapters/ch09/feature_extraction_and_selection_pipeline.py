@@ -386,25 +386,36 @@ def extract_time_domain_features(broadband_uv:   np.ndarray,
                                   time_ms:        np.ndarray,
                                   protocol:       str,
                                   noise_rms_uv:   float,
+                                  hardware_lowpass_hz:  float = 300.0,
+                                  hardware_highpass_hz: float = 0.3,
                                   fs:             float = FS_HZ) -> dict:
     """Extract all ISCEV time-domain features for one ERG recording.
 
     Orchestrates the individual extractors in the correct order:
-    a-wave → b-wave (using a-wave as reference) → b/a ratio →
-    PhNR (LA 3.0 only) → OPs (DA 3.0 and DA 10.0 only).
+    a-wave -> b-wave (using a-wave as reference) -> b/a ratio ->
+    PhNR (LA 3.0 only) -> OPs (DA 3.0 and DA 10.0 only).
 
     Parameters
     ----------
     broadband_uv : np.ndarray
-        Broadband-filtered ERG in µV (Chapter 5 §5.2.1 output).
+        Broadband-filtered ERG in uV (Chapter 5 §5.2.1 output).
     op_filtered_uv : np.ndarray
-        OP-isolated 75–300 Hz signal in µV (Chapter 5 §5.3 output).
+        OP-isolated 75-300 Hz signal in uV (Chapter 5 §5.3 output).
     time_ms : np.ndarray
         Time axis aligned to stimulus onset at t = 0 ms.
     protocol : str
         ISCEV protocol string.
     noise_rms_uv : float
         Pre-stimulus noise RMS from Chapter 2 quality pipeline.
+    hardware_lowpass_hz : float
+        Hardware low-pass cutoff for this recording (Chapter 5 metadata,
+        default 300.0 matches an unconstrained device). Passed to the
+        a-wave and OP extractors for MAR-technical vs MNAR-physiological
+        classification when no signal is detected.
+    hardware_highpass_hz : float
+        Hardware high-pass cutoff for this recording (Chapter 5 metadata,
+        default 0.3 matches the ISCEV target). Passed to the PhNR
+        extractor for the same purpose.
     fs : float
         Sampling rate in Hz.
 
@@ -414,7 +425,8 @@ def extract_time_domain_features(broadband_uv:   np.ndarray,
     """
     features = {}
 
-    a = extract_a_wave(broadband_uv, time_ms, protocol)
+    a = extract_a_wave(broadband_uv, time_ms, protocol,
+                       hardware_lowpass_hz=hardware_lowpass_hz)
     features.update(a)
 
     b = extract_b_wave(broadband_uv, time_ms, protocol,
@@ -425,13 +437,16 @@ def extract_time_domain_features(broadband_uv:   np.ndarray,
 
     if protocol.strip().upper() == 'LA 3.0':
         b_t = b['b_implicit_ms'] if not np.isnan(b['b_implicit_ms']) else 50.0
-        features.update(extract_phnr(broadband_uv, time_ms, b_t, noise_rms_uv))
+        features.update(extract_phnr(broadband_uv, time_ms, b_t, noise_rms_uv,
+                                     hardware_highpass_hz=hardware_highpass_hz))
     else:
         features['phnr_amp_uv'] = np.nan
 
     if protocol.strip().upper() in ('DA 3.0', 'DA 10.0'):
         features.update(
-            extract_oscillatory_potentials(op_filtered_uv, time_ms, fs=fs))
+            extract_oscillatory_potentials(op_filtered_uv, time_ms,
+                                           hardware_lowpass_hz=hardware_lowpass_hz,
+                                           fs=fs))
     else:
         for k in ['op2_amp_uv', 'op3_amp_uv', 'op4_amp_uv',
                   'op_sum_uv', 'op2_implicit_ms']:
@@ -705,12 +720,14 @@ def extract_all_features(patient_recordings: dict,
             op_s = rec.get('op_filtered_uv', np.zeros_like(amp))
             fs   = float(rec.get('fs_hz', config.get('fs', FS_HZ)))
             nrms = noise_rms_by_eye.get(eye, {}).get(protocol, 5.0)
+            hw_lp = float(rec.get('hardware_lowpass_hz', 300.0))
+            hw_hp = float(rec.get('hardware_highpass_hz', 0.3))
 
-            td = extract_time_domain_features(amp, op_s, t, protocol, nrms, fs)
+            td = extract_time_domain_features(amp, op_s, t, protocol, nrms,
+                                              hardware_lowpass_hz=hw_lp,
+                                              hardware_highpass_hz=hw_hp,
+                                              fs=fs)
             features.update({f'{prefix}_{k}': v for k, v in td.items()})
-
-            ss = spectrogram_region_features(amp, t, protocol, config)
-            features.update({f'{prefix}_{k}': v for k, v in ss.items()})
 
             features[f'{prefix}_power_ratio']    = compute_power_ratio(amp, t, fs)
             features[f'{prefix}_spec_entropy']   = compute_spectral_entropy(amp, t, fs)
