@@ -42,7 +42,7 @@ def design_notch_filter(notch_hz, quality_factor, fs_hz):
     b, a = iirnotch(notch_hz, quality_factor, fs=fs_hz)
     return tf2sos(b, a)
 
-def apply_notch_filter(signal_uv, fs_hz, notch_hz=50.0, quality_factor=30.0):
+def apply_notch_filter(signal_uv, fs_hz, notch_hz=50.0, quality_factor=50.0):
     """Apply zero-phase notch filter."""
     sos = design_notch_filter(notch_hz, quality_factor, fs_hz)
     return sosfiltfilt(sos, signal_uv)
