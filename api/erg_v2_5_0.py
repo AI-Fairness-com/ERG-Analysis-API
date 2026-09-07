@@ -718,7 +718,7 @@ def extract_a_wave(signal_uv: np.ndarray, time_ms: np.ndarray, protocol: str,
     returned immediately for these protocols. Amplitude is reported as
     absolute value (ISCEV 2022: baseline-to-trough). When no a-wave is
     detected, hardware_lowpass_hz is compared against a protocol-specific
-    threshold (30 Hz dark-adapted, 35 Hz LA 3) to distinguish a
+    threshold (30 Hz dark-adapted, 35 Hz LA 3.0) to distinguish a
     MAR-technical absence from a MNAR-physiological one.
     """
     correction_ms = (flash_duration_ms / 2.0
@@ -728,13 +728,13 @@ def extract_a_wave(signal_uv: np.ndarray, time_ms: np.ndarray, protocol: str,
 
     protocol_key = protocol.strip().upper()
     if protocol_key in ('DA 0.01', 'LA 30 HZ'):
-        return {'a_wave_amplitude_uv': np.nan, 'a_wave_implicit_time_ms': np.nan}
+        return {'a_amp_uv': np.nan, 'a_implicit_ms': np.nan}
 
-    lowpass_threshold = 35.0 if protocol_key == 'LA 3' else 30.0
+    lowpass_threshold = 35.0 if protocol_key == 'LA 3.0' else 30.0
 
     mask = (time_ms >= search_start) & (time_ms <= search_end)
     if not mask.any():
-        return {'a_wave_amplitude_uv': np.nan, 'a_wave_implicit_time_ms': np.nan,
+        return {'a_amp_uv': np.nan, 'a_implicit_ms': np.nan,
                 'a_wave_mar_technical': hardware_lowpass_hz < lowpass_threshold}
 
     window_amp = signal_uv[mask]
@@ -744,14 +744,14 @@ def extract_a_wave(signal_uv: np.ndarray, time_ms: np.ndarray, protocol: str,
     a_time = float(window_time[a_local_idx]) - correction_ms
 
     if a_amp_raw >= 0:
-        return {'a_wave_amplitude_uv': np.nan, 'a_wave_implicit_time_ms': np.nan,
+        return {'a_amp_uv': np.nan, 'a_implicit_ms': np.nan,
                 'a_wave_mar_technical': hardware_lowpass_hz < lowpass_threshold}
 
     baseline_mask = time_ms < 0
     baseline_mean = float(signal_uv[baseline_mask].mean()) if baseline_mask.any() else 0.0
     a_amp_uv = abs(a_amp_raw - baseline_mean)
 
-    return {'a_wave_amplitude_uv': round(a_amp_uv, 1), 'a_wave_implicit_time_ms': round(a_time, 1),
+    return {'a_amp_uv': round(a_amp_uv, 1), 'a_implicit_ms': round(a_time, 1),
             'flash_midpoint_correction_applied': correction_applied,
             'flash_midpoint_correction_ms': correction_ms}
 
@@ -773,7 +773,7 @@ def extract_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray, protocol: str,
 
     mask = (time_ms >= b_search_start) & (time_ms <= search_end)
     if not mask.any():
-        return {'b_wave_amplitude_uv': np.nan, 'b_wave_implicit_time_ms': np.nan}
+        return {'b_amp_uv': np.nan, 'b_implicit_ms': np.nan}
 
     window_amp = signal_uv[mask]
     window_time = time_ms[mask]
@@ -782,7 +782,7 @@ def extract_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray, protocol: str,
     b_time = float(window_time[b_local_idx]) - correction_ms
 
     if b_amp_raw <= 0:
-        return {'b_wave_amplitude_uv': np.nan, 'b_wave_implicit_time_ms': np.nan}
+        return {'b_amp_uv': np.nan, 'b_implicit_ms': np.nan}
 
     if np.isnan(a_time_ms):
         baseline_mask = time_ms < 0
@@ -793,9 +793,9 @@ def extract_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray, protocol: str,
 
     b_amp_uv = b_amp_raw - reference_level
     if b_amp_uv <= 0:
-        return {'b_wave_amplitude_uv': np.nan, 'b_wave_implicit_time_ms': np.nan}
+        return {'b_amp_uv': np.nan, 'b_implicit_ms': np.nan}
 
-    return {'b_wave_amplitude_uv': round(b_amp_uv, 1), 'b_wave_implicit_time_ms': round(b_time, 1),
+    return {'b_amp_uv': round(b_amp_uv, 1), 'b_implicit_ms': round(b_time, 1),
             'flash_midpoint_correction_applied': correction_applied,
             'flash_midpoint_correction_ms': correction_ms}
 
@@ -812,7 +812,7 @@ def extract_phnr(signal_uv: np.ndarray, time_ms: np.ndarray, b_time_ms: float,
                  hardware_highpass_hz: float = 0.3,
                  search_start: float = 60.0,
                  search_end: float = 200.0) -> Dict[str, Any]:
-    """Extract PhNR amplitude from a LA 3 broadband-filtered sweep.
+    """Extract PhNR amplitude from a LA 3.0 broadband-filtered sweep.
 
     Ported from Chapter 9's canonical extract_phnr (free-function form).
     PhNR is reported as a SIGNED value relative to the pre-stimulus
@@ -902,7 +902,7 @@ def extract_oscillatory_potentials(op_signal_uv: np.ndarray, time_ms: np.ndarray
 
 
 def extract_all_features(signal: np.ndarray, fs_hz: float,
-                         protocol: str = 'DA 3',
+                         protocol: str = 'DA 3.0',
                          flash_onset_sample: int = 0,
                          flash_duration_ms: float = 1.0,
                          op_signal: np.ndarray = None,
@@ -912,7 +912,7 @@ def extract_all_features(signal: np.ndarray, fs_hz: float,
     """Orchestrate all time-domain feature extractors for one ERG recording.
 
     a-wave -> b-wave (using a-wave as reference) -> b/a ratio -> PhNR
-    (LA 3 only) -> OPs (DA 3 and DA 10 only), matching the order and
+    (LA 3.0 only) -> OPs (DA 3.0 and DA 10.0 only), matching the order and
     protocol gating of Chapter 9's canonical extract_time_domain_features.
     Builds a flash-onset-aligned time axis (t=0 at stimulus) from
     flash_onset_sample/fs_hz to match the free functions' time_ms contract.
@@ -926,17 +926,17 @@ def extract_all_features(signal: np.ndarray, fs_hz: float,
     features.update(a)
 
     b = extract_b_wave(signal, time_ms, protocol,
-                       a_time_ms=a.get('a_wave_implicit_time_ms', np.nan),
+                       a_time_ms=a.get('a_implicit_ms', np.nan),
                        flash_duration_ms=flash_duration_ms)
     features.update(b)
 
     features['ba_ratio'] = compute_ba_ratio(
-        b.get('b_wave_amplitude_uv', np.nan), a.get('a_wave_amplitude_uv', np.nan))
+        b.get('b_amp_uv', np.nan), a.get('a_amp_uv', np.nan))
 
     protocol_key = protocol.strip().upper()
 
-    if protocol_key == 'LA 3':
-        b_t = b.get('b_wave_implicit_time_ms', np.nan)
+    if protocol_key == 'LA 3.0':
+        b_t = b.get('b_implicit_ms', np.nan)
         b_t = b_t if not np.isnan(b_t) else 50.0
         features.update(extract_phnr(signal, time_ms, b_t, noise_rms_uv,
                                      hardware_highpass_hz=hardware_highpass_hz))
@@ -944,7 +944,7 @@ def extract_all_features(signal: np.ndarray, fs_hz: float,
         features['phnr_amp_uv'] = np.nan
         features['phnr_polarity_atypical'] = False
 
-    if protocol_key in ('DA 3', 'DA 10') and op_signal is not None:
+    if protocol_key in ('DA 3.0', 'DA 10.0') and op_signal is not None:
         features.update(
             extract_oscillatory_potentials(op_signal, time_ms,
                                            hardware_lowpass_hz=hardware_lowpass_hz,
@@ -963,7 +963,7 @@ print("=" * 60)
 print("Features: a-wave amplitude, a-wave implicit time, b-wave amplitude,")
 print("          b-wave implicit time, b/a ratio, flash midpoint correction")
 print("          Oscillatory Potentials (OP2-OP4) with OP sum = OP2+OP3+OP4")
-print("          + OP2 implicit time, PhNR amplitude (LA 3 protocol)")
+print("          + OP2 implicit time, PhNR amplitude (LA 3.0 protocol)")
 print("          Free-function structure ported from Chapter 9 canonical")
 print("          rebuild (chapters/ch09/feature_extraction_and_selection_pipeline.py)")
 print("=" * 60)
@@ -1105,7 +1105,7 @@ class ERGReportGenerator:
         # b/a RATIO REFERENCE (Chapter 9, manuscript)
         # Normal range: 1.8–3.5
         # Modelled as mean=2.65, sd=0.425 so that ±2SD ≈ [1.8, 3.5]
-        # Applied to DA 3 protocol only; same for both supported electrodes
+        # Applied to DA 3.0 protocol only; same for both supported electrodes
         # Loaded from normative_data_baker2025.json ba_ratio block (T3-B F6)
         # ----------------------------------------------------------------
         self.BA_RATIO_MEAN = _norm["ba_ratio"]["mean"]
@@ -1253,35 +1253,35 @@ class ERGReportGenerator:
 
         # ── a-wave amplitude (absolute value) ──────────────────────
         if (ref.get('a_amp') is not None
-                and 'a_wave_amplitude_uv' in features
-                and features['a_wave_amplitude_uv'] is not None):
+                and 'a_amp_uv' in features
+                and features['a_amp_uv'] is not None):
             mean, sd = ref['a_amp']
-            raw_val  = abs(features['a_wave_amplitude_uv'])
+            raw_val  = abs(features['a_amp_uv'])
             if electrode == 'dtl_fiber':
                 raw_val = abs(self._apply_dtl_transform(protocol, 'a_amp', raw_val))
                 dtl_correction_applied = True
-                # T3-B F4: LA 3 a_amp Deming r²=0.68 is borderline (<0.70)
+                # T3-B F4: LA 3.0 a_amp Deming r²=0.68 is borderline (<0.70)
                 # Flag for Layer 4 audit trail and regulatory transparency
-                if protocol == 'LA 3':
+                if protocol == 'LA 3.0':
                     z_scores['_la3_a_amp_dtl_r2_borderline'] = True
             if sd > 0:
                 z_scores['a_wave_amplitude'] = self.calculate_z_score(raw_val, mean, sd)
 
         # ── a-wave implicit time ────────────────────────────────────
         if (ref.get('a_imp') is not None
-                and 'a_wave_implicit_time_ms' in features
-                and features['a_wave_implicit_time_ms'] is not None):
+                and 'a_implicit_ms' in features
+                and features['a_implicit_ms'] is not None):
             mean, sd = ref['a_imp']
             if sd > 0:
                 z_scores['a_wave_implicit_time'] = self.calculate_z_score(
-                    features['a_wave_implicit_time_ms'], mean, sd)
+                    features['a_implicit_ms'], mean, sd)
 
         # ── b-wave amplitude ────────────────────────────────────────
         if (ref.get('b_amp') is not None
-                and 'b_wave_amplitude_uv' in features
-                and features['b_wave_amplitude_uv'] is not None):
+                and 'b_amp_uv' in features
+                and features['b_amp_uv'] is not None):
             mean, sd = ref['b_amp']
-            raw_val  = features['b_wave_amplitude_uv']
+            raw_val  = features['b_amp_uv']
             if electrode == 'dtl_fiber':
                 raw_val = self._apply_dtl_transform(protocol, 'b_amp', raw_val)
                 dtl_correction_applied = True
@@ -1290,15 +1290,15 @@ class ERGReportGenerator:
 
         # ── b-wave implicit time ────────────────────────────────────
         if (ref.get('b_imp') is not None
-                and 'b_wave_implicit_time_ms' in features
-                and features['b_wave_implicit_time_ms'] is not None):
+                and 'b_implicit_ms' in features
+                and features['b_implicit_ms'] is not None):
             mean, sd = ref['b_imp']
             if sd > 0:
                 z_scores['b_wave_implicit_time'] = self.calculate_z_score(
-                    features['b_wave_implicit_time_ms'], mean, sd)
+                    features['b_implicit_ms'], mean, sd)
 
-        # ── b/a ratio (DA 3 only; normal range 1.8–3.5) ────────────
-        if (protocol == 'DA 3'
+        # ── b/a ratio (DA 3.0 only; normal range 1.8–3.5) ────────────
+        if (protocol == 'DA 3.0'
                 and 'ba_ratio' in features
                 and features['ba_ratio'] is not None):
             z_scores['ba_ratio'] = self.calculate_z_score(
@@ -1438,18 +1438,18 @@ class ERGReportGenerator:
         # and must not be silently GREEN.
         if (protocol == 'LA 30 Hz'
                 and traffic_light.get('signal') == 'GREEN'
-                and features.get('b_wave_amplitude_uv') is not None
-                and not isinstance(features.get('b_wave_amplitude_uv'), float)
+                and features.get('b_amp_uv') is not None
+                and not isinstance(features.get('b_amp_uv'), float)
                     is False  # guard NaN
-                and features.get('b_wave_amplitude_uv') < 20.0):
+                and features.get('b_amp_uv') < 20.0):
             import math as _math
-            if not _math.isnan(features['b_wave_amplitude_uv']):
+            if not _math.isnan(features['b_amp_uv']):
                 traffic_light = {
                     'signal'          : 'AMBER',
                     'color'           : '🟡',
                     'message'         : (
                         f'LA 30 Hz flicker b-wave amplitude '
-                        f'{features["b_wave_amplitude_uv"]:.1f} µV is below the '
+                        f'{features["b_amp_uv"]:.1f} µV is below the '
                         f'absolute safety floor of 20.0 µV (T3-C B4). '
                         f'Clinically significant flicker amplitude reduction; '
                         f'specialist review recommended.'
@@ -1511,11 +1511,11 @@ class ERGReportGenerator:
                 'z_scores'         : z_scores,
                 'phnr_amp_uv'      : (
                     features.get('phnr_amp_uv', None)
-                    if protocol in ('LA 3', 'LA 3.0') else None
+                    if protocol == 'LA 3.0' else None
                 ),
                 'phnr_polarity_atypical': (
                     features.get('phnr_polarity_atypical', False)
-                    if protocol in ('LA 3', 'LA 3.0') else False
+                    if protocol == 'LA 3.0' else False
                 ),
                 'recommended_action': (
                     "Select Gold Foil or DTL electrode for Z-score classification. "
@@ -1560,11 +1560,11 @@ class ERGReportGenerator:
                 'z_scores'           : z_scores,
                 'phnr_amp_uv'        : (
                     features.get('phnr_amp_uv', None)
-                    if protocol in ('LA 3', 'LA 3.0') else None
+                    if protocol == 'LA 3.0' else None
                 ),
                 'phnr_polarity_atypical': (
                     features.get('phnr_polarity_atypical', False)
-                    if protocol in ('LA 3', 'LA 3.0') else False
+                    if protocol == 'LA 3.0' else False
                 ),
                 'zscore_available'   : electrode in ZSCORE_SUPPORTED_ELECTRODES,
                 'filter_log'         : filter_log,
@@ -2348,9 +2348,9 @@ class ERGFHIRGenerator:
     # ISCEV protocol codes (custom extension)
     ISCEV_PROTOCOL_CODES = {
         'DA 0.01': 'ISCEV-DA-001',
-        'DA 3': 'ISCEV-DA-300',
-        'DA 10': 'ISCEV-DA-1000',
-        'LA 3': 'ISCEV-LA-300',
+        'DA 3.0': 'ISCEV-DA-300',
+        'DA 10.0': 'ISCEV-DA-1000',
+        'LA 3.0': 'ISCEV-LA-300',
         'LA 30 Hz': 'ISCEV-LA-30HZ'
     }
 
@@ -2546,8 +2546,8 @@ class ERGFHIRGenerator:
 
                 observation['component'].append(component)
 
-        # ── PhNR raw amplitude (LA 3 only — no z-score, reference range pending) ──
-        if protocol in ('LA 3', 'LA 3.0'):
+        # ── PhNR raw amplitude (LA 3.0 only — no z-score, reference range pending) ──
+        if protocol == 'LA 3.0':
             phnr_val = features.get('phnr_amp_uv', None)
             phnr_atypical = features.get('phnr_polarity_atypical', False)
             if phnr_val is not None and not (isinstance(phnr_val, float) and np.isnan(phnr_val)):
@@ -2696,7 +2696,7 @@ print("      features=features_dict,")
 print("      z_scores=z_scores_dict,")
 print("      audit_results=audit_dict,")
 print("      electrode_type='contact_lens',")
-print("      protocol='DA 3'")
+print("      protocol='DA 3.0'")
 print("  )")
 print("  fhir_json = fhir_gen.to_json(observation)")
 print("  fhir_gen.save_to_file(observation, 'fhir_observation.json')")
@@ -2742,8 +2742,8 @@ electrode_widget = widgets.Dropdown(
     description='Electrode Type:'
 )
 protocol_widget = widgets.ToggleButtons(
-    options=['DA 0.01', 'DA 3', 'DA 10', 'LA 3', 'LA 30 Hz'],
-    value='DA 3',
+    options=['DA 0.01', 'DA 3.0', 'DA 10.0', 'LA 3.0', 'LA 30 Hz'],
+    value='DA 3.0',
     description='Protocol:'
 )
 environment_widget = widgets.Dropdown(
@@ -2778,7 +2778,7 @@ op_extract_widget = widgets.Checkbox(value=True, description='Extract Oscillator
 def update_op_default(change):
     """Set OP extraction default based on protocol"""
     protocol = protocol_widget.value
-    if protocol in ['DA 3', 'DA 10']:
+    if protocol in ['DA 3.0', 'DA 10.0']:
         op_extract_widget.value = True
     else:
         op_extract_widget.value = False
@@ -2941,7 +2941,7 @@ def run_pipeline(b):
                     # 5/9's separation of signal conditioning from feature
                     # extraction.
                     inverted_polarity_detected = False
-                    _DA_PROTOCOLS = {'DA 0.01', 'DA 3', 'DA 10'}
+                    _DA_PROTOCOLS = {'DA 0.01', 'DA 3.0', 'DA 10.0'}
                     if protocol_widget.value.strip().upper() in {p.upper() for p in _DA_PROTOCOLS}:
                         post_stim_signal = filtered_signal[flash_onset_sample:]
                         window_30ms_samples = min(int(30.0 * fs_hz / 1000), len(post_stim_signal))
@@ -2968,9 +2968,9 @@ def run_pipeline(b):
                     features['inverted_polarity_detected'] = inverted_polarity_detected
 
                     print(f"✓ Features extracted")
-                    if 'a_wave_amplitude_uv' in features and not np.isnan(features['a_wave_amplitude_uv']):
-                        print(f"  a-wave: {features['a_wave_amplitude_uv']} µV @ {features['a_wave_implicit_time_ms']} ms")
-                        print(f"  b-wave: {features['b_wave_amplitude_uv']} µV @ {features['b_wave_implicit_time_ms']} ms")
+                    if 'a_amp_uv' in features and not np.isnan(features['a_amp_uv']):
+                        print(f"  a-wave: {features['a_amp_uv']} µV @ {features['a_implicit_ms']} ms")
+                        print(f"  b-wave: {features['b_amp_uv']} µV @ {features['b_implicit_ms']} ms")
                     if 'phnr_amp_uv' in features and not np.isnan(features['phnr_amp_uv']):
                         print(f"  PhNR: {features['phnr_amp_uv']} µV")
                     if 'op2_amp_uv' in features and not np.isnan(features.get('op2_amp_uv', np.nan)):
