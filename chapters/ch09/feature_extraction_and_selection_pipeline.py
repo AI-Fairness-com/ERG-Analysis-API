@@ -24,18 +24,20 @@ TIME-DOMAIN FEATURES
   extract_oscillatory_potentials– OP2, OP3, OP4 amplitudes and OP2 implicit time
   extract_time_domain_features  – Orchestrator: all time-domain features for one recording
 
-SPECTROGRAM REGION FEATURES
-  spectrogram_region_features   – Summary statistics per time-frequency region
+NONLINEAR AND TIME-FREQUENCY FEATURES (Section 9.3)
+  extract_nonlinear_features           – Hurst Exponent, Approximate Entropy (Nair & Joseph, 2014a)
+  extract_dwt_band_energies            – 6 CWT band-energy descriptors (Gauvin, Lina & Lachapelle, 2014)
+  extract_bwave_derivative_features    – b-wave ascending/descending inflection time+gradient (Wood, Margrain & Binns, 2014)
+  extract_awave_descending_inflection  – a-wave descending inflection time (Wood, Margrain & Binns, 2014)
 
-FREQUENCY-DOMAIN FEATURES
-  compute_power_ratio           – OP / b-wave Welch PSD power ratio
-  compute_spectral_entropy      – Normalised spectral entropy [0, 1]
-  compute_peak_frequency        – Frequency of maximum PSD
-  compute_harmonic_ratio        – Harmonic ratio for LA 30 Hz flicker
-  compute_psd_per_band          – Integrated PSD in four clinical bands
+FREQUENCY-DOMAIN FEATURES (Section 9.4)
+  extract_frequency_domain_features    – peak frequency, spectral entropy (all protocols), harmonic ratio (LA 30 Hz only)
+
+COMPLETE SINGLE-RECORDING PIPELINE
+  extract_all_features           – All 25-27 features (of 28 defined) for one recording (Section 9.6)
 
 COMPLETE PATIENT PIPELINE
-  extract_all_features          – Full feature vector for all protocols × eyes
+  build_patient_feature_matrix   – extract_all_features() across all protocols x eyes for one patient
 
 FEATURE SELECTION
   rfe_selection                 – Recursive Feature Elimination (RFECV)
@@ -60,12 +62,14 @@ Licence    : See repo root LICENSE
 
 import numpy as np
 import pandas as pd
+from typing import Dict, Any
 from collections import Counter
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy.signal import welch, find_peaks, stft as _stft
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import RFECV
 from sklearn.model_selection import StratifiedKFold
+import pywt
 
 # ── Locked constants ───────────────────────────────────────────────────────────
 FS_HZ         = 2000.0   # pipeline sampling rate (Chapter 3)
@@ -81,32 +85,10 @@ EYES          = ('RE', 'LE')
 ISCEV_FLASH_MAX_DURATION_MS = 5.0
 FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS = 1.0
 
-FREQUENCY_BANDS = {
-    'vlow'   : (0.3,   1),
-    'bwave'  : (1,    30),
-    'transit': (30,   75),
-    'op'     : (75,  300),
-}
+# (No spectrogram-region or PSD-per-band constants: those features were
+# dropped from this pipeline's canonical design -- not part of Chapter 9's
+# cited 28-feature set. See docs/CHANGELOG.md, 2026-09-07 entry.)
 
-# Time-frequency regions for spectrogram summary features
-# {name: (fmin_hz, fmax_hz, tmin_ms, tmax_ms)}
-SPECTRO_REGIONS = {
-    'bwave'    : (0,   30,  20,  100),
-    'op'       : (75, 300,  20,  100),
-    'noise_ref': (0,  300, -150,   0),
-    'late_phot': (0,   30,  80,  200),   # LA 3.0 only
-}
-
-# Default STFT config (must match Chapter 8 STFT_CONFIG)
-_STFT_CFG = {
-    'window': 'hamming', 'nperseg': 64,
-    'noverlap': 56,      'fs': FS_HZ,
-}
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# TIME-DOMAIN FEATURE EXTRACTORS
-# ══════════════════════════════════════════════════════════════════════════════
 
 def extract_a_wave(signal_uv:    np.ndarray,
                    time_ms:      np.ndarray,
@@ -505,292 +487,328 @@ def extract_time_domain_features(broadband_uv:   np.ndarray,
 # SPECTROGRAM REGION FEATURES
 # ══════════════════════════════════════════════════════════════════════════════
 
-def spectrogram_region_features(signal_uv: np.ndarray,
-                                 time_ms:   np.ndarray,
-                                 protocol:  str,
-                                 config:    dict = None) -> dict:
-    """Extract spectrogram summary statistics from defined time-frequency regions.
 
-    Computes max, min, median, and mean power within each region defined in
-    SPECTRO_REGIONS, plus a derived OP/b-wave dB ratio.
-
-    Uses the pre-normalisation dB spectrogram for absolute comparability
-    across recordings (unlike the z-scored 224×224 image in Chapter 8).
-
-    Parameters
-    ----------
-    signal_uv : np.ndarray
-        Broadband-filtered ERG in µV.
-    time_ms : np.ndarray
-        Time axis in ms (t = 0 at stimulus onset).
-    protocol : str
-        ISCEV protocol string. 'late_phot' region is skipped for DA protocols.
-    config : dict, optional
-        STFT config dict. Defaults to _STFT_CFG (Hamming, nperseg=64).
-
-    Returns
-    -------
-    dict of {region_stat: float_or_nan}.
+def extract_nonlinear_features(signal: np.ndarray) -> Dict[str, Any]:
     """
-    cfg = config or _STFT_CFG
-    fs  = cfg['fs']
-
-    freqs, times_stft, Zxx = _stft(signal_uv, fs=fs,
-                                    window=cfg['window'],
-                                    nperseg=cfg['nperseg'],
-                                    noverlap=cfg['noverlap'])
-    S_db = 10 * np.log10(np.abs(Zxx) ** 2 + 1e-12)
-
-    stim_idx  = int(np.argmin(np.abs(time_ms)))
-    t_ms_stft = times_stft * 1000 - time_ms[stim_idx]
-
-    pre_cols = t_ms_stft < 0
-    if pre_cols.any():
-        baseline_db = np.mean(S_db[:, pre_cols], axis=1, keepdims=True)
-        S_db        = S_db - baseline_db
-
-    features = {}
-    stat_fns  = {'max': np.max, 'min': np.min,
-                 'median': np.median, 'mean': np.mean}
-
-    for region, (fmin, fmax, tmin, tmax) in SPECTRO_REGIONS.items():
-        if region == 'late_phot' and 'LA' not in protocol.upper():
-            for stat in stat_fns:
-                features[f'{region}_{stat}'] = np.nan
-            continue
-        fmask = (freqs >= fmin)      & (freqs <= fmax)
-        tmask = (t_ms_stft >= tmin)  & (t_ms_stft <= tmax)
-        if not (fmask.any() and tmask.any()):
-            for stat in stat_fns:
-                features[f'{region}_{stat}'] = np.nan
-            continue
-        patch = S_db[np.ix_(fmask, tmask)]
-        for stat_name, stat_fn in stat_fns.items():
-            features[f'{region}_{stat_name}'] = round(float(stat_fn(patch)), 4)
-
-    op_mean    = features.get('op_mean',    np.nan)
-    bwave_mean = features.get('bwave_mean', np.nan)
-    if not (np.isnan(op_mean) or np.isnan(bwave_mean) or bwave_mean == 0):
-        features['op_bwave_ratio'] = round(op_mean / bwave_mean, 4)
+    Hurst Exponent and Approximate Entropy of the broadband signal.
+    Both measures are significantly lower (p<0.05) in CSNB, RP, and
+    cone-rod dystrophy vs. healthy controls (Nair and Joseph, 2014a).
+    """
+    x = np.asarray(signal, dtype=float)
+    n = len(x)
+    # Hurst exponent via detrended-difference scaling
+    if n < 20:
+        hurst = np.nan
     else:
-        features['op_bwave_ratio'] = np.nan
+        lags = range(2, n // 2)
+        tau = np.array([np.std(x[lag:] - x[:-lag]) for lag in lags])
+        valid = tau > 0
+        if valid.sum() < 2:
+            hurst = np.nan
+        else:
+            log_lags = np.log(np.array(list(lags))[valid])
+            log_tau = np.log(tau[valid])
+            slope, _ = np.polyfit(log_lags, log_tau, 1)
+            hurst = float(slope * 2.0)
+    # Approximate entropy (Pincus, 1991; m=2, r=0.15*SD per Nair and Joseph, 2014a)
+    def _phi(m, r):
+        z = np.array([x[i:i + m] for i in range(n - m + 1)])
+        d = np.abs(z[:, None, :] - z[None, :, :]).max(axis=2)
+        c = (d <= r).sum(axis=1) / (n - m + 1)
+        return np.sum(np.log(c)) / (n - m + 1)
+    if n < 10:
+        apen = np.nan
+    else:
+        r = 0.15 * np.std(x)
+        apen = float(_phi(2, r) - _phi(3, r)) if r > 0 else np.nan
+    return {
+        'hurst_exponent': round(hurst, 4) if not np.isnan(hurst) else np.nan,
+        'approximate_entropy': round(apen, 4) if not np.isnan(apen) else np.nan,
+    }
+
+
+
+def extract_dwt_band_energies(signal: np.ndarray, fs_hz: float,
+                               flash_onset_sample: int = 0,
+                               wavelet: str = 'morl') -> Dict[str, Any]:
+    """
+    CWT band-energy descriptors at the six statistically-validated
+    frequency/time-window pairs: 20/40 Hz over the a-wave window, 20/40 Hz
+    over the b-wave window, and 80/160 Hz over the OP window
+    (Gauvin, Lina and Lachapelle, 2014).
+    """
+    x = np.asarray(signal, dtype=float)
+    n = len(x)
+    t_ms = (np.arange(n) - flash_onset_sample) * 1000.0 / fs_hz
+    dt = 1.0 / fs_hz
+    central_freq = pywt.central_frequency(wavelet)
+    descriptors = {
+        'dwt_20a_uv2': (20.0, (5.0, 30.0)),
+        'dwt_40a_uv2': (40.0, (5.0, 30.0)),
+        'dwt_20b_uv2': (20.0, (20.0, 70.0)),
+        'dwt_40b_uv2': (40.0, (20.0, 70.0)),
+        'dwt_80ops_uv2': (80.0, (10.0, 45.0)),
+        'dwt_160ops_uv2': (160.0, (10.0, 45.0)),
+    }
+    out = {}
+    for key, (target_freq_hz, window_ms) in descriptors.items():
+        scale = central_freq * fs_hz / target_freq_hz
+        coeffs, _ = pywt.cwt(x, [scale], wavelet, sampling_period=dt)
+        mag = np.abs(coeffs[0])
+        mask = (t_ms >= window_ms[0]) & (t_ms <= window_ms[1])
+        out[key] = round(float(np.sum(mag[mask] ** 2)), 2) if mask.any() else np.nan
+    return out
+
+
+
+def extract_bwave_derivative_features(signal: np.ndarray, fs_hz: float,
+                                       b_wave_implicit_time_ms: float,
+                                       flash_onset_sample: int = 0,
+                                       search_end_ms: float = 150.0) -> Dict[str, Any]:
+    """
+    b-wave ascending- and descending-limb inflection points (2nd-derivative
+    zero crossings), implicit time and gradient. Both limbs reached
+    statistical significance in the source study (descending: p<0.001 time,
+    p=0.033 gradient; ascending: p<0.001 time, p=0.005 gradient)
+    (Wood, Margrain and Binns, 2014).
+    """
+    empty = {'b_ascending_inflection_ms': np.nan, 'b_ascending_gradient_uv_ms': np.nan,
+             'b_descending_inflection_ms': np.nan, 'b_descending_gradient_uv_ms': np.nan}
+    if np.isnan(b_wave_implicit_time_ms):
+        return empty
+    t_ms = (np.arange(len(signal)) - flash_onset_sample) * 1000.0 / fs_hz
+    asc_mask = (t_ms >= 0.0) & (t_ms <= b_wave_implicit_time_ms - 1.0)
+    asc_result = {'b_ascending_inflection_ms': np.nan, 'b_ascending_gradient_uv_ms': np.nan}
+    if asc_mask.sum() >= 5:
+        seg_t = t_ms[asc_mask]
+        seg_x = np.asarray(signal)[asc_mask]
+        d1 = np.gradient(seg_x, seg_t)
+        d2 = np.gradient(d1, seg_t)
+        sign_changes = np.where(np.diff(np.sign(d2)))[0]
+        candidates = [i for i in sign_changes if d1[i] > 0]
+        if candidates:
+            idx = candidates[-1]
+            asc_result = {
+                'b_ascending_inflection_ms': round(float(seg_t[idx]), 2),
+                'b_ascending_gradient_uv_ms': round(float(d1[idx]), 2),
+            }
+    desc_mask = (t_ms >= b_wave_implicit_time_ms + 3.0) & (t_ms <= search_end_ms)
+    desc_result = {'b_descending_inflection_ms': np.nan, 'b_descending_gradient_uv_ms': np.nan}
+    if desc_mask.sum() >= 5:
+        seg_t = t_ms[desc_mask]
+        seg_x = np.asarray(signal)[desc_mask]
+        d1 = np.gradient(seg_x, seg_t)
+        d2 = np.gradient(d1, seg_t)
+        sign_changes = np.where(np.diff(np.sign(d2)))[0]
+        candidates = [i for i in sign_changes if d1[i] < 0]
+        if candidates:
+            idx = candidates[0]
+            desc_result = {
+                'b_descending_inflection_ms': round(float(seg_t[idx]), 2),
+                'b_descending_gradient_uv_ms': round(float(d1[idx]), 2),
+            }
+    return {**asc_result, **desc_result}
+
+
+
+def extract_awave_descending_inflection(signal: np.ndarray, fs_hz: float,
+                                         a_wave_implicit_time_ms: float,
+                                         b_wave_implicit_time_ms: float,
+                                         flash_onset_sample: int = 0) -> Dict[str, Any]:
+    """
+    a-wave descending-limb inflection point, implicit time only. Gradient at
+    this point was NOT significant in the source study (p = 0.097) and is
+    deliberately not extracted; implicit time was significant (p < 0.001,
+    AUC 0.68) (Wood, Margrain and Binns, 2014).
+    """
+    if np.isnan(a_wave_implicit_time_ms) or np.isnan(b_wave_implicit_time_ms):
+        return {'a_descending_inflection_ms': np.nan}
+    t_ms = (np.arange(len(signal)) - flash_onset_sample) * 1000.0 / fs_hz
+    mask = (t_ms >= a_wave_implicit_time_ms + 1.0) & (t_ms <= b_wave_implicit_time_ms - 1.0)
+    if mask.sum() < 5:
+        return {'a_descending_inflection_ms': np.nan}
+    seg_t = t_ms[mask]
+    seg_x = np.asarray(signal)[mask]
+    d1 = np.gradient(seg_x, seg_t)
+    d2 = np.gradient(d1, seg_t)
+    sign_changes = np.where(np.diff(np.sign(d2)))[0]
+    if len(sign_changes) == 0:
+        return {'a_descending_inflection_ms': np.nan}
+    idx = sign_changes[0]
+    return {'a_descending_inflection_ms': round(float(seg_t[idx]), 2)}
+
+
+def extract_frequency_domain_features(signal: np.ndarray, fs_hz: float,
+                                       protocol: str = 'DA 3.0',
+                                       fmin: float = 0.0, fmax: float = 300.0,
+                                       fundamental_hz: float = 30.0,
+                                       n_harmonics: int = 3,
+                                       bw_hz: float = 2.0) -> Dict[str, Any]:
+    """
+    Peak PSD frequency and spectral entropy on the broadband signal for
+    every protocol. Harmonic ratio (LA 30 Hz only).
+    """
+    freqs, psd = welch(signal, fs=fs_hz, nperseg=min(256, len(signal)))
+    mask = (freqs >= fmin) & (freqs <= fmax)
+    freqs_m, psd_m = freqs[mask], psd[mask]
+    if len(psd_m) == 0 or np.sum(psd_m) == 0:
+        out = {'peak_freq_hz': np.nan, 'spectral_entropy': np.nan}
+    else:
+        peak_freq = float(freqs_m[np.argmax(psd_m)])
+        p_norm = psd_m / np.sum(psd_m)
+        p_norm = p_norm[p_norm > 0]
+        entropy = float(-np.sum(p_norm * np.log(p_norm)) / np.log(len(p_norm))) if len(p_norm) > 1 else np.nan
+        out = {'peak_freq_hz': round(peak_freq, 2), 'spectral_entropy': round(entropy, 4)}
+    if protocol.upper().replace(' ', '') in ('LA30HZ', 'LA30'):
+        total_power = np.sum(psd)
+        if total_power > 0:
+            harmonic_power = 0.0
+            for k in range(1, n_harmonics + 1):
+                f0 = fundamental_hz * k
+                hmask = (freqs >= f0 - bw_hz) & (freqs <= f0 + bw_hz)
+                harmonic_power += np.sum(psd[hmask])
+            out['harmonic_ratio'] = round(float(harmonic_power / total_power), 4)
+        else:
+            out['harmonic_ratio'] = np.nan
+    return out
+
+
+
+def extract_all_features(signal: np.ndarray, fs_hz: float,
+                         protocol: str = 'DA 3.0',
+                         flash_onset_sample: int = 0,
+                         flash_duration_ms: float = 0.0,
+                         op_signal: np.ndarray = None,
+                         noise_rms_uv: float = 1.0,
+                         hardware_lowpass_hz: float = 300.0,
+                         hardware_highpass_hz: float = 0.3) -> Dict[str, Any]:
+    """Assemble every feature family in this chapter for one recording.
+
+    flash_duration_ms defaults to 0.0, matching ISCEV 2022's assumption
+    for a near-instantaneous xenon flashtube; pass the device's actual
+    flash duration for LED-based systems to apply the ISCEV
+    flash-midpoint implicit-time correction where it is needed.
+
+    hardware_lowpass_hz and hardware_highpass_hz are Chapter 5 device
+    metadata, used only to distinguish a MAR-technical absence from a
+    MNAR-physiological one when the a-wave, PhNR, or OPs are not detected.
+    """
+    time_ms = (np.arange(len(signal)) - flash_onset_sample) * 1000.0 / fs_hz
+
+    features = {'protocol': protocol}
+
+    # §9.1: a-wave, b-wave, b/a ratio
+    a = extract_a_wave(signal, time_ms, protocol,
+                       hardware_lowpass_hz=hardware_lowpass_hz,
+                       flash_duration_ms=flash_duration_ms)
+    features.update(a)
+    b = extract_b_wave(signal, time_ms, protocol,
+                       a_time_ms=a['a_implicit_ms'],
+                       flash_duration_ms=flash_duration_ms)
+    features.update(b)
+    features['ba_ratio'] = compute_ba_ratio(b['b_amp_uv'], a['a_amp_uv'])
+
+    # §9.1: oscillatory potentials, computed only when a dedicated
+    # OP-isolated (75-300 Hz) signal is supplied; there is no fallback
+    # to the broadband signal. Without op_signal, OP extraction is
+    # skipped entirely and its keys are simply absent from the output.
+    if protocol.strip().upper() in ('DA 3.0', 'DA 10.0') and op_signal is not None:
+        features.update(extract_oscillatory_potentials(
+            op_signal, time_ms, hardware_lowpass_hz=hardware_lowpass_hz))
+    else:
+        for k in ['op2_amp_uv', 'op3_amp_uv', 'op4_amp_uv',
+                  'op_sum_uv', 'op2_implicit_ms']:
+            features[k] = np.nan
+    # §9.2: PhNR family, LA 3.0 only        
+    if protocol.strip().upper() == 'LA 3.0':
+        b_it = features.get('b_implicit_ms', np.nan)
+        if not np.isnan(b_it):
+            features.update(extract_phnr(signal, time_ms, b_it, noise_rms_uv,
+                                         hardware_highpass_hz=hardware_highpass_hz))
+            b_amp = features.get('b_amp_uv', np.nan)
+            phnr_amp = features.get('phnr_amp_uv', np.nan)
+            if not np.isnan(b_amp) and b_amp != 0 and not np.isnan(phnr_amp):
+                features['phnr_bwave_ratio'] = round(float(phnr_amp / b_amp), 4)
+            else:
+                features['phnr_bwave_ratio'] = np.nan
+        else:
+            features['phnr_amp_uv'] = np.nan
+            features['phnr_polarity_atypical'] = False
+            features['phnr_bwave_ratio'] = np.nan
+
+    # §9.3: nonlinear, DWT bands, b-wave and a-wave derivative features (all protocols)
+    features.update(extract_nonlinear_features(signal))
+    features.update(extract_dwt_band_energies(signal, fs_hz, flash_onset_sample))
+    a_implicit = features.get('a_implicit_ms', np.nan)
+    b_implicit = features.get('b_implicit_ms', np.nan)
+    features.update(extract_bwave_derivative_features(
+        signal, fs_hz, b_implicit, flash_onset_sample))
+    features.update(extract_awave_descending_inflection(
+        signal, fs_hz, a_implicit, b_implicit, flash_onset_sample))
+
+    # §9.4: frequency-domain
+    features.update(extract_frequency_domain_features(signal, fs_hz, protocol))
 
     return features
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FREQUENCY-DOMAIN FEATURES
+# COMPLETE PATIENT PIPELINE
 # ══════════════════════════════════════════════════════════════════════════════
 
-def compute_power_ratio(signal_uv:  np.ndarray,
-                         time_ms:   np.ndarray,
-                         fs:        float = FS_HZ,
-                         op_band:   tuple = (75, 300),
-                         bwave_band: tuple = (1,  30)) -> float:
-    """Compute the OP-to-b-wave Welch PSD power ratio (post-stimulus only).
+def build_patient_feature_matrix(patient_recordings: dict,
+                                  noise_rms_by_eye:   dict) -> dict:
+    """Call extract_all_features() once per protocol x eye for one patient.
 
-    Returns NaN if b-wave band power is zero or signal is too short.
-    """
-    post_sig = signal_uv[time_ms >= 0]
-    if len(post_sig) < 2:
-        return np.nan
-    freqs, psd = welch(post_sig, fs=fs, nperseg=min(256, len(post_sig)),
-                       window='hann')
-    freq_res    = freqs[1] - freqs[0]
-    op_power    = np.sum(psd[(freqs >= op_band[0])    & (freqs <= op_band[1])])    * freq_res
-    bwave_power = np.sum(psd[(freqs >= bwave_band[0]) & (freqs <= bwave_band[1])]) * freq_res
-    if bwave_power == 0:
-        return np.nan
-    return round(op_power / bwave_power, 4)
-
-
-def compute_spectral_entropy(signal_uv: np.ndarray,
-                              time_ms:   np.ndarray,
-                              fs:        float = FS_HZ) -> float:
-    """Compute normalised spectral entropy of the post-stimulus ERG.
-
-    Returns a value in [0, 1]:
-      0 = all power concentrated in one frequency bin (pure tone)
-      1 = power uniformly distributed (white noise / extinguished ERG)
-
-    Advanced RP recordings approach 1; normal recordings have low entropy.
-    """
-    post_sig = signal_uv[time_ms >= 0]
-    if len(post_sig) < 2:
-        return np.nan
-    _, psd    = welch(post_sig, fs=fs, nperseg=min(256, len(post_sig)))
-    psd_norm  = psd / (psd.sum() + 1e-12)
-    entropy   = -np.sum(psd_norm * np.log2(psd_norm + 1e-12))
-    max_entr  = np.log2(len(psd_norm))
-    return round(float(entropy / max_entr), 4) if max_entr > 0 else np.nan
-
-
-def compute_peak_frequency(signal_uv: np.ndarray,
-                            time_ms:   np.ndarray,
-                            fs:        float = FS_HZ,
-                            fmax:      float = 300.0) -> float:
-    """Compute the frequency of maximum Welch PSD in the post-stimulus ERG.
-
-    Normal ERGs peak at 10–30 Hz (b-wave dominant).
-    Severely reduced ERGs may show a flat or shifted PSD peak.
-    """
-    post_sig = signal_uv[time_ms >= 0]
-    if len(post_sig) < 2:
-        return np.nan
-    freqs, psd = welch(post_sig, fs=fs, nperseg=min(256, len(post_sig)))
-    fmask      = freqs <= fmax
-    return round(float(freqs[fmask][np.argmax(psd[fmask])]), 2)
-
-
-def compute_harmonic_ratio(signal_uv:   np.ndarray,
-                            time_ms:    np.ndarray,
-                            fs:         float = FS_HZ,
-                            flicker_hz: float = 30.0,
-                            n_harmonics: int  = 3,
-                            bw_hz:      float = 3.0) -> float:
-    """Compute the harmonic ratio for LA 30 Hz flicker ERG.
-
-    Ratio of power at the stimulus frequency and its first (n_harmonics - 1)
-    harmonics to total spectral power. High ratio = well-locked cone response.
-
-    Parameters
-    ----------
-    flicker_hz : float
-        Stimulus flicker frequency (30.0 Hz for LA 30 Hz protocol).
-    n_harmonics : int
-        Number of harmonics to include (fundamental + overtones).
-    bw_hz : float
-        Half-bandwidth around each harmonic in Hz.
-
-    Returns
-    -------
-    float in [0, 1], or NaN if insufficient steady-state data (< 150 ms).
-
-    Notes
-    -----
-    The first 150 ms is excluded per ISCEV 2022 to avoid transient-onset
-    contamination of the steady-state measurement.
-    """
-    ss_mask = time_ms >= 150
-    if not ss_mask.any() or ss_mask.sum() < 64:
-        return np.nan
-    ss_sig = signal_uv[ss_mask]
-    freqs, psd   = welch(ss_sig, fs=fs, nperseg=min(256, len(ss_sig)))
-    total_power  = psd.sum()
-    if total_power == 0:
-        return np.nan
-    harmonic_power = 0.0
-    for k in range(1, n_harmonics + 1):
-        f_target = k * flicker_hz
-        band = (freqs >= f_target - bw_hz) & (freqs <= f_target + bw_hz)
-        harmonic_power += psd[band].sum()
-    return round(float(harmonic_power / total_power), 4)
-
-
-def compute_psd_per_band(signal_uv: np.ndarray,
-                          time_ms:   np.ndarray,
-                          fs:        float = FS_HZ) -> dict:
-    """Compute integrated Welch PSD power in each of the four frequency bands.
-
-    Returns
-    -------
-    dict with keys: psd_vlow, psd_bwave, psd_transit, psd_op (µV²/Hz).
-    """
-    post_sig = signal_uv[time_ms >= 0]
-    if len(post_sig) < 2:
-        return {f'psd_{k}': np.nan for k in FREQUENCY_BANDS}
-    freqs, psd = welch(post_sig, fs=fs, nperseg=min(256, len(post_sig)))
-    freq_res   = freqs[1] - freqs[0]
-    result     = {}
-    for band_name, (flo, fhi) in FREQUENCY_BANDS.items():
-        mask  = (freqs >= flo) & (freqs <= fhi)
-        power = float(np.sum(psd[mask]) * freq_res) if mask.any() else np.nan
-        result[f'psd_{band_name}'] = round(power, 4)
-    return result
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# COMPLETE PATIENT FEATURE PIPELINE
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _all_feature_keys(protocol: str) -> list:
-    """Return all expected feature key suffixes for a given protocol."""
-    keys = ['a_amp_uv', 'a_implicit_ms', 'b_amp_uv', 'b_implicit_ms',
-            'ba_ratio', 'phnr_amp_uv',
-            'op2_amp_uv', 'op3_amp_uv', 'op4_amp_uv',
-            'op_sum_uv', 'op2_implicit_ms']
-    for region in SPECTRO_REGIONS:
-        for stat in ['max', 'min', 'median', 'mean']:
-            keys.append(f'{region}_{stat}')
-    keys.append('op_bwave_ratio')
-    keys += ['power_ratio', 'spec_entropy', 'peak_freq', 'harmonic_ratio']
-    keys += [f'psd_{b}' for b in FREQUENCY_BANDS]
-    return keys
-
-
-def extract_all_features(patient_recordings: dict,
-                          config:             dict,
-                          noise_rms_by_eye:   dict) -> dict:
-    """Extract the complete ERG feature vector for one patient.
+    Not printed in the book -- Section 9.6 describes this loop in prose
+    ("Calling this once per recording, across all 5 protocols and both
+    eyes for one patient...") without printing the loop itself. This is
+    the repo's own implementation of that described pattern.
 
     Parameters
     ----------
     patient_recordings : dict
         Nested dict: {protocol: {eye: recording_dict}}.
-        recording_dict must contain:
-          time_ms, amplitude_uv (broadband), op_filtered_uv, fs_hz.
-    config : dict
-        STFT config dict (Chapter 8 STFT_CONFIG).
+        recording_dict must contain: signal_uv, fs_hz, flash_onset_sample.
+        Optional per-recording keys: op_signal_uv, flash_duration_ms,
+        hardware_lowpass_hz, hardware_highpass_hz.
     noise_rms_by_eye : dict
         {eye: {protocol: noise_rms_uv}} noise RMS from Chapter 2 pipeline.
 
     Returns
     -------
-    dict {feature_name: float_or_nan}
-        Flat named feature vector covering all protocols × eyes.
-        Missing protocols are filled with NaN blocks.
+    dict {f'{protocol}_{eye}_{feature}': value}
+        Flat feature vector. 5 protocols x 2 eyes x 25-27 features/recording
+        = 256 raw values per patient (Section 9.6).
     """
     features = {}
     for protocol in PROTOCOLS:
         for eye in EYES:
-            prefix = (f"{protocol.replace(' ', '_').replace('.', 'p')}_{eye}")
+            prefix = f"{protocol.replace(' ', '_').replace('.', 'p')}_{eye}"
             try:
                 rec = patient_recordings[protocol][eye]
             except KeyError:
-                for k in _all_feature_keys(protocol):
-                    features[f'{prefix}_{k}'] = np.nan
                 continue
-
-            t    = rec['time_ms']
-            amp  = rec['amplitude_uv']
-            op_s = rec.get('op_filtered_uv', np.zeros_like(amp))
-            fs   = float(rec.get('fs_hz', config.get('fs', FS_HZ)))
             nrms = noise_rms_by_eye.get(eye, {}).get(protocol, 5.0)
-            hw_lp = float(rec.get('hardware_lowpass_hz', 300.0))
-            hw_hp = float(rec.get('hardware_highpass_hz', 0.3))
-            flash_ms = float(rec.get('flash_duration_ms', 0.0))
-
-            td = extract_time_domain_features(amp, op_s, t, protocol, nrms,
-                                              hardware_lowpass_hz=hw_lp,
-                                              hardware_highpass_hz=hw_hp,
-                                              flash_duration_ms=flash_ms,
-                                              fs=fs)
-            features.update({f'{prefix}_{k}': v for k, v in td.items()})
-
-            features[f'{prefix}_power_ratio']    = compute_power_ratio(amp, t, fs)
-            features[f'{prefix}_spec_entropy']   = compute_spectral_entropy(amp, t, fs)
-            features[f'{prefix}_peak_freq']      = compute_peak_frequency(amp, t, fs)
-            features[f'{prefix}_harmonic_ratio'] = (
-                compute_harmonic_ratio(amp, t, fs)
-                if 'LA 30' in protocol else np.nan)
-            features.update({f'{prefix}_{k}': v
-                             for k, v in compute_psd_per_band(amp, t, fs).items()})
+            recording_feats = extract_all_features(
+                signal=rec['signal_uv'],
+                fs_hz=rec['fs_hz'],
+                protocol=protocol,
+                flash_onset_sample=rec.get('flash_onset_sample', 0),
+                flash_duration_ms=rec.get('flash_duration_ms', 0.0),
+                op_signal=rec.get('op_signal_uv'),
+                noise_rms_uv=nrms,
+                hardware_lowpass_hz=rec.get('hardware_lowpass_hz', 300.0),
+                hardware_highpass_hz=rec.get('hardware_highpass_hz', 0.3),
+            )
+            _meta_keys = {'protocol', 'flash_midpoint_correction_applied',
+                          'flash_midpoint_correction_ms', 'op_mar_technical',
+                          'a_wave_mar_technical', 'phnr_mar_technical',
+                          'phnr_polarity_atypical'}
+            features.update({f'{prefix}_{k}': v for k, v in recording_feats.items()
+                             if k not in _meta_keys})
     return features
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# FEATURE SELECTION
-# ══════════════════════════════════════════════════════════════════════════════
 
 def rfe_selection(X_train:       np.ndarray,
                   y_train:       np.ndarray,
@@ -970,19 +988,20 @@ def feature_selection_pipeline(X_train:        np.ndarray,
     return selected
 
 
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Smoke test
 # ══════════════════════════════════════════════════════════════════════════════
 
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
+    from scipy.signal import butter, sosfiltfilt
 
-    # ── Synthetic ERG signals ─────────────────────────────────────────────
     fs    = int(FS_HZ)
     pre   = 100       # ms pre-stimulus
     epoch = 500       # ms total
     N     = int(fs * epoch / 1000)
     t_ms  = np.linspace(-pre, epoch - pre, N, endpoint=False)
+    flash_onset_sample = int(pre * fs / 1000)
 
     def make_sweep(a=-120, b=280, op=1.0, noise=5, seed=0) -> np.ndarray:
         rng = np.random.default_rng(seed)
@@ -997,87 +1016,60 @@ if __name__ == '__main__':
         return sig + rng.normal(0, noise, N)
 
     def make_op_filtered(sig: np.ndarray) -> np.ndarray:
-        from scipy.signal import butter, sosfiltfilt
         sos = butter(4, [75, 300], btype='bandpass', fs=fs, output='sos')
         return sosfiltfilt(sos, sig)
 
-    normal   = make_sweep(seed=0)
-    early_dr = make_sweep(b=230, op=0.4, seed=1)
-    adv_rp   = make_sweep(a=-10, b=22, op=0.05, seed=2)
+    normal = make_sweep(seed=0)
 
-    # ── 1. Time-domain feature extraction ────────────────────────────────
-    print('=== Time-domain feature extraction ===')
-    for label, sig in [('Normal', normal),
-                        ('Early DR', early_dr),
-                        ('Advanced RP', adv_rp)]:
-        op_sig = make_op_filtered(sig)
-        feats  = extract_time_domain_features(
-            sig, op_sig, t_ms, 'DA 3.0', noise_rms_uv=5.0, fs=fs)
-        print(f'\n{label}:')
-        for k, v in feats.items():
-            print(f'  {k:<22s} = {v}')
+    print('=== extract_all_features() for one DA 3.0 recording ===')
+    feats = extract_all_features(normal, fs, protocol='DA 3.0',
+                                  flash_onset_sample=flash_onset_sample,
+                                  flash_duration_ms=1.0,
+                                  op_signal=make_op_filtered(normal),
+                                  noise_rms_uv=5.0)
+    for k, v in feats.items():
+        print(f'  {k:<32s} = {v}')
+    meta_keys = {'protocol', 'flash_midpoint_correction_applied',
+                 'flash_midpoint_correction_ms', 'op_mar_technical',
+                 'a_wave_mar_technical', 'phnr_mar_technical',
+                 'phnr_polarity_atypical'}
+    n_feats = len([k for k in feats if k not in meta_keys])
+    print(f'\n  {n_feats} diagnostic features on this DA 3.0 recording (expect 25)')
+    assert n_feats == 25, f"expected 25 diagnostic features on DA 3.0, got {n_feats}"
 
-    # ── 2. Frequency-domain features ─────────────────────────────────────
-    print('\n=== Frequency-domain features (Normal, DA 3.0) ===')
-    print(f'  Power ratio      = {compute_power_ratio(normal, t_ms, fs):.4f}')
-    print(f'  Spectral entropy = {compute_spectral_entropy(normal, t_ms, fs):.4f}')
-    print(f'  Peak frequency   = {compute_peak_frequency(normal, t_ms, fs):.1f} Hz')
-    print(f'  PSD per band     = {compute_psd_per_band(normal, t_ms, fs)}')
-
-    # ── 3. Feature vector dimensions via extract_all_features ────────────
-    print('\n=== Full patient feature vector ===')
-    rec = {'time_ms': t_ms, 'amplitude_uv': normal,
-           'op_filtered_uv': make_op_filtered(normal), 'fs_hz': float(fs)}
-    patient_recs   = {p: {'RE': rec, 'LE': rec} for p in PROTOCOLS}
+    print('\\n=== Full patient feature matrix (build_patient_feature_matrix) ===')
+    rec_template = {'signal_uv': normal, 'fs_hz': float(fs),
+                     'flash_onset_sample': flash_onset_sample,
+                     'op_signal_uv': make_op_filtered(normal)}
+    patient_recs   = {p: {'RE': rec_template, 'LE': rec_template} for p in PROTOCOLS}
     noise_rms_dict = {eye: {p: 5.0 for p in PROTOCOLS} for eye in EYES}
-    all_feats      = extract_all_features(patient_recs, _STFT_CFG, noise_rms_dict)
-    feat_names     = list(all_feats.keys())
-    feat_vals      = np.array(list(all_feats.values()), dtype=float)
-    n_nan          = int(np.isnan(feat_vals).sum())
-    print(f'  Total features : {len(feat_names)}')
-    print(f'  NaN count      : {n_nan}  '
-          f'(expected for protocol-specific features)')
+    all_feats  = build_patient_feature_matrix(patient_recs, noise_rms_dict)
+    feat_names = list(all_feats.keys())
+    feat_vals  = np.array(list(all_feats.values()), dtype=float)
+    print(f'  Total raw values : {len(feat_names)}  (expect 256)')
+    assert len(feat_names) == 256, f"expected 256 raw values, got {len(feat_names)}"
+    print(f'  NaN count        : {int(np.isnan(feat_vals).sum())}  (expected for protocol-gated features)')
 
-    # ── 4. Feature importance bar chart (synthetic 30-sample dataset) ────
-    n_each   = 10
-    labels_  = []
-    X_rows   = []
+    print('\\n=== Feature selection pipeline (synthetic 3-class dataset) ===')
+    n_each = 15
+    labels_, X_rows = [], []
     for cls_idx, (a, b, op_s) in enumerate([
             (-120, 280, 1.0), (-80, 230, 0.4), (-10, 22, 0.05)]):
         for seed in range(n_each):
             s   = make_sweep(a=a, b=b, op=op_s, seed=seed + cls_idx * n_each)
-            ops = make_op_filtered(s)
-            rec_ = {'time_ms': t_ms, 'amplitude_uv': s,
-                    'op_filtered_uv': ops, 'fs_hz': float(fs)}
-            pr   = {p: {'RE': rec_, 'LE': rec_} for p in PROTOCOLS}
-            fv   = extract_all_features(pr, _STFT_CFG, noise_rms_dict)
+            rec_ = {'signal_uv': s, 'fs_hz': float(fs),
+                     'flash_onset_sample': flash_onset_sample,
+                     'op_signal_uv': make_op_filtered(s)}
+            pr  = {p: {'RE': rec_, 'LE': rec_} for p in PROTOCOLS}
+            fv  = build_patient_feature_matrix(pr, noise_rms_dict)
             X_rows.append(list(fv.values()))
             labels_.append(cls_idx)
 
-    X_all   = np.nan_to_num(np.array(X_rows, dtype=float))
-    y_all   = np.array(labels_)
-    fnames  = list(feat_names)
+    X_all  = np.nan_to_num(np.array(X_rows, dtype=float))
+    y_all  = np.array(labels_)
+    fnames = feat_names
 
-    selected = rf_importance_selection(X_all, y_all, fnames, top_k=15)
+    selected = feature_selection_pipeline(X_all, y_all, fnames, vote_threshold=2)
+    print(f'\\nFinal selected feature count: {len(selected)}')
 
-    # Plot top 15 importances
-    rf_plot = RandomForestClassifier(n_estimators=200, max_depth=8,
-                                      random_state=42, n_jobs=-1)
-    rf_plot.fit(X_all, y_all)
-    ranked  = sorted(zip(fnames, rf_plot.feature_importances_),
-                     key=lambda x: x[1], reverse=True)[:15]
-    names_p, imps_p = zip(*ranked)
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.barh(range(15), imps_p[::-1], color='#2E75B6')
-    ax.set_yticks(range(15))
-    ax.set_yticklabels([n[:50] for n in names_p[::-1]], fontsize=8)
-    ax.set_xlabel('Mean decrease in impurity', fontsize=11)
-    ax.set_title('Top 15 Features – Random Forest Importance\n'
-                 '(Normal vs Early DR vs Advanced RP)',
-                 fontsize=12, fontweight='bold')
-    ax.grid(True, axis='x', alpha=0.3)
-    plt.tight_layout()
-    fig.savefig('ch9_fig1_feature_importance.png', dpi=150, bbox_inches='tight')
-    print('Saved: ch9_fig1_feature_importance.png')
-    plt.show()
+    print('\\n=== ALL SMOKE TESTS PASSED ===')
