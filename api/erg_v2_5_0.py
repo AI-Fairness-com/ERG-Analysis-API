@@ -347,240 +347,247 @@ from scipy.stats import median_abs_deviation
 from scipy import stats
 import warnings
 
-class ERGAudit:
-    """Pre-Processing Audit for ERG Signals - No filtering applied"""
+def run_full_audit(signal_uv: np.ndarray, fs_hz: float,
+                   electrode_type: str = 'contact_lens',
+                   prestimulus_samples: int = 0,
+                   age_group: str = None,
+                   flash_duration_ms: float = 1.0,
+                   config: ERGConfig = None) -> Dict[str, Any]:
+    """Pre-Processing Audit for ERG Signals - No filtering applied."""
+    config = config or CONFIG
 
-    def __init__(self, config: ERGConfig = None):
-        self.config = config or CONFIG
+    signal_clean = np.nan_to_num(signal_uv)
+    prestimulus_ms = prestimulus_samples * 1000.0 / fs_hz if prestimulus_samples > 0 else 0
+    prestimulus_status, prestimulus_msg = config.get_prestimulus_status(prestimulus_ms)
 
-    def run_full_audit(self, signal_uv: np.ndarray, fs_hz: float,
-                       electrode_type: str = 'contact_lens',
-                       prestimulus_samples: int = 0,
-                       age_group: str = None,
-                       flash_duration_ms: float = 1.0) -> Dict[str, Any]:
-
-        signal_clean = np.nan_to_num(signal_uv)
-        prestimulus_ms = prestimulus_samples * 1000.0 / fs_hz if prestimulus_samples > 0 else 0
-        prestimulus_status, prestimulus_msg = self.config.get_prestimulus_status(prestimulus_ms)
-
-        total_duration_ms = len(signal_uv) * 1000.0 / fs_hz
-        iscev_compliance = validate_iscev_requirements(fs_hz, prestimulus_ms, total_duration_ms)
-        iscev_compliance['flash_duration_ms'] = flash_duration_ms
-        iscev_compliance['flash_duration_noncompliant'] = (
-            flash_duration_ms >= self.config.ISCEV_FLASH_MAX_DURATION_MS
+    total_duration_ms = len(signal_uv) * 1000.0 / fs_hz
+    iscev_compliance = validate_iscev_requirements(fs_hz, prestimulus_ms, total_duration_ms)
+    iscev_compliance['flash_duration_ms'] = flash_duration_ms
+    iscev_compliance['flash_duration_noncompliant'] = (
+        flash_duration_ms >= config.ISCEV_FLASH_MAX_DURATION_MS
+    )
+    if iscev_compliance['flash_duration_noncompliant']:
+        iscev_compliance['warnings'].append(
+            f"Flash duration {flash_duration_ms:.1f} ms >= ISCEV maximum "
+            f"{config.ISCEV_FLASH_MAX_DURATION_MS} ms (Page 4, Col 2, Para 2)"
         )
-        if iscev_compliance['flash_duration_noncompliant']:
-            iscev_compliance['warnings'].append(
-                f"Flash duration {flash_duration_ms:.1f} ms >= ISCEV maximum "
-                f"{self.config.ISCEV_FLASH_MAX_DURATION_MS} ms (Page 4, Col 2, Para 2)"
-            )
-            iscev_compliance['overall_compliant'] = False
-        snr_db = calculate_snr(signal_clean, fs_hz, prestimulus_samples)
-        snr_status, snr_msg = self.config.get_electrode_snr_status(electrode_type, snr_db)
+        iscev_compliance['overall_compliant'] = False
+    snr_db = calculate_snr(signal_clean, fs_hz, prestimulus_samples)
+    snr_status, snr_msg = config.get_electrode_snr_status(electrode_type, snr_db)
 
-        bandwidth_result = self._analyze_bandwidth(signal_clean, fs_hz)
-        op_result = self._analyze_oscillatory_potentials(signal_clean, fs_hz)
-        mains_result = self._analyze_mains_interference(signal_clean, fs_hz)
-        artifact_result = self._analyze_artifacts(signal_clean, fs_hz, prestimulus_samples)
-        quality_grade, grade_score, grade_desc = self._assign_quality_grade(
-            op_result, bandwidth_result, artifact_result, mains_result, snr_status)
-        age_group_used = age_group if age_group is not None else 'unknown'
-        age_flags = self.config.get_age_group_flag(age_group_used)
+    bandwidth_result = analyze_bandwidth(signal_clean, fs_hz, config)
+    op_result = analyze_oscillatory_potentials(signal_clean, fs_hz, config)
+    mains_result = analyze_mains_interference(signal_clean, fs_hz, config)
+    artifact_result = analyze_artifacts(signal_clean, fs_hz, prestimulus_samples, config)
+    quality_grade, grade_score, grade_desc = assign_quality_grade(
+        op_result, bandwidth_result, artifact_result, mains_result, snr_status)
+    age_group_used = age_group if age_group is not None else 'unknown'
+    age_flags = config.get_age_group_flag(age_group_used)
 
-        return {
-            'prestimulus': {'status': prestimulus_status, 'message': prestimulus_msg, 'ms': prestimulus_ms},
-            'iscev_compliance': iscev_compliance,
-            'snr': {'db': round(snr_db, 1), 'electrode_type': electrode_type, 'status': snr_status, 'message': snr_msg},
-            'bandwidth': bandwidth_result,
-            'oscillatory_potentials': op_result,
-            'mains_interference': mains_result,
-            'artifacts': artifact_result,
-            'quality': {'grade': quality_grade, 'score': grade_score, 'description': grade_desc},
-            'age_handling': {'reference_source': age_flags[0], 'flag': age_flags[1]}
-        }
+    return {
+        'prestimulus': {'status': prestimulus_status, 'message': prestimulus_msg, 'ms': prestimulus_ms},
+        'iscev_compliance': iscev_compliance,
+        'snr': {'db': round(snr_db, 1), 'electrode_type': electrode_type, 'status': snr_status, 'message': snr_msg},
+        'bandwidth': bandwidth_result,
+        'oscillatory_potentials': op_result,
+        'mains_interference': mains_result,
+        'artifacts': artifact_result,
+        'quality': {'grade': quality_grade, 'score': grade_score, 'description': grade_desc},
+        'age_handling': {'reference_source': age_flags[0], 'flag': age_flags[1]}
+    }
 
-    def _analyze_bandwidth(self, signal: np.ndarray, fs_hz: float) -> Dict[str, Any]:
-        freqs, psd = welch(signal, fs=fs_hz, nperseg=min(1024, len(signal)))
-        psd_db = 10 * np.log10(psd + 1e-30)
 
-        noise_mask = (freqs >= 400) & (freqs <= 500)
-        noise_floor_db = np.mean(psd_db[noise_mask]) if np.any(noise_mask) else np.mean(psd_db[freqs >= 300])
+def analyze_bandwidth(signal: np.ndarray, fs_hz: float, config: ERGConfig = None) -> Dict[str, Any]:
+    config = config or CONFIG
+    freqs, psd = welch(signal, fs=fs_hz, nperseg=min(1024, len(signal)))
+    psd_db = 10 * np.log10(psd + 1e-30)
 
-        threshold_db = noise_floor_db + 6
-        high_mask = (freqs >= 100) & (freqs <= fs_hz/2)
-        above_threshold = psd_db[high_mask] > threshold_db
+    noise_mask = (freqs >= 400) & (freqs <= 500)
+    noise_floor_db = np.mean(psd_db[noise_mask]) if np.any(noise_mask) else np.mean(psd_db[freqs >= 300])
 
-        if np.any(above_threshold):
-            freq_above = freqs[high_mask][above_threshold]
-            estimated_high_hz = freq_above[-1] if len(freq_above) > 0 else 300.0
-            if estimated_high_hz > 400:
-                estimated_high_hz = 400.0
-                confidence = "CAPPED"
+    threshold_db = noise_floor_db + 6
+    high_mask = (freqs >= 100) & (freqs <= fs_hz/2)
+    above_threshold = psd_db[high_mask] > threshold_db
+
+    if np.any(above_threshold):
+        freq_above = freqs[high_mask][above_threshold]
+        estimated_high_hz = freq_above[-1] if len(freq_above) > 0 else 300.0
+        if estimated_high_hz > 400:
+            estimated_high_hz = 400.0
+            confidence = "CAPPED"
+        else:
+            confidence = "HIGH" if estimated_high_hz >= 250 else "MEDIUM"
+        hardware_cutoff_hz = estimated_high_hz
+    else:
+        estimated_high_hz = 300.0
+        hardware_cutoff_hz = None
+        confidence = "LOW"
+
+    if confidence == "LOW":
+        hardware_cutoff_hz = None
+
+    return {'estimated_high_hz': round(estimated_high_hz, 0), 'hardware_cutoff_hz': hardware_cutoff_hz, 'confidence': confidence, 'noise_floor_db': round(noise_floor_db, 1)}
+
+
+def analyze_oscillatory_potentials(signal: np.ndarray, fs_hz: float, config: ERGConfig = None) -> Dict[str, Any]:
+    config = config or CONFIG
+    freqs, psd = welch(signal, fs=fs_hz, nperseg=min(1024, len(signal)))
+
+    op_mask = (freqs >= config.ISCEV_OP_BAND_LOW_HZ) & (freqs <= config.OP_BAND_HIGH_HZ)
+    _trapz = getattr(np, 'trapezoid', None) or np.trapz  # numpy 1.x: trapz; 2.x: trapezoid
+    op_band_energy = _trapz(psd[op_mask], freqs[op_mask])
+
+    noise_mask = (freqs >= config.NOISE_BAND_LOW_HZ) & (freqs <= config.NOISE_BAND_HIGH_HZ)
+    if np.any(noise_mask):
+        noise_band_energy = _trapz(psd[noise_mask], freqs[noise_mask])
+        snr_db = 10 * np.log10((op_band_energy + 1e-30) / (noise_band_energy + 1e-30))
+    else:
+        noise_band_energy = 0
+        snr_db = -np.inf
+
+    if snr_db >= config.OP_BAND_SNR_THRESHOLD_DB:
+        available = True
+        quality = "excellent" if snr_db >= 10 else "good"
+        reason = f"OP band SNR = {snr_db:.1f} dB (≥ threshold)"
+    else:
+        available = False
+        quality = "absent"
+        reason = f"OP band SNR = {snr_db:.1f} dB (< {config.OP_BAND_SNR_THRESHOLD_DB} dB threshold)"
+
+    return {'available': available, 'quality': quality, 'snr_db': round(snr_db, 1), 'reason': reason}
+
+
+def analyze_mains_interference(signal: np.ndarray, fs_hz: float, config: ERGConfig = None) -> Dict[str, Any]:
+    config = config or CONFIG
+    freqs, psd = welch(signal, fs=fs_hz, nperseg=min(1024, len(signal)))
+    psd_db = 10 * np.log10(psd + 1e-30)
+
+    noise_mask = np.ones_like(freqs, dtype=bool)
+    for candidate in config.MAINS_CANDIDATE_FREQS_HZ:
+        noise_mask &= ~((freqs >= candidate - 5) & (freqs <= candidate + 5))
+    noise_floor_db = np.mean(psd_db[noise_mask]) if np.any(noise_mask) else -80
+
+    results = {'detected_hz': None, 'excess_db': 0, 'confidence': 'NONE'}
+
+    for candidate in config.MAINS_CANDIDATE_FREQS_HZ:
+        idx = np.argmin(np.abs(freqs - candidate))
+        peak_db = psd_db[idx]
+        excess_db = peak_db - noise_floor_db
+
+        if excess_db > config.MAINS_DETECTION_THRESHOLD_DB and excess_db > results['excess_db']:
+            results['detected_hz'] = candidate
+            results['excess_db'] = round(excess_db, 1)
+            results['confidence'] = 'HIGH' if excess_db >= 10 else 'MEDIUM'
+
+    results['recommended_action'] = 'SKIP (ISCEV 2022 compliant)' if results['detected_hz'] is None else f'DETECTED: {results["detected_hz"]} Hz - Notch filter NOT recommended'
+    return results
+
+
+def analyze_artifacts(signal: np.ndarray, fs_hz: float, prestimulus_samples: int = 0, config: ERGConfig = None) -> Dict[str, Any]:
+    config = config or CONFIG
+    mad = median_abs_deviation(signal)
+    threshold = 5 * mad
+    spikes = np.where(np.abs(signal - np.median(signal)) > threshold)[0]
+
+    if len(spikes) > 0:
+        spike_groups = []
+        current_group = [spikes[0]]
+        for i in range(1, len(spikes)):
+            if spikes[i] - spikes[i-1] <= 5:
+                current_group.append(spikes[i])
             else:
-                confidence = "HIGH" if estimated_high_hz >= 250 else "MEDIUM"
-            hardware_cutoff_hz = estimated_high_hz
-        else:
-            estimated_high_hz = 300.0
-            hardware_cutoff_hz = None
-            confidence = "LOW"
+                spike_groups.append(current_group)
+                current_group = [spikes[i]]
+        spike_groups.append(current_group)
+        spike_count = len(spike_groups)
+        max_spike_uv = float(np.max(np.abs(signal[spikes]))) if len(spikes) > 0 else 0
+    else:
+        spike_count = 0
+        max_spike_uv = 0.0
 
-        if confidence == "LOW":
-            hardware_cutoff_hz = None
+    t = np.arange(len(signal)) / fs_hz * 1000
+    slope, _, _, _, _ = stats.linregress(t, signal)
+    drift_uv_per_ms = slope
 
-        return {'estimated_high_hz': round(estimated_high_hz, 0), 'hardware_cutoff_hz': hardware_cutoff_hz, 'confidence': confidence, 'noise_floor_db': round(noise_floor_db, 1)}
+    amplifier_ceiling_uv = 5000.0
+    saturation = bool(
+        np.any(signal >= amplifier_ceiling_uv * 0.98) or
+        np.any(signal <= -amplifier_ceiling_uv * 0.98)
+    )
+    step_size = np.diff(signal)
+    flat_run_fraction = np.sum(np.abs(step_size) < 0.01) / len(step_size) if len(step_size) > 0 else 0
+    saturation = saturation or (flat_run_fraction > 0.05)
 
-    def _analyze_oscillatory_potentials(self, signal: np.ndarray, fs_hz: float) -> Dict[str, Any]:
-        freqs, psd = welch(signal, fs=fs_hz, nperseg=min(1024, len(signal)))
+    # EMG detection per Chapter 6 §6.2.2 – High-frequency band (150-300 Hz)
+    pre_n = max(prestimulus_samples, 8)
+    pre_s = signal[:pre_n]
 
-        op_mask = (freqs >= self.config.ISCEV_OP_BAND_LOW_HZ) & (freqs <= self.config.OP_BAND_HIGH_HZ)
-        op_band_energy = np.trapz(psd[op_mask], freqs[op_mask])
+    if prestimulus_samples > 0:
+        post_s = signal[prestimulus_samples:]
+    else:
+        post_s = signal[pre_n:]
 
-        noise_mask = (freqs >= self.config.NOISE_BAND_LOW_HZ) & (freqs <= self.config.NOISE_BAND_HIGH_HZ)
-        if np.any(noise_mask):
-            noise_band_energy = np.trapz(psd[noise_mask], freqs[noise_mask])
-            snr_db = 10 * np.log10((op_band_energy + 1e-30) / (noise_band_energy + 1e-30))
-        else:
-            noise_band_energy = 0
-            snr_db = -np.inf
+    f_pre, p_pre = welch(pre_s, fs=fs_hz, nperseg=min(64, len(pre_s)))
+    f_post, p_post = welch(post_s, fs=fs_hz, nperseg=min(64, len(post_s)))
 
-        if snr_db >= self.config.OP_BAND_SNR_THRESHOLD_DB:
-            available = True
-            quality = "excellent" if snr_db >= 10 else "good"
-            reason = f"OP band SNR = {snr_db:.1f} dB (≥ threshold)"
-        else:
-            available = False
-            quality = "absent"
-            reason = f"OP band SNR = {snr_db:.1f} dB (< {self.config.OP_BAND_SNR_THRESHOLD_DB} dB threshold)"
+    emg_mask_pre = (f_pre >= 75) & (f_pre <= 300)
+    emg_mask_post = (f_post >= 75) & (f_post <= 300)
 
-        return {'available': available, 'quality': quality, 'snr_db': round(snr_db, 1), 'reason': reason}
+    emg_pre_energy = float(np.sum(p_pre[emg_mask_pre])) if emg_mask_pre.any() else 1e-12
+    emg_post_energy = float(np.sum(p_post[emg_mask_post])) if emg_mask_post.any() else 1e-12
 
-    def _analyze_mains_interference(self, signal: np.ndarray, fs_hz: float) -> Dict[str, Any]:
-        freqs, psd = welch(signal, fs=fs_hz, nperseg=min(1024, len(signal)))
-        psd_db = 10 * np.log10(psd + 1e-30)
+    excess_db = 10 * np.log10(emg_post_energy / (emg_pre_energy + 1e-30))
 
-        noise_mask = np.ones_like(freqs, dtype=bool)
-        for candidate in self.config.MAINS_CANDIDATE_FREQS_HZ:
-            noise_mask &= ~((freqs >= candidate - 5) & (freqs <= candidate + 5))
-        noise_floor_db = np.mean(psd_db[noise_mask]) if np.any(noise_mask) else -80
+    if excess_db > 12:
+        emg_level = "HIGH"
+    elif excess_db > 8:
+        emg_level = "MODERATE"
+    else:
+        emg_level = "LOW"
 
-        results = {'detected_hz': None, 'excess_db': 0, 'confidence': 'NONE'}
+    emg_details = {
+        "level": emg_level,
+        "excess_db": round(excess_db, 1),
+        "emg_pre_energy": round(emg_pre_energy, 4),
+        "emg_post_energy": round(emg_post_energy, 4)
+    }
 
-        for candidate in self.config.MAINS_CANDIDATE_FREQS_HZ:
-            idx = np.argmin(np.abs(freqs - candidate))
-            peak_db = psd_db[idx]
-            excess_db = peak_db - noise_floor_db
+    return {'spike_count': spike_count, 'max_spike_uv': round(max_spike_uv, 2), 'drift_uv_per_ms': round(drift_uv_per_ms, 4), 'saturation': saturation, 'emg_level': emg_level, 'emg_details': emg_details}
 
-            if excess_db > self.config.MAINS_DETECTION_THRESHOLD_DB and excess_db > results['excess_db']:
-                results['detected_hz'] = candidate
-                results['excess_db'] = round(excess_db, 1)
-                results['confidence'] = 'HIGH' if excess_db >= 10 else 'MEDIUM'
 
-        results['recommended_action'] = 'SKIP (ISCEV 2022 compliant)' if results['detected_hz'] is None else f'DETECTED: {results["detected_hz"]} Hz - Notch filter NOT recommended'
-        return results
+def assign_quality_grade(op_result, bandwidth_result, artifact_result, mains_result, snr_status):
+    score = 0
+    if op_result['available'] and op_result['quality'] == 'excellent':
+        score += 3
+    elif op_result['available']:
+        score += 2
+    if bandwidth_result['estimated_high_hz'] >= 250:
+        score += 2
+    elif bandwidth_result['estimated_high_hz'] >= 150:
+        score += 1
+    if artifact_result['spike_count'] == 0 and not artifact_result['saturation']:
+        score += 2
+    elif artifact_result['spike_count'] <= 5 and not artifact_result['saturation']:
+        score += 1
+    if snr_status == "PASS":
+        score += 1
+    if mains_result['detected_hz'] is None:
+        score += 1
 
-    def _analyze_artifacts(self, signal: np.ndarray, fs_hz: float, prestimulus_samples: int = 0) -> Dict[str, Any]:
-        mad = median_abs_deviation(signal)
-        threshold = 5 * mad
-        spikes = np.where(np.abs(signal - np.median(signal)) > threshold)[0]
-
-        if len(spikes) > 0:
-            spike_groups = []
-            current_group = [spikes[0]]
-            for i in range(1, len(spikes)):
-                if spikes[i] - spikes[i-1] <= 5:
-                    current_group.append(spikes[i])
-                else:
-                    spike_groups.append(current_group)
-                    current_group = [spikes[i]]
-            spike_groups.append(current_group)
-            spike_count = len(spike_groups)
-            max_spike_uv = float(np.max(np.abs(signal[spikes]))) if len(spikes) > 0 else 0
-        else:
-            spike_count = 0
-            max_spike_uv = 0.0
-
-        t = np.arange(len(signal)) / fs_hz * 1000
-        slope, _, _, _, _ = stats.linregress(t, signal)
-        drift_uv_per_ms = slope
-
-        amplifier_ceiling_uv = 5000.0
-        saturation = bool(
-            np.any(signal >= amplifier_ceiling_uv * 0.98) or
-            np.any(signal <= -amplifier_ceiling_uv * 0.98)
-        )
-        step_size = np.diff(signal)
-        flat_run_fraction = np.sum(np.abs(step_size) < 0.01) / len(step_size) if len(step_size) > 0 else 0
-        saturation = saturation or (flat_run_fraction > 0.05)
-
-        # EMG detection per Chapter 6 §6.2.2 – High-frequency band (150-300 Hz)
-        pre_n = max(prestimulus_samples, 8)
-        pre_s = signal[:pre_n]
-
-        if prestimulus_samples > 0:
-            post_s = signal[prestimulus_samples:]
-        else:
-            post_s = signal[pre_n:]
-
-        f_pre, p_pre = welch(pre_s, fs=fs_hz, nperseg=min(64, len(pre_s)))
-        f_post, p_post = welch(post_s, fs=fs_hz, nperseg=min(64, len(post_s)))
-
-        emg_mask_pre = (f_pre >= 75) & (f_pre <= 300)
-        emg_mask_post = (f_post >= 75) & (f_post <= 300)
-
-        emg_pre_energy = float(np.sum(p_pre[emg_mask_pre])) if emg_mask_pre.any() else 1e-12
-        emg_post_energy = float(np.sum(p_post[emg_mask_post])) if emg_mask_post.any() else 1e-12
-
-        excess_db = 10 * np.log10(emg_post_energy / (emg_pre_energy + 1e-30))
-
-        if excess_db > 12:
-            emg_level = "HIGH"
-        elif excess_db > 8:
-            emg_level = "MODERATE"
-        else:
-            emg_level = "LOW"
-
-        emg_details = {
-            "level": emg_level,
-            "excess_db": round(excess_db, 1),
-            "emg_pre_energy": round(emg_pre_energy, 4),
-            "emg_post_energy": round(emg_post_energy, 4)
-        }
-
-        return {'spike_count': spike_count, 'max_spike_uv': round(max_spike_uv, 2), 'drift_uv_per_ms': round(drift_uv_per_ms, 4), 'saturation': saturation, 'emg_level': emg_level, 'emg_details': emg_details}
-
-    def _assign_quality_grade(self, op_result, bandwidth_result, artifact_result, mains_result, snr_status):
-        score = 0
-        if op_result['available'] and op_result['quality'] == 'excellent':
-            score += 3
-        elif op_result['available']:
-            score += 2
-        if bandwidth_result['estimated_high_hz'] >= 250:
-            score += 2
-        elif bandwidth_result['estimated_high_hz'] >= 150:
-            score += 1
-        if artifact_result['spike_count'] == 0 and not artifact_result['saturation']:
-            score += 2
-        elif artifact_result['spike_count'] <= 5 and not artifact_result['saturation']:
-            score += 1
-        if snr_status == "PASS":
-            score += 1
-        if mains_result['detected_hz'] is None:
-            score += 1
-
-        if score >= 7:
-            return "A", score, "Excellent - Full ISCEV bandwidth preserved, clean signal"
-        elif score >= 5:
-            return "B", score, "Good - Minor issues present, OP features likely usable"
-        elif score >= 3:
-            return "C", score, "Acceptable - OP features may be compromised"
-        else:
-            return "D", score, "Poor - Significant issues, OP features unavailable"
+    if score >= 7:
+        return "A", score, "Excellent - Full ISCEV bandwidth preserved, clean signal"
+    elif score >= 5:
+        return "B", score, "Good - Minor issues present, OP features likely usable"
+    elif score >= 3:
+        return "C", score, "Acceptable - OP features may be compromised"
+    else:
+        return "D", score, "Poor - Significant issues, OP features unavailable"
 
 
 print("\n" + "=" * 60)
 print("STAGE 1: PRE-PROCESSING AUDIT - READY")
 print("=" * 60)
-print("ERGAudit class instantiated. Ready to analyze signals.")
+print("Free-function audit pipeline ready. Call run_full_audit() to analyze signals.")
 print("=" * 60)
 
 # ============================================================================
@@ -589,95 +596,109 @@ print("=" * 60)
 
 from scipy.signal import butter, sosfiltfilt, iirnotch, tf2sos, medfilt
 
-class ERGFilter:
-    """ISCEV 2022-Compliant ERG Filtering Pipeline"""
+def design_butterworth_bandpass(lowcut_hz: float, highcut_hz: float, fs_hz: float, config: ERGConfig = None) -> np.ndarray:
+    config = config or CONFIG
+    nyquist = fs_hz / 2.0
+    if highcut_hz >= nyquist:
+        raise ValueError(f"Low-pass cutoff {highcut_hz} Hz exceeds Nyquist ({nyquist} Hz)")
+    low = lowcut_hz / nyquist
+    high = highcut_hz / nyquist
+    return butter(config.BUTTERWORTH_ORDER, [low, high], btype='bandpass', output='sos')
 
-    def __init__(self, config: ERGConfig = None):
-        self.config = config or CONFIG
 
-    def design_bandpass(self, lowcut_hz: float, highcut_hz: float, fs_hz: float) -> np.ndarray:
-        nyquist = fs_hz / 2.0
-        if highcut_hz >= nyquist:
-            raise ValueError(f"Low-pass cutoff {highcut_hz} Hz exceeds Nyquist ({nyquist} Hz)")
-        low = lowcut_hz / nyquist
-        high = highcut_hz / nyquist
-        return butter(self.config.BUTTERWORTH_ORDER, [low, high], btype='bandpass', output='sos')
+def apply_bandpass_filter(signal: np.ndarray, fs_hz: float, lowcut_hz: float = None, highcut_hz: float = None, config: ERGConfig = None) -> np.ndarray:
+    config = config or CONFIG
+    if lowcut_hz is None:
+        lowcut_hz = config.ISCEV_HIGHPASS_HZ
+    if highcut_hz is None:
+        highcut_hz = config.ISCEV_LOWPASS_HZ
+    sos = design_butterworth_bandpass(lowcut_hz, highcut_hz, fs_hz, config)
+    return sosfiltfilt(sos, signal)
 
-    def apply_bandpass(self, signal: np.ndarray, fs_hz: float, lowcut_hz: float = None, highcut_hz: float = None) -> np.ndarray:
-        if lowcut_hz is None:
-            lowcut_hz = self.config.ISCEV_HIGHPASS_HZ
-        if highcut_hz is None:
-            highcut_hz = self.config.ISCEV_LOWPASS_HZ
-        sos = self.design_bandpass(lowcut_hz, highcut_hz, fs_hz)
-        return sosfiltfilt(sos, signal)
 
-    def apply_median(self, signal: np.ndarray, fs_hz: float) -> np.ndarray:
-        kernel_samples = compute_kernel_samples(fs_hz, self.config.MEDIAN_KERNEL_MS)
-        return medfilt(signal, kernel_size=kernel_samples)
+def apply_median_filter(signal: np.ndarray, fs_hz: float, config: ERGConfig = None) -> np.ndarray:
+    config = config or CONFIG
+    kernel_samples = compute_kernel_samples(fs_hz, config.MEDIAN_KERNEL_MS)
+    return medfilt(signal, kernel_size=kernel_samples)
 
-    def design_notch(self, notch_hz: float, fs_hz: float) -> np.ndarray:
-        b, a = iirnotch(notch_hz, self.config.NOTCH_QUALITY_FACTOR, fs=fs_hz)
-        return tf2sos(b, a)
 
-    def apply_notch(self, signal: np.ndarray, fs_hz: float, notch_hz: float) -> np.ndarray:
-        sos = self.design_notch(notch_hz, fs_hz)
-        return sosfiltfilt(sos, signal)
+def design_notch_filter(notch_hz: float, fs_hz: float, config: ERGConfig = None) -> np.ndarray:
+    config = config or CONFIG
+    b, a = iirnotch(notch_hz, config.NOTCH_QUALITY_FACTOR, fs=fs_hz)
+    return tf2sos(b, a)
 
-    def run_filter_pipeline(self, signal: np.ndarray, fs_hz: float,
-                           apply_notch: bool = False, notch_hz: float = 50.0,
-                           hardware_cutoff_hz: float = None,
-                           user_confirmed_notch: bool = False) -> Tuple[np.ndarray, List[str]]:
-        log = []
-        sig = signal.copy()
 
-        # Step 1: Median filter (always applied)
-        sig_before = sig.copy()
-        sig = self.apply_median(sig, fs_hz)
-        spike_removed = np.sum(np.abs(sig_before - sig) > 5) > 0
-        log.append(f"Median filter: kernel={self.config.MEDIAN_KERNEL_MS} ms, {compute_kernel_samples(fs_hz, self.config.MEDIAN_KERNEL_MS)} samples")
-        if spike_removed:
-            log.append("  - Spikes detected and removed")
+def apply_notch_filter(signal: np.ndarray, fs_hz: float, notch_hz: float, config: ERGConfig = None) -> np.ndarray:
+    config = config or CONFIG
+    sos = design_notch_filter(notch_hz, fs_hz, config)
+    return sosfiltfilt(sos, signal)
 
-        # Step 2: Notch filter (OFF by default - ISCEV 2022 compliance)
-        if apply_notch and user_confirmed_notch:
-            log.append(f"⚠️ NOTCH FILTER: User override at {notch_hz} Hz, Q={self.config.NOTCH_QUALITY_FACTOR}")
-            sig = self.apply_notch(sig, fs_hz, notch_hz)
-            log.append("   WARNING: Notch filters distort ERG waveform per ISCEV 2022")
-        else:
-            log.append(f"Notch filter: SKIPPED (ISCEV 2022 compliant - OFF by default)")
 
-        # Step 3: Determine effective high-pass cutoff
-        effective_high_hz = self.config.ISCEV_LOWPASS_HZ
-        if hardware_cutoff_hz is not None and hardware_cutoff_hz < self.config.ISCEV_LOWPASS_HZ:
-            effective_high_hz = hardware_cutoff_hz * 0.95
-            log.append(f"Hardware cutoff detected: {hardware_cutoff_hz:.0f} Hz → effective: {effective_high_hz:.0f} Hz")
+def run_filter_pipeline(signal: np.ndarray, fs_hz: float,
+                       apply_notch: bool = False, notch_hz: float = 50.0,
+                       hardware_cutoff_hz: float = None,
+                       user_confirmed_notch: bool = False,
+                       config: ERGConfig = None) -> Tuple[np.ndarray, List[str]]:
+    """ISCEV 2022-Compliant ERG Filtering Pipeline: Median -> Notch (off by
+    default) -> Butterworth bandpass. Free-function form; naming for the
+    building blocks (apply_median_filter, apply_bandpass_filter,
+    apply_notch_filter, design_notch_filter, design_butterworth_bandpass)
+    matches chapters/ch05/filtering/complete_filter_pipeline.py.
+    """
+    config = config or CONFIG
+    log = []
+    sig = signal.copy()
 
-        # Step 4: Butterworth bandpass
-        sig = self.apply_bandpass(sig, fs_hz, self.config.ISCEV_HIGHPASS_HZ, effective_high_hz)
-        log.append(f"Butterworth bandpass: order={self.config.BUTTERWORTH_ORDER}, {self.config.ISCEV_HIGHPASS_HZ}-{effective_high_hz:.0f} Hz (zero-phase)")
+    # Step 1: Median filter (always applied)
+    sig_before = sig.copy()
+    sig = apply_median_filter(sig, fs_hz, config)
+    spike_removed = np.sum(np.abs(sig_before - sig) > 5) > 0
+    log.append(f"Median filter: kernel={config.MEDIAN_KERNEL_MS} ms, {compute_kernel_samples(fs_hz, config.MEDIAN_KERNEL_MS)} samples")
+    if spike_removed:
+        log.append("  - Spikes detected and removed")
 
-        return sig, log
+    # Step 2: Notch filter (OFF by default - ISCEV 2022 compliance)
+    if apply_notch and user_confirmed_notch:
+        log.append(f"⚠️ NOTCH FILTER: User override at {notch_hz} Hz, Q={config.NOTCH_QUALITY_FACTOR}")
+        sig = apply_notch_filter(sig, fs_hz, notch_hz, config)
+        log.append("   WARNING: Notch filters distort ERG waveform per ISCEV 2022")
+    else:
+        log.append(f"Notch filter: SKIPPED (ISCEV 2022 compliant - OFF by default)")
 
-    @staticmethod
-    def apply_streaming_filter(signal: np.ndarray, fs_hz: float) -> np.ndarray:
-        """
-        Streaming (causal) filter pathway — not yet implemented.
-        Raises NotImplementedError on any call.
+    # Step 3: Determine effective high-pass cutoff
+    effective_high_hz = config.ISCEV_LOWPASS_HZ
+    if hardware_cutoff_hz is not None and hardware_cutoff_hz < config.ISCEV_LOWPASS_HZ:
+        effective_high_hz = hardware_cutoff_hz * 0.95
+        log.append(f"Hardware cutoff detected: {hardware_cutoff_hz:.0f} Hz → effective: {effective_high_hz:.0f} Hz")
 
-        When implemented, this will use sosfilt() instead of sosfiltfilt()
-        to avoid lookahead, enabling real-time sample-by-sample processing.
-        No target version committed.
-        """
-        raise NotImplementedError(
-            "Streaming mode (sosfilt causal filter) is not yet implemented. "
-            "Use run_filter_pipeline() for offline zero-phase filtering "
-            "(sosfiltfilt). No streaming-support target version is "
-            "currently committed."
-        )
+    # Step 4: Butterworth bandpass
+    sig = apply_bandpass_filter(sig, fs_hz, config.ISCEV_HIGHPASS_HZ, effective_high_hz, config)
+    log.append(f"Butterworth bandpass: order={config.BUTTERWORTH_ORDER}, {config.ISCEV_HIGHPASS_HZ}-{effective_high_hz:.0f} Hz (zero-phase)")
 
-    def extract_ops(self, signal: np.ndarray, fs_hz: float) -> np.ndarray:
-        sos = self.design_bandpass(self.config.ISCEV_OP_BAND_LOW_HZ, self.config.OP_BAND_HIGH_HZ, fs_hz)
-        return sosfiltfilt(sos, signal)
+    return sig, log
+
+
+def apply_streaming_filter(signal: np.ndarray, fs_hz: float) -> np.ndarray:
+    """
+    Streaming (causal) filter pathway — not yet implemented.
+    Raises NotImplementedError on any call.
+
+    When implemented, this will use sosfilt() instead of sosfiltfilt()
+    to avoid lookahead, enabling real-time sample-by-sample processing.
+    No target version committed.
+    """
+    raise NotImplementedError(
+        "Streaming mode (sosfilt causal filter) is not yet implemented. "
+        "Use run_filter_pipeline() for offline zero-phase filtering "
+        "(sosfiltfilt). No streaming-support target version is "
+        "currently committed."
+    )
+
+
+def extract_ops(signal: np.ndarray, fs_hz: float, config: ERGConfig = None) -> np.ndarray:
+    config = config or CONFIG
+    sos = design_butterworth_bandpass(config.ISCEV_OP_BAND_LOW_HZ, config.OP_BAND_HIGH_HZ, fs_hz, config)
+    return sosfiltfilt(sos, signal)
 
 
 print("\n" + "=" * 60)
@@ -2892,8 +2913,7 @@ def run_pipeline(b):
                         print(f"⚠️ Warning: Could not extract pre-stimulus baseline. Using default noise RMS.")
 
                     # Run audit
-                    auditor = ERGAudit()
-                    audit_result = auditor.run_full_audit(
+                    audit_result = run_full_audit(
                         signal_uv, fs_hz,
                         electrode_type=electrode_widget.value,
                         prestimulus_samples=prestimulus_samples,
@@ -2906,10 +2926,9 @@ def run_pipeline(b):
                     print(f"  SNR: {audit_result['snr']['db']} dB ({audit_result['snr']['status']})")
 
                     # Run filter pipeline
-                    filter_obj = ERGFilter()
                     hardware_cutoff = audit_result['bandwidth'].get('hardware_cutoff_hz')
 
-                    filtered_signal, filter_log = filter_obj.run_filter_pipeline(
+                    filtered_signal, filter_log = run_filter_pipeline(
                         signal_uv, fs_hz,
                         apply_notch=notch_override_widget.value,
                         notch_hz=50.0,
@@ -2922,7 +2941,7 @@ def run_pipeline(b):
                     # Extract features
                     op_signal = None
                     if op_extract_widget.value and audit_result['oscillatory_potentials']['available']:
-                        op_signal = filter_obj.extract_ops(filtered_signal, fs_hz)
+                        op_signal = extract_ops(filtered_signal, fs_hz)
                         print(f"✓ OP signal extracted (75-300 Hz)")
 
                     # ── Step 2.5: Signal orientation auto-detection ──────────
