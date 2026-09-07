@@ -9,7 +9,7 @@ Original file is located at
 
 # ============================================================================
 # CELL 1: ERG PIPELINE CONFIGURATION (ISCEV 2022 Compliant)
-# Single source of truth - Version 2.3.2
+# Single source of truth - Version 2.5.0
 # ============================================================================
 
 import numpy as np
@@ -661,18 +661,18 @@ class ERGFilter:
     @staticmethod
     def apply_streaming_filter(signal: np.ndarray, fs_hz: float) -> np.ndarray:
         """
-        Streaming (causal) filter pathway — not implemented in v2.3.2.
+        Streaming (causal) filter pathway — not yet implemented.
         Raises NotImplementedError on any call.
 
         When implemented, this will use sosfilt() instead of sosfiltfilt()
         to avoid lookahead, enabling real-time sample-by-sample processing.
-        Scheduled for v2.4.0.
+        No target version committed.
         """
         raise NotImplementedError(
-            "Streaming mode (sosfilt causal filter) is not implemented in "
-            "pipeline v2.3.2. Use run_filter_pipeline() for offline "
-            "zero-phase filtering (sosfiltfilt). "
-            "Streaming support is scheduled for v2.4.0."
+            "Streaming mode (sosfilt causal filter) is not yet implemented. "
+            "Use run_filter_pipeline() for offline zero-phase filtering "
+            "(sosfiltfilt). No streaming-support target version is "
+            "currently committed."
         )
 
     def extract_ops(self, signal: np.ndarray, fs_hz: float) -> np.ndarray:
@@ -970,7 +970,7 @@ print("=" * 60)
 
 # ============================================================================
 # CELL 6: STAGE 4 - COMPLIANCE REPORT WITH Z-SCORE TRAFFIC LIGHT
-# Version 2.3.2 | Baker et al. (2025) N=407 validated normative data
+# Version 2.5.0 | Baker et al. (2025) N=407 validated normative data
 # Electrode support: Gold Foil and DTL (Z-score + traffic light)
 #                   Contact Lens and Skin (signal processing only)
 # FHIR output: standalone Cell 9
@@ -1583,7 +1583,7 @@ class ERGReportGenerator:
 
 # ============================================================================
 print("\n" + "=" * 60)
-print("CELL 6  |  STAGE 4: COMPLIANCE REPORT  |  v2.4.0")
+print("CELL 6  |  STAGE 4: COMPLIANCE REPORT  |  v2.5.0")
 print("=" * 60)
 print("Normative reference : Baker et al. (2025)  N=407")
 print("Age strata          : ≤35y | 36–59y | ≥60y (Baker 2025)")
@@ -2334,7 +2334,7 @@ class ERGFHIRGenerator:
 
     # Custom code system URL
     ERG_CODE_SYSTEM = "https://ai-fairness.com/fhir/CodeSystem/erg-api"
-    ERG_CODE_SYSTEM_VERSION = "2.4.0"
+    ERG_CODE_SYSTEM_VERSION = "2.5.0"
 
     # SNOMED CT codes for interpretation
     SNOMED_INTERPRETATION = {
@@ -2424,7 +2424,7 @@ class ERGFHIRGenerator:
             "performer": [
                 {
                     "reference": "Organization/ERG-Processing-API",
-                    "display": "ERG Processing Pipeline v2.4.0"
+                    "display": "ERG Processing Pipeline v2.5.0"
                 }
             ],
             "valueCodeableConcept": {
@@ -2553,7 +2553,7 @@ class ERGFHIRGenerator:
             if phnr_val is not None and not (isinstance(phnr_val, float) and np.isnan(phnr_val)):
                 note_text = (
                     "Raw amplitude only. Reference range under development. "
-                    "No Z-score classification applied (v2.4.0)."
+                    "No Z-score classification applied (v2.5.0)."
                 )
                 if phnr_atypical:
                     note_text += (
@@ -2593,7 +2593,7 @@ class ERGFHIRGenerator:
                     "deflection detected in 0-30 ms post-stimulus window, indicating "
                     "inverted amplifier polarity. Signal multiplied by -1 prior to "
                     "feature extraction. Verify electrode orientation before clinical use. "
-                    "ERG Analysis API v2.4.0 Step 2.5."
+                    "ERG Analysis API v2.5.0 Step 2.5."
                 )
             })
 
