@@ -2,11 +2,11 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Pipeline Version](https://img.shields.io/badge/pipeline-v2.5.1-lightgreen.svg)](https://github.com/AI-Fairness-com/ERG-Analysis-API/blob/main/docs/CHANGELOG.md)
+[![Pipeline Version](https://img.shields.io/badge/pipeline-v2.5.0-lightgreen.svg)](https://github.com/AI-Fairness-com/ERG-Analysis-API/blob/main/docs/CHANGELOG.md)
 ![Validation](https://img.shields.io/badge/validation-41%2F41%20PASS%20(v2.4.0)-yellow)
 ![pytest](https://img.shields.io/badge/pytest-23%2F23%20PASS-brightgreen)
 ![Tier](https://img.shields.io/badge/tier-4%20prep%20complete-brightgreen)
-![Version](https://img.shields.io/badge/version-v2.5.1-blue)
+![Version](https://img.shields.io/badge/version-v2.5.0-blue)
 
 
 **Full-field ERG signal processing, machine learning classification, and clinical decision support API.**
@@ -15,13 +15,13 @@
 
 | Tier | Name | Status |
 |:---|:---|:---|
-| **Tier 1** | Synthetic Validation | ⚠️ 41/41 PASS on v2.4.0 — pending re-validation on v2.5.0's feature set |
+| **Tier 1** | Synthetic Validation | ⚠️ 41/41 PASS on v2.4.0 — pending re-validation on the current (2026-09-07 rebuild) feature set |
 | **Tier 2** | Code Hardening | ✅ Complete — pytest 23/23 PASS |
 | **Tier 3** | Clinical & Regulatory | ✅ Complete — T3-A through T3-E signed off |
 | **Tier 4** | External Validation | 🔄 Phase A complete — clinical site TBD |
 | **Tier 5** | Clinical Deployment | ⏳ Pending Tier 4 |
 
-**Current version:** v2.5.1  
+**Current version:** v2.5.0 (2026-09-07 rebuild)  
 **Normative reference:** Baker et al. (2025) N=407. DOI: [10.1007/s10633-025-10009-2](https://doi.org/10.1007/s10633-025-10009-2)  
 **OSF pre-registration:** [10.17605/OSF.IO/6WA42](https://doi.org/10.17605/OSF.IO/6WA42)  
 **Regulatory package:** [`docs/regulatory/`](docs/regulatory/) (T2–T4 documents)  
@@ -32,7 +32,9 @@ _*A Practical Guide from Clinical Fundamentals to Intelligent Decision Support*"
 
 ## Version Information
 
-**Current Version: 2.5.1** | Release Date: 2 September 2026
+**Current Version: 2.5.0** | Last Updated: 7 September 2026
+
+- **2026-09-07 rebuild** (PIPELINE_VERSION unchanged at 2.5.0): `ERGFeatureExtractor`/`ERGFilter`/`ERGAudit` converted from classes to free functions, matching the canonical structure in `chapters/ch05/filtering/complete_filter_pipeline.py` and `chapters/ch09/feature_extraction_and_selection_pipeline.py`. Feature set reverted from the V2.5.0/V2.5.1 28-feature design (below) back to the ch09-canonical 11-feature set (a-wave amp/implicit, b-wave amp/implicit, b/a ratio, PhNR amplitude, OP2/OP3/OP4 amplitude, OP-sum, OP2 implicit time) — the nonlinear (Hurst/ApEn), DWT band-energy, b-wave derivative, and frequency-domain descriptors introduced in V2.5.0/V2.5.1 are no longer part of this pipeline. Protocol strings standardized to `'DA 3.0'`/`'DA 10.0'`/`'LA 3.0'` (previously `'DA 3'`/`'DA 10'`/`'LA 3'`). Real bugs fixed: the flash-midpoint-correction trigger was comparing against the 5.0ms ISCEV compliance ceiling instead of the correct ~1.0ms trigger threshold; `analyze_oscillatory_potentials` used `np.trapz`, unsupported on the pinned `numpy==1.26.0` if naively switched to `np.trapezoid` — fixed with a version-safe fallback. Synthetic validation (41/41) still pending re-run against this feature set — see Tier 1 status above.
 
 - **V2.5.1**: Chapter 9 full-pixel-level review completed — 3 further features added (b-wave ascending-limb inflection time and gradient, a-wave descending-limb inflection time; Wood, Margrain & Binns 2014 found these equally significant to the already-implemented b-wave descending-limb pair), bringing the pipeline to 28 distinct features (up to 27 on a single recording, since the PhNR and harmonic-ratio bonuses never co-occur on the same protocol). One logic bug fixed: the §9.3 nonlinear/DWT/derivative feature block was nested inside the LA-3-only PhNR conditional, meaning those 13 features were silently skipped on every protocol except LA 3; now runs unconditionally on all five protocols. Several citation corrections from full-text verification: Nair & Joseph's (2014a) cohort description corrected (three groups, not four — cone-rod dystrophy and retinitis pigmentosa are the same group under two names in that study, not separate groups); Gauvin et al.'s (2014) non-redundancy claim narrowed to the two descriptor pairs actually tested, not all six; a spectral-structure claim misattributed to Behbahani, Ahmadieh & Rajan (2021) corrected to its actual source (Gauvin et al. 2014 alone); the harmonic-ratio citation (previously Pescosolido et al. 2015, found on full-text review to describe vascular flicker-light reactivity, not the flicker-ERG waveform) replaced with Fukuo et al. (2016), which directly measures flicker-ERG amplitude and implicit time against diabetic retinopathy severity. OP1 exclusion rationale corrected: ISCEV 2022 does not define an OP1–OP4 numbering scheme at all (it describes "typically three main positive peaks, often followed by a fourth"), so the numbering this pipeline uses is a wider-literature convention, not an ISCEV compliance rule. Pipeline pushed to chapters/ch09/ch09_complete.py. Synthetic validation (41/41) still pending re-run against this feature set — see Tier 1 status above.
   
@@ -51,7 +53,7 @@ See `docs/CHANGELOG.md` for complete version history.
 This project provides a complete, reproducible pipeline for:
 - **ISCEV-compliant ERG filtering** (Butterworth bandpass, notch Q=50, median)
 - **Time-frequency analysis** (STFT spectrograms, wavelet transforms)
-- **Feature extraction** (time-domain, PhNR family, nonlinear & CWT time-frequency descriptors, frequency-domain — 28 features total, 25–27 per recording depending on protocol, see `docs/CHANGELOG.md` v2.5.1)
+- **Feature extraction** (time-domain a-wave/b-wave, b/a ratio, PhNR, oscillatory potentials — 11 features total, up to 10 per recording since PhNR and OPs are mutually exclusive by protocol; see `docs/CHANGELOG.md`, 2026-09-07 entry)
 - **Machine learning classification** (Random Forest baseline + Vision Transformer)
 - **SHAP explainability** (feature-level, spectrogram-level, plain-language)
 - **No-code clinical API** (four-layer report: Traffic Light + Clinical Summary + Specialist + Audit)
@@ -135,9 +137,9 @@ Pipeline V2.4.0 uses **age-stratified normative reference ranges** from:
 
 - **Age strata:** ≤35y | 36–59y | ≥60y (Baker 2025 three-stratum framework)
 - **Electrodes:** Silver thread (fornix) + Gold Foil (Deming regression transference, Baker Table 2)
-- **Protocols:** DA 0.01, DA 3, DA 10, LA 3, LA 30 Hz (all five ISCEV 2022 standard protocols)
+- **Protocols:** DA 0.01, DA 3.0, DA 10.0, LA 3.0, LA 30 Hz (all five ISCEV 2022 standard protocols)
 - **Parameters:** a-wave amplitude, a-wave implicit time, b-wave amplitude, b-wave implicit time (96 validated µ/σ values across 5 protocols × 3 strata × 2 electrodes)
-- **b/a ratio:** mean 2.65, SD 0.425 (normal range 1.8–3.5, DA 3 only; Chapter 9)
+- **b/a ratio:** mean 2.65, SD 0.425 (normal range 1.8–3.5, DA 3.0 only; Chapter 9)
 
 ## Traffic Light Interpretation
 
@@ -164,7 +166,7 @@ If you use this pipeline in your research, please cite:
       title = {ERG Analysis API: ISCEV 2022-Compliant Full-Field ERG Processing Pipeline},
       year = {2026},
       publisher = {GitHub},
-      version = {2.5.1},
+      version = {2.5.0},
       url = {https://github.com/AI-Fairness-com/erg-analysis-api}
     }
 
