@@ -27,9 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 `ERGFeatureExtractor`, `ERGFilter`, and `ERGAudit` converted from classes to free functions in `api/erg_v2_5_0.py`, matching the canonical structure already used in `chapters/ch05/filtering/complete_filter_pipeline.py` and `chapters/ch09/feature_extraction_and_selection_pipeline.py`. Full call graph mapped first (all three were instantiated/called from exactly one place, `run_pipeline()`) — no other call sites were affected.
 
-### Feature set reverted
+### Feature set: restored to the full 28-feature design, after a same-day correction
 
-The V2.5.0/V2.5.1 28-feature design (below) is superseded by this rebuild. The pipeline now matches ch09's canonical 11-feature set: a-wave amplitude/implicit time, b-wave amplitude/implicit time, b/a ratio, PhNR amplitude (LA 3.0 only), OP2/OP3/OP4 amplitude, OP-sum, OP2 implicit time (DA 3.0/DA 10.0 only) — up to 10 features on a single recording, since PhNR and OPs are protocol-exclusive and never co-occur. The nonlinear (Hurst Exponent, Approximate Entropy), DWT band-energy, b-wave derivative, and frequency-domain (peak frequency, spectral entropy, harmonic ratio) descriptors added in V2.5.0/V2.5.1 are no longer part of this pipeline. Confirmed via grep before removal that none of these were referenced by `ERGReportGenerator` or `ERGFHIRGenerator` — zero downstream ripple.
+An earlier version of this entry, live for part of the day, said the feature set was reduced to a compact 11-feature design. **That was wrong** — it was based on an incomplete read of `chapters/ch09/feature_extraction_and_selection_pipeline.py` (a large file, not read in full) that mistakenly concluded the canonical design was smaller than it actually is. The error was caught the same day, disclosed plainly, and corrected: the pipeline now implements the full V2.5.0/V2.5.1 28-feature design (below) — a-wave/b-wave amplitude and implicit time, b/a ratio, PhNR amplitude and PhNR/b-wave ratio (LA 3.0 only), OP2/OP3/OP4 amplitude, OP-sum, OP2 implicit time (DA 3.0/DA 10.0 only), Hurst Exponent, Approximate Entropy, six DWT band-energy descriptors, five b/a-wave derivative-inflection features, peak frequency, spectral entropy, and harmonic ratio (LA 30 Hz only) — 25/26/27 features per recording depending on protocol, 256 raw values across a full 5-protocol/2-eye patient assessment. The net change from this rebuild is structural (classes → free functions) and two real bug fixes, not a feature-set change. Execution-verified against synthetic multi-protocol data: exactly 25/25/25/27/26 features per protocol, matching the book's own stated counts.
 
 ### Protocol-string convention standardized
 
@@ -45,6 +45,10 @@ The V2.5.0/V2.5.1 28-feature design (below) is superseded by this rebuild. The p
 ### Not changed
 
 `ERGConfig`, `ERGReportGenerator`, `SpectrogramPCAReducer`, `ERGSHAPExplainer`, `ERGFHIRGenerator` remain untouched. Synthetic validation (41/41) still pending re-run against this feature set.
+
+### Open flag, not yet resolved
+
+The V2.5.1 entry below states the harmonic-ratio citation was corrected from Pescosolido et al. (2015) to Fukuo et al. (2016). The book's current text (Chapter 9, §9.4.2) still cites Pescosolido et al. (2015) for this feature. This discrepancy has not been investigated or resolved — flagged here rather than silently picking one.
 
 ---
 ## [2.5.1] — 2026-09-02
