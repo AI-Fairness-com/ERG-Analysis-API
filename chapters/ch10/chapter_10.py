@@ -65,14 +65,16 @@ N_FOLDS         = 5
 # Baker three-strata age groups (Chapter 15 / normative framework)
 AGE_GROUPS      = ('≤35y', '36–59y', '≥60y')
 
-# Electrode ISCEV minimum b-wave references (Esakowitz et al., 1993; Baker et al. 2025)
-ISCEV_MIN_BWAVE = {
+# Project-defined electrode-amplitude hierarchy (NOT an ISCEV-published criterion --
+# ISCEV 2022 specifies no minimum b-wave amplitude or inter-protocol ratio; it
+# explicitly leaves reference ranges to each laboratory). Derived from Esakowitz
+# et al. (1993) and Baker et al. (2025).
+PROJECT_REFERENCE_BWAVE = {
     'contact_lens': 150.0,
     'gold_foil'   :  90.0,
     'dtl'         :  60.0,
     'skin'        :  20.0,
 }
-
 # Seven-class label map (1 Normal + 6 disease)
 CLASS_LABELS = {
     0: 'Normal',
@@ -265,11 +267,11 @@ def normalise_amplitude(a_measured:     float,
         own normative mean for the same protocol and electrode type.
         Requires: norm_mean > 0.
 
-    Method 3 – ISCEV relative criteria (fallback)
-        Expresses the measured amplitude as a fraction of the ISCEV minimum
-        acceptable b-wave for the electrode type (Esakowitz et al., 1993;
-        Baker et al., 2025). Increased uncertainty; use only when Methods 1
-        and 2 are unavailable.
+    Method 3 – Project-defined reference criteria (fallback)
+        Expresses the measured amplitude as a fraction of a project-defined
+        electrode-amplitude hierarchy (Esakowitz et al., 1993; Baker et al.,
+        2025), not an ISCEV-published criterion. Increased uncertainty; use
+        only when Methods 1 and 2 are unavailable.
 
     Parameters
     ----------
@@ -307,10 +309,11 @@ def normalise_amplitude(a_measured:     float,
     elif method == 3:
         electrode_key = (electrode_type.lower()
                          if electrode_type else 'dtl')
-        iscev_ref = ISCEV_MIN_BWAVE.get(electrode_key, 60.0)
-        norm_val  = a_measured / iscev_ref
-        note      = (f'ISCEV relative criteria (Method 3 – fallback, '
-                     f'increased uncertainty, electrode={electrode_key})')
+        project_ref = PROJECT_REFERENCE_BWAVE.get(electrode_key, 60.0)
+        norm_val    = a_measured / project_ref
+        note        = (f'Project-defined reference criteria (Method 3 – fallback, '
+                       f'increased uncertainty, not an ISCEV-published criterion, '
+                       f'electrode={electrode_key})')
     else:
         raise ValueError(f'Unknown normalisation method: {method}')
 
