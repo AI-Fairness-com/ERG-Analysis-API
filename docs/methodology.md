@@ -2,7 +2,7 @@
 
 This document provides the mathematical and methodological foundations for the ERG Analysis API. All formulas and explanations are sourced directly from the ERG manuscript (Tavakoli, 2027) and the Blueprint API Action Plan.
 
-*Feature Coverage section last reconciled against the pipeline's actual feature set on 2026-09-07, following the class-to-function rebuild documented in `docs/CHANGELOG.md` — see that entry for what changed and why.*
+*Feature Coverage section reconciled against the pipeline's actual feature set on 2026-09-07, after a same-day self-correction (see `docs/CHANGELOG.md`) restored the full 28-feature design following a brief, mistaken reduction to 11 features earlier that day.*
 
 ## Table of Contents
 
@@ -66,9 +66,11 @@ The Traffic Light system currently computes Z-scores for **five parameters only*
 | b-wave implicit time | Baker et al. (2025) |
 | b/a ratio | Baker et al. (2025), DA 3.0 only |
 
-**Every other feature this pipeline extracts is reported as a raw value but does NOT currently contribute to the Green/Amber/Red Traffic Light signal.** This includes PhNR amplitude (LA 3.0 only) and OP2/OP3/OP4 amplitude, OP-sum, and OP2 implicit time (DA 3.0/DA 10.0 only).
+**Every other feature this pipeline extracts is reported as a raw value but does NOT currently contribute to the Green/Amber/Red Traffic Light signal.** This includes the pre-existing OP2/OP3/OP4 amplitudes, OP-sum, OP2 implicit time, and PhNR amplitude, as well as the citation-grounded additions: Hurst Exponent, Approximate Entropy, the six DWT band-energy descriptors, all five b/a-wave derivative features (b-wave descending-limb and ascending-limb inflection time and gradient, a-wave descending-limb inflection time), peak frequency, spectral entropy, harmonic ratio, and the PhNR/b-wave ratio.
 
-This is a deliberate omission, not an oversight — establishing genuine normative coverage for these features requires either (a) a literature source measured with this pipeline's exact acquisition parameters and protocol scope, or (b) this project's own normative reference cohort, computed the same way Baker et al. (2025) established the existing five-parameter norms. Until then, these features remain available for raw reporting and SHAP explainability, but are excluded from the clinical interpretation layer.
+This is a deliberate omission, not an oversight. A published normative source exists for the DWT band-energy descriptors specifically (Gauvin, Lina & Lachapelle 2014, *BioMed Research International*), but it was measured with a different wavelet basis (discrete Haar decomposition vs. this pipeline's continuous Morlet-based implementation), a different cohort (N=40, photopic-only), and different acquisition parameters. Because wavelet basis and discretization change the numeric scale of "energy" even for identical underlying signals, importing that paper's published mean/SD values against this pipeline's own output would risk producing **systematically incorrect Z-scores** — a patient-safety concern, not just an academic mismatch.
+
+Establishing genuine normative coverage for these features requires either (a) a literature source measured with this pipeline's exact parameters and protocol scope, or (b) this project's own normative reference cohort, computed the same way Baker et al. (2025) established the existing five-parameter norms. Until then, these features remain available for raw reporting and SHAP explainability, but are excluded from the clinical interpretation layer.
 
 ### Device-Relative Normalization
 
