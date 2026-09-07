@@ -694,494 +694,267 @@ print("=" * 60)
 # ============================================================================
 
 from scipy.signal import find_peaks, welch
-import pywt
+from numpy.lib.stride_tricks import sliding_window_view
 
-class ERGFeatureExtractor:
-    """ISCEV 2022-Compliant Feature Extraction"""
+FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS = 1.0
+# ISCEV 2022 flash-duration constants -- kept separate deliberately:
+# ISCEV_FLASH_MAX_DURATION_MS (CONFIG, above) is the absolute ceiling ISCEV
+# allows for any stimulus flash. FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS is
+# the (much lower) duration above which ISCEV requires implicit time to be
+# measured from the flash midpoint rather than flash onset. These answer
+# different questions and must not share one constant (matches Chapter 9
+# canonical rebuild, chapters/ch09/feature_extraction_and_selection_pipeline.py).
 
-    def __init__(self, config: ERGConfig = None):
-        self.config = config or CONFIG
 
-    def extract_awave_bwave(self, signal: np.ndarray, fs_hz: float,
-                            protocol: str = 'DA 3',
-                            flash_onset_sample: int = 0,
-                            flash_duration_ms: float = 1.0) -> Dict[str, Any]:
+def extract_a_wave(signal_uv: np.ndarray, time_ms: np.ndarray, protocol: str,
+                   hardware_lowpass_hz: float = 300.0,
+                   flash_duration_ms: float = 0.0,
+                   search_start: float = 5.0,
+                   search_end: float = 40.0) -> Dict[str, Any]:
+    """Extract a-wave amplitude and implicit time from a broadband ERG sweep.
 
-        # Protocol-specific search windows per Action Plan §3.4.1
-        if protocol == 'DA 0.01':
-            a_wave_window_ms = (None, None)
-            b_wave_window_ms = (40, 130)
-        elif protocol == 'DA 3':
-            a_wave_window_ms = (10, 35)
-            b_wave_window_ms = (30, 100)
-        elif protocol == 'DA 10':
-            a_wave_window_ms = (8, 30)
-            b_wave_window_ms = (25, 95)
-        elif protocol == 'LA 3':
-            a_wave_window_ms = (12, 28)
-            b_wave_window_ms = (25, 60)
-        elif protocol == 'LA 30 Hz':
-            a_wave_window_ms = (None, None)
-            b_wave_window_ms = (20, 60)
-        else:
-            a_wave_window_ms = (10, 35)
-            b_wave_window_ms = (30, 100)
+    Ported from Chapter 9's canonical extract_a_wave (free-function form).
+    DA 0.01 and LA 30 Hz do not generate a measurable a-wave; NaN is
+    returned immediately for these protocols. Amplitude is reported as
+    absolute value (ISCEV 2022: baseline-to-trough). When no a-wave is
+    detected, hardware_lowpass_hz is compared against a protocol-specific
+    threshold (30 Hz dark-adapted, 35 Hz LA 3) to distinguish a
+    MAR-technical absence from a MNAR-physiological one.
+    """
+    correction_ms = (flash_duration_ms / 2.0
+                     if flash_duration_ms >= FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS
+                     else 0.0)
+    correction_applied = correction_ms > 0.0
 
-        # Handle protocols with no a-wave (DA 0.01, LA 30 Hz)
-        if a_wave_window_ms[0] is None:
-            a_wave_amplitude = np.nan
-            a_wave_implicit_ms = np.nan
-            # Still need b-wave start/end
-            b_start = flash_onset_sample + int(b_wave_window_ms[0] * fs_hz / 1000)
-            b_end = flash_onset_sample + int(b_wave_window_ms[1] * fs_hz / 1000)
-            b_start = max(0, min(b_start, len(signal)-1))
-            b_end = max(b_start+1, min(b_end, len(signal)))
-        else:
-            a_start = flash_onset_sample + int(a_wave_window_ms[0] * fs_hz / 1000)
-            a_end = flash_onset_sample + int(a_wave_window_ms[1] * fs_hz / 1000)
+    protocol_key = protocol.strip().upper()
+    if protocol_key in ('DA 0.01', 'LA 30 HZ'):
+        return {'a_wave_amplitude_uv': np.nan, 'a_wave_implicit_time_ms': np.nan}
 
-            a_start = max(0, min(a_start, len(signal)-1))
-            a_end = max(a_start+1, min(a_end, len(signal)))
+    lowpass_threshold = 35.0 if protocol_key == 'LA 3' else 30.0
 
-            a_segment = signal[a_start:a_end]
-            if len(a_segment) > 0:
-                a_trough_idx_local = np.argmin(a_segment)
-                a_trough_idx = a_start + a_trough_idx_local
-                a_wave_amplitude = signal[a_trough_idx]
-                # a-wave amplitude: take trough value as-is (sign enforced
-                # unconditionally at end of function via -abs())
-                a_wave_implicit_samples = a_trough_idx - flash_onset_sample
-                a_wave_implicit_ms = a_wave_implicit_samples * 1000.0 / fs_hz
-            else:
-                a_wave_amplitude = np.nan
-                a_wave_implicit_ms = np.nan
+    mask = (time_ms >= search_start) & (time_ms <= search_end)
+    if not mask.any():
+        return {'a_wave_amplitude_uv': np.nan, 'a_wave_implicit_time_ms': np.nan,
+                'a_wave_mar_technical': hardware_lowpass_hz < lowpass_threshold}
 
-                # CRITICAL FIX: b-wave search must start AFTER a-wave trough
-            if not np.isnan(a_wave_implicit_ms):
-                b_start_abs = max(a_trough_idx + int(2 * fs_hz / 1000),
-                                  flash_onset_sample + int(b_wave_window_ms[0] * fs_hz / 1000))
-            else:
-                b_start_abs = flash_onset_sample + int(b_wave_window_ms[0] * fs_hz / 1000)
+    window_amp = signal_uv[mask]
+    window_time = time_ms[mask]
+    a_local_idx = int(np.argmin(window_amp))
+    a_amp_raw = float(window_amp[a_local_idx])
+    a_time = float(window_time[a_local_idx]) - correction_ms
 
-            b_end_abs = flash_onset_sample + int(b_wave_window_ms[1] * fs_hz / 1000)
+    if a_amp_raw >= 0:
+        return {'a_wave_amplitude_uv': np.nan, 'a_wave_implicit_time_ms': np.nan,
+                'a_wave_mar_technical': hardware_lowpass_hz < lowpass_threshold}
 
-            b_start = max(0, min(b_start_abs, len(signal)-1))
-            b_end = max(b_start+1, min(b_end_abs, len(signal)))
+    baseline_mask = time_ms < 0
+    baseline_mean = float(signal_uv[baseline_mask].mean()) if baseline_mask.any() else 0.0
+    a_amp_uv = abs(a_amp_raw - baseline_mean)
 
-        b_segment = signal[b_start:b_end]
-        if len(b_segment) > 0:
-            b_peak_idx_local = np.argmax(b_segment)
-            b_peak_idx = b_start + b_peak_idx_local
-            b_wave_raw = signal[b_peak_idx]
-            b_wave_amplitude = b_wave_raw - a_wave_amplitude if not np.isnan(a_wave_amplitude) else b_wave_raw
-            # Ensure b-wave amplitude is positive
-            if b_wave_amplitude < 0:
-                b_wave_amplitude = -b_wave_amplitude
-            b_wave_implicit_samples = b_peak_idx - flash_onset_sample
-            b_wave_implicit_ms = b_wave_implicit_samples * 1000.0 / fs_hz
-        else:
-            b_wave_amplitude = np.nan
-            b_wave_implicit_ms = np.nan
-
-        # Ensure a-wave amplitude is reported as negative (clinical convention)
-        # Single enforcement — earlier forced-negative block removed to prevent
-        # double-negation inversion on signals where trough is already negative
-        if not np.isnan(a_wave_amplitude):
-            a_wave_amplitude = -abs(a_wave_amplitude)
-        ba_ratio = b_wave_amplitude / abs(a_wave_amplitude) if a_wave_amplitude != 0 and not np.isnan(a_wave_amplitude) else np.nan
-
-        correction_applied = False
-        correction_ms = 0.0
-
-        if flash_duration_ms >= self.config.ISCEV_FLASH_MAX_DURATION_MS:
-            correction_ms = flash_duration_ms / 2.0
-            a_wave_implicit_ms = a_wave_implicit_ms - correction_ms if not np.isnan(a_wave_implicit_ms) else np.nan
-            b_wave_implicit_ms = b_wave_implicit_ms - correction_ms if not np.isnan(b_wave_implicit_ms) else np.nan
-            correction_applied = True
-
-        return {
-            'a_wave_amplitude_uv': round(float(a_wave_amplitude), 1) if not np.isnan(a_wave_amplitude) else np.nan,
-            'a_wave_implicit_time_ms': round(float(a_wave_implicit_ms), 1) if not np.isnan(a_wave_implicit_ms) else np.nan,
-            'b_wave_amplitude_uv': round(float(b_wave_amplitude), 1) if not np.isnan(b_wave_amplitude) else np.nan,
-            'b_wave_implicit_time_ms': round(float(b_wave_implicit_ms), 1) if not np.isnan(b_wave_implicit_ms) else np.nan,
-            'ba_ratio': round(float(ba_ratio), 2) if not np.isnan(ba_ratio) else np.nan,
+    return {'a_wave_amplitude_uv': round(a_amp_uv, 1), 'a_wave_implicit_time_ms': round(a_time, 1),
             'flash_midpoint_correction_applied': correction_applied,
-            'flash_midpoint_correction_ms': correction_ms
-        }
-
-    def extract_oscillatory_potentials(self, signal: np.ndarray, fs_hz: float,
-                                        flash_onset_sample: int = 0) -> Dict[str, Any]:
-        """
-        Extract Oscillatory Potentials OP2-OP4 from 75-300 Hz filtered signal
-        Per ISCEV 2022: OP4 window 35-65 ms, OP sum = OP2+OP3+OP4.
-        OP1 is not extracted: its trough overlaps the b-wave ascending limb
-        and it is excluded from ISCEV 2022 OP quantification.
-        """
-
-        # OP search windows (post-flash in ms) per ISCEV 2022
-        # OP4 window extended to 35-65 ms (peaks at 50-65 ms in human dark-adapted ERG)
-        op_windows = {
-            'OP2': (20, 28),
-            'OP3': (28, 38),
-            'OP4': (38, 65)  # Non-overlapping with OP3
-        }
-
-        ops = {}
-        op2_implicit_ms = np.nan
-
-        for op_name, (start_ms, end_ms) in op_windows.items():
-            start_idx = flash_onset_sample + int(start_ms * fs_hz / 1000)
-            end_idx = flash_onset_sample + int(end_ms * fs_hz / 1000)
-
-            start_idx = max(0, min(start_idx, len(signal)-1))
-            end_idx = max(start_idx+1, min(end_idx, len(signal)))
-
-            segment = signal[start_idx:end_idx]
-
-            if len(segment) > 0:
-                peaks, _ = find_peaks(segment, height=0, prominence=0.5)
-                if len(peaks) > 0:
-                    peak_idx_local = peaks[np.argmax(segment[peaks])]
-                    peak_amplitude = segment[peak_idx_local]
-                    trough_idx_local = np.argmin(segment[:peak_idx_local+1]) if peak_idx_local > 0 else 0
-                    trough_amplitude = segment[trough_idx_local]
-                    op_amplitude = peak_amplitude - trough_amplitude
-                    if op_name == 'OP2':
-                        op2_implicit_ms = (start_idx + peak_idx_local - flash_onset_sample) * 1000.0 / fs_hz
-                else:
-                    op_amplitude = 0.0
-            else:
-                op_amplitude = 0.0
-
-            ops[op_name] = round(float(op_amplitude), 1)
-
-        # OP sum per ISCEV: OP2+OP3+OP4
-        ops['OP_sum_uv'] = ops.get('OP2', 0) + ops.get('OP3', 0) + ops.get('OP4', 0)
-        ops['OP2_implicit_ms'] = round(float(op2_implicit_ms), 2) if not np.isnan(op2_implicit_ms) else np.nan
-
-        return ops
-
-    def extract_phnr(self, signal: np.ndarray, fs_hz: float,
-                     b_wave_implicit_time_ms: float,
-                     flash_onset_sample: int = 0,
-                     noise_rms_uv: float = 1.0) -> Dict[str, Any]:
-        """
-        Extract PhNR amplitude from LA 3.0 broadband-filtered signal
-        Per Chapter 9 §9.1.4: search 60-200 ms post-stimulus window
-
-        Sign convention: PhNR is reported as a SIGNED value relative to the
-        pre-stimulus baseline (0 µV). The typical, expected physiological
-        PhNR is a negative-going deflection below baseline; this is the
-        normal/common case and is reported as a negative number (e.g. -9.0
-        µV). If the largest deflection in the search window is instead
-        positive (above baseline), this is reported as a positive number
-        and flagged via 'phnr_polarity_atypical': True.
-
-        Clinical note: the Photopic Negative Response is, by definition and
-        in all published normative and pathological data reviewed for this
-        pipeline (Frishman et al. 2018; Viswanathan et al. 1999; Colotto
-        et al. 2000; Machida 2012; Prencipe et al. 2020; Sarossy et al.
-        2021), a NEGATIVE-going deflection. A positive value returned here
-        is NOT a recognised alternate physiological state. It most likely
-        indicates one of: (1) a residual positive deflection (b-wave tail,
-        i-wave remnant, or oscillatory potential ringing) in the search
-        window exceeding the true, smaller PhNR trough, so the wrong
-        feature is being measured; (2) signal polarity inversion from an
-        electrode connection error; (3) baseline drift or low-frequency
-        noise dominating a low-amplitude or absent PhNR in a severely
-        diseased retina. This is surfaced to the user as a data-quality
-        flag, not presented as a valid alternate clinical reading.
-        """
-        # Search window after b-wave peak (60-200 ms post-stimulus)
-        search_start_ms = max(60.0, b_wave_implicit_time_ms + 10.0)
-        search_end_ms = 200.0
-
-        start_idx = flash_onset_sample + int(search_start_ms * fs_hz / 1000)
-        end_idx = flash_onset_sample + int(search_end_ms * fs_hz / 1000)
-
-        start_idx = max(0, min(start_idx, len(signal)-1))
-        end_idx = max(start_idx+1, min(end_idx, len(signal)))
-
-        segment = signal[start_idx:end_idx]
-
-        if len(segment) > 0:
-            seg_min = float(np.min(segment))
-            seg_max = float(np.max(segment))
-            # Dominant excursion from baseline (0 µV), signed.
-            # abs(seg_min) > abs(seg_max)  -> trough dominates -> negative PhNR (typical)
-            # abs(seg_max) > abs(seg_min)  -> peak dominates   -> positive PhNR (atypical)
-            if abs(seg_min) >= abs(seg_max):
-                phnr_signed = seg_min   # negative or zero -- typical
-            else:
-                phnr_signed = seg_max   # positive -- atypical, see docstring
-
-            phnr_magnitude = abs(phnr_signed)
-
-            # Reliability check: PhNR must exceed 2x noise RMS, regardless of sign
-            if phnr_magnitude < 2.0 * noise_rms_uv:
-                return {'phnr_amp_uv': np.nan, 'phnr_polarity_atypical': False}
-
-            return {
-                'phnr_amp_uv': round(phnr_signed, 1),
-                'phnr_polarity_atypical': bool(phnr_signed > 0),
-            }
-        else:
-            return {'phnr_amp_uv': np.nan, 'phnr_polarity_atypical': False}
-
-    def extract_nonlinear_features(self, signal: np.ndarray) -> Dict[str, Any]:
-        """
-        Hurst Exponent and Approximate Entropy of the broadband signal.
-        Per Nair & Joseph (2014, BioMed Research International): both measures
-        are significantly lower (p<0.05) in CSNB, RP, and cone-rod dystrophy
-        vs. healthy controls. The Largest Lyapunov Exponent and Higuchi
-        Fractal Dimension from the same study were NOT statistically
-        significant on their data and are deliberately not implemented here.
-        """
-        x = np.asarray(signal, dtype=float)
-        n = len(x)
-
-        # Hurst exponent via detrended-difference scaling (Nair & Joseph 2014, Eq. 1)
-        if n < 20:
-            hurst = np.nan
-        else:
-            lags = range(2, n // 2)
-            tau = np.array([np.std(x[lag:] - x[:-lag]) for lag in lags])
-            valid = tau > 0
-            if valid.sum() < 2:
-                hurst = np.nan
-            else:
-                log_lags = np.log(np.array(list(lags))[valid])
-                log_tau = np.log(tau[valid])
-                slope, _ = np.polyfit(log_lags, log_tau, 1)
-                hurst = float(slope * 2.0)
-
-        # Approximate entropy (Pincus 1991; m=2, r=0.15*SD per Nair & Joseph 2014)
-        def _phi(m, r):
-            z = np.array([x[i:i + m] for i in range(n - m + 1)])
-            d = np.abs(z[:, None, :] - z[None, :, :]).max(axis=2)
-            c = (d <= r).sum(axis=1) / (n - m + 1)
-            return np.sum(np.log(c)) / (n - m + 1)
-
-        if n < 10:
-            apen = np.nan
-        else:
-            r = 0.15 * np.std(x)
-            apen = float(_phi(2, r) - _phi(3, r)) if r > 0 else np.nan
-
-        return {
-            'hurst_exponent': round(hurst, 4) if not np.isnan(hurst) else np.nan,
-            'approximate_entropy': round(apen, 4) if not np.isnan(apen) else np.nan,
-        }
-
-    def extract_dwt_band_energies(self, signal: np.ndarray, fs_hz: float,
-                                   flash_onset_sample: int = 0,
-                                   wavelet: str = 'morl') -> Dict[str, Any]:
-        """
-        CWT band-energy descriptors at Gauvin et al.'s (2014, BioMed Research
-        International) six statistically-validated frequency/time-window
-        pairs: 20/40 Hz over the a-wave window, 20/40 Hz over the b-wave
-        window, and 80/150 Hz over the OP window. Gauvin proved these six
-        descriptors are non-redundant with classical amplitude/implicit-time
-        measures (p<0.05 differences on ERGs indistinguishable by amplitude
-        or peak time alone).
-        """
-        x = np.asarray(signal, dtype=float)
-        n = len(x)
-        t_ms = (np.arange(n) - flash_onset_sample) * 1000.0 / fs_hz
-        dt = 1.0 / fs_hz
-        central_freq = pywt.central_frequency(wavelet)
-
-        descriptors = {
-            'dwt_20a_uv2': (20.0, (5.0, 30.0)),
-            'dwt_40a_uv2': (40.0, (5.0, 30.0)),
-            'dwt_20b_uv2': (20.0, (20.0, 70.0)),
-            'dwt_40b_uv2': (40.0, (20.0, 70.0)),
-            'dwt_80ops_uv2': (80.0, (10.0, 45.0)),
-            'dwt_160ops_uv2': (160.0, (10.0, 45.0)),
-        }
-
-        out = {}
-        for key, (target_freq_hz, window_ms) in descriptors.items():
-            scale = central_freq * fs_hz / target_freq_hz
-            coeffs, _ = pywt.cwt(x, [scale], wavelet, sampling_period=dt)
-            mag = np.abs(coeffs[0])
-            mask = (t_ms >= window_ms[0]) & (t_ms <= window_ms[1])
-            out[key] = round(float(np.sum(mag[mask] ** 2)), 2) if mask.any() else np.nan
-        return out
-
-    def extract_bwave_derivative_features(self, signal: np.ndarray, fs_hz: float,
-                                           b_wave_implicit_time_ms: float,
-                                           flash_onset_sample: int = 0,
-                                           search_end_ms: float = 150.0) -> Dict[str, Any]:
-        """
-        b-wave descending-limb inflection point (2nd-derivative zero crossing)
-        implicit time and gradient. Per Wood, Margrain & Binns (2014, PLoS
-        ONE), this was the only statistically significant derivative-based
-        parameter pair in early AMD (their a-wave descending inflection was
-        not significant, p=0.097, and is deliberately not implemented here).
-        """
-        if np.isnan(b_wave_implicit_time_ms):
-            return {'b_descending_inflection_ms': np.nan, 'b_descending_gradient_uv_ms': np.nan}
-
-        t_ms = (np.arange(len(signal)) - flash_onset_sample) * 1000.0 / fs_hz
-        # Start 3 ms past the reported peak: numerical differentiation exactly
-        # at the peak can catch leftover rising-limb curvature or noise, giving
-        # a spurious positive ("ascending") gradient for a "descending" feature.
-        mask = (t_ms >= b_wave_implicit_time_ms + 3.0) & (t_ms <= search_end_ms)
-        if mask.sum() < 5:
-            return {'b_descending_inflection_ms': np.nan, 'b_descending_gradient_uv_ms': np.nan}
-
-        seg_t = t_ms[mask]
-        seg_x = np.asarray(signal)[mask]
-        d1 = np.gradient(seg_x, seg_t)
-        d2 = np.gradient(d1, seg_t)
-        # Only accept a candidate on the genuine descending limb (gradient < 0);
-        # this is a "descending inflection" feature by definition (Wood et al. 2014).
-        sign_changes = np.where(np.diff(np.sign(d2)))[0]
-        candidates = [i for i in sign_changes if d1[i] < 0]
-        if len(candidates) == 0:
-            return {'b_descending_inflection_ms': np.nan, 'b_descending_gradient_uv_ms': np.nan}
-
-        idx = candidates[0]
-        return {
-            'b_descending_inflection_ms': round(float(seg_t[idx]), 2),
-            'b_descending_gradient_uv_ms': round(float(d1[idx]), 2),
-        }
-
-    def extract_frequency_domain_features(self, signal: np.ndarray, fs_hz: float,
-                                           protocol: str = 'DA 3',
-                                           fmin: float = 0.0, fmax: float = 300.0,
-                                           fundamental_hz: float = 30.0,
-                                           n_harmonics: int = 3,
-                                           bw_hz: float = 2.0) -> Dict[str, Any]:
-        """
-        Peak PSD frequency and spectral entropy (Behbahani, Ahmadieh & Rajan
-        2021, IEEE Access; Gauvin et al. 2014) on the broadband signal for
-        every protocol. Harmonic ratio at the flicker fundamental and its
-        first two harmonics (Behbahani et al. 2021) is computed only for the
-        LA 30 Hz protocol, matching this pipeline's existing LA-30Hz-only
-        convention for flicker-specific features.
-        """
-        freqs, psd = welch(signal, fs=fs_hz, nperseg=min(256, len(signal)))
-        mask = (freqs >= fmin) & (freqs <= fmax)
-        freqs_m, psd_m = freqs[mask], psd[mask]
-
-        if len(psd_m) == 0 or np.sum(psd_m) == 0:
-            out = {'peak_freq_hz': np.nan, 'spectral_entropy': np.nan}
-        else:
-            peak_freq = float(freqs_m[np.argmax(psd_m)])
-            p_norm = psd_m / np.sum(psd_m)
-            p_norm = p_norm[p_norm > 0]
-            entropy = float(-np.sum(p_norm * np.log(p_norm)) / np.log(len(p_norm))) if len(p_norm) > 1 else np.nan
-            out = {'peak_freq_hz': round(peak_freq, 2), 'spectral_entropy': round(entropy, 4)}
-
-        if protocol.upper().replace(' ', '') in ('LA30HZ', 'LA30'):
-            total_power = np.sum(psd)
-            if total_power > 0:
-                harmonic_power = 0.0
-                for k in range(1, n_harmonics + 1):
-                    f0 = fundamental_hz * k
-                    hmask = (freqs >= f0 - bw_hz) & (freqs <= f0 + bw_hz)
-                    harmonic_power += np.sum(psd[hmask])
-                out['harmonic_ratio'] = round(float(harmonic_power / total_power), 4)
-            else:
-                out['harmonic_ratio'] = np.nan
-
-        return out
-
-    def extract_all_features(self, signal: np.ndarray, fs_hz: float,
-                             protocol: str = 'DA 3',
-                             flash_onset_sample: int = 0,
-                             flash_duration_ms: float = 1.0,
-                             op_signal: np.ndarray = None,
-                             noise_rms_uv: float = 1.0) -> Dict[str, Any]:
-
-        features = {'protocol': protocol}
-
-        # ── Step 2.5: Signal orientation auto-detection ──────────────────
-        # ISCEV physiology: the a-wave is a negative deflection and the
-        # b-wave is positive. Some recording systems invert the amplifier
-        # output, producing a mirror-image waveform. Detect this by summing
-        # the post-stimulus signal in the 0–30 ms window: if the sum is
-        # positive (dominant positive peak where the a-trough should be),
-        # the signal polarity is inverted. Multiply by -1 to correct, and
-        # set the audit flag for Layer 4 and FHIR reporting.
-        #
-        # PROTOCOL RESTRICTION: Only applied to DA protocols (DA 0.01, DA 3,
-        # DA 10) where a large negative a-wave physiologically dominates the
-        # 0–30 ms post-stimulus window. For LA 3 and LA 30 Hz the b-wave
-        # rising flank dominates this window even in correctly oriented signals
-        # (b-peak at 25–30 ms), so the sum > 0 criterion produces false positives.
-        #
-        # The 0–30 ms window is chosen because:
-        #   - It covers the a-wave trough for all DA protocols
-        #   - It precedes the DA b-wave peak (≥45 ms for all DA protocols)
-        #   - Pre-stimulus samples are excluded (flash_onset_sample offset)
-        #
-        # Traffic light is NOT affected by this correction. An AMBER
-        # annotation is added to the Layer 4 audit output only.
-        inverted_polarity_detected = False
-        _DA_PROTOCOLS = {'DA 0.01', 'DA 3', 'DA 10', 'DA3', 'DA10', 'DA001'}
-        _protocol_upper = protocol.upper().replace(' ', '').replace('.', '')
-        _is_da_protocol = any(
-            protocol.upper().replace(' ', '') == p.upper().replace(' ', '')
-            for p in _DA_PROTOCOLS
-        )
-        if _is_da_protocol:
-            post_stim_signal = signal[flash_onset_sample:]
-            window_30ms_samples = min(int(30.0 * fs_hz / 1000), len(post_stim_signal))
-            if window_30ms_samples > 0:
-                window_sum = float(np.sum(post_stim_signal[:window_30ms_samples]))
-                if window_sum > 0:
-                    signal = signal * -1.0
-                    inverted_polarity_detected = True
-
-        features['inverted_polarity_detected'] = inverted_polarity_detected
+            'flash_midpoint_correction_ms': correction_ms}
 
 
-        awave_bwave = self.extract_awave_bwave(signal, fs_hz, protocol, flash_onset_sample, flash_duration_ms)
-        features.update(awave_bwave)
+def extract_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray, protocol: str,
+                   a_time_ms: float = np.nan,
+                   flash_duration_ms: float = 0.0,
+                   search_end: float = 150.0) -> Dict[str, Any]:
+    """Extract b-wave amplitude (trough-to-peak, ISCEV 2022) and implicit time.
 
-        if op_signal is not None:
-            ops = self.extract_oscillatory_potentials(op_signal, fs_hz, flash_onset_sample)
-            features['oscillatory_potentials'] = ops
+    Ported from Chapter 9's canonical extract_b_wave (free-function form).
+    """
+    correction_ms = (flash_duration_ms / 2.0
+                     if flash_duration_ms >= FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS
+                     else 0.0)
+    correction_applied = correction_ms > 0.0
 
-                # Extract PhNR for LA 3.0 protocol
-        if protocol == 'LA 3':
-            if 'b_wave_implicit_time_ms' in features and not np.isnan(features['b_wave_implicit_time_ms']):
-                phnr = self.extract_phnr(signal, fs_hz, features['b_wave_implicit_time_ms'],
-                                         flash_onset_sample, noise_rms_uv)
-                features.update(phnr)
-                # PhNR/b-wave ratio (Kirkiewicz, Lubinski & Penkala 2016, Doc
-                # Ophthalmol): AUC 0.78-0.86 across glaucoma stages, statistically
-                # comparable to raw PhNR amplitude alone but normalises inter-
-                # individual variability per Prencipe et al. (2020).
-                b_amp = features.get('b_wave_amplitude_uv', np.nan)
-                phnr_amp = features.get('phnr_amp_uv', np.nan)
-                if not np.isnan(b_amp) and b_amp != 0 and not np.isnan(phnr_amp):
-                    features['phnr_bwave_ratio'] = round(float(phnr_amp / b_amp), 4)
-                else:
-                    features['phnr_bwave_ratio'] = np.nan
-            else:
-                features['phnr_amp_uv'] = np.nan
-                features['phnr_polarity_atypical'] = False
-                features['phnr_bwave_ratio'] = np.nan
+    b_search_start = 20.0 if np.isnan(a_time_ms) else a_time_ms
 
-        # Nonlinear features (Hurst Exponent, Approximate Entropy)
-        features.update(self.extract_nonlinear_features(signal))
+    mask = (time_ms >= b_search_start) & (time_ms <= search_end)
+    if not mask.any():
+        return {'b_wave_amplitude_uv': np.nan, 'b_wave_implicit_time_ms': np.nan}
 
-        # DWT time-frequency band-energy descriptors (Gauvin et al. 2014)
-        features.update(self.extract_dwt_band_energies(signal, fs_hz, flash_onset_sample))
+    window_amp = signal_uv[mask]
+    window_time = time_ms[mask]
+    b_local_idx = int(np.argmax(window_amp))
+    b_amp_raw = float(window_amp[b_local_idx])
+    b_time = float(window_time[b_local_idx]) - correction_ms
 
-        # b-wave descending-limb inflection point (Wood et al. 2014)
-        b_implicit = features.get('b_wave_implicit_time_ms', np.nan)
-        features.update(self.extract_bwave_derivative_features(signal, fs_hz, b_implicit, flash_onset_sample))
+    if b_amp_raw <= 0:
+        return {'b_wave_amplitude_uv': np.nan, 'b_wave_implicit_time_ms': np.nan}
 
-        # Frequency-domain features (peak frequency, spectral entropy, and
-        # harmonic ratio for LA 30 Hz)
-        features.update(self.extract_frequency_domain_features(signal, fs_hz, protocol))
+    if np.isnan(a_time_ms):
+        baseline_mask = time_ms < 0
+        reference_level = float(signal_uv[baseline_mask].mean()) if baseline_mask.any() else 0.0
+    else:
+        a_idx = int(np.argmin(np.abs(time_ms - a_time_ms)))
+        reference_level = float(signal_uv[a_idx])
 
-        return features
+    b_amp_uv = b_amp_raw - reference_level
+    if b_amp_uv <= 0:
+        return {'b_wave_amplitude_uv': np.nan, 'b_wave_implicit_time_ms': np.nan}
+
+    return {'b_wave_amplitude_uv': round(b_amp_uv, 1), 'b_wave_implicit_time_ms': round(b_time, 1),
+            'flash_midpoint_correction_applied': correction_applied,
+            'flash_midpoint_correction_ms': correction_ms}
+
+
+def compute_ba_ratio(b_amp_uv: float, a_amp_uv: float) -> float:
+    """Compute the b/a amplitude ratio. NaN if either is missing or a_amp_uv is 0."""
+    if np.isnan(b_amp_uv) or np.isnan(a_amp_uv) or a_amp_uv == 0:
+        return np.nan
+    return round(b_amp_uv / a_amp_uv, 2)
+
+
+def extract_phnr(signal_uv: np.ndarray, time_ms: np.ndarray, b_time_ms: float,
+                 noise_rms_uv: float,
+                 hardware_highpass_hz: float = 0.3,
+                 search_start: float = 60.0,
+                 search_end: float = 200.0) -> Dict[str, Any]:
+    """Extract PhNR amplitude from a LA 3 broadband-filtered sweep.
+
+    Ported from Chapter 9's canonical extract_phnr (free-function form).
+    PhNR is reported as a SIGNED value relative to the pre-stimulus
+    baseline (0 uV); a positive value is flagged via
+    'phnr_polarity_atypical': True (see Chapter 9 docstring for the full
+    clinical rationale). A 5-point moving average is applied before
+    trough/peak detection to reduce false detections from noise.
+    """
+    effective_start = max(search_start, b_time_ms + 5.0)
+    mask = (time_ms >= effective_start) & (time_ms <= search_end)
+    if not mask.any():
+        return {'phnr_amp_uv': np.nan, 'phnr_polarity_atypical': False,
+                'phnr_mar_technical': hardware_highpass_hz > 0.3}
+
+    win_amp = signal_uv[mask]
+    if len(win_amp) >= 5:
+        smoothed = np.mean(sliding_window_view(win_amp, 5), axis=1)
+    else:
+        smoothed = win_amp
+
+    seg_min, seg_max = float(np.min(smoothed)), float(np.max(smoothed))
+    phnr_signed = seg_min if abs(seg_min) >= abs(seg_max) else seg_max
+    phnr_magnitude = abs(phnr_signed)
+    if phnr_magnitude < 2.0 * noise_rms_uv:
+        return {'phnr_amp_uv': np.nan, 'phnr_polarity_atypical': False,
+                'phnr_mar_technical': hardware_highpass_hz > 0.3}
+
+    return {'phnr_amp_uv': round(phnr_signed, 1),
+            'phnr_polarity_atypical': bool(phnr_signed > 0)}
+
+
+def extract_oscillatory_potentials(op_signal_uv: np.ndarray, time_ms: np.ndarray,
+                                    hardware_lowpass_hz: float = 300.0,
+                                    min_prom_uv: float = 5.0,
+                                    min_dist_ms: float = 8.0,
+                                    fs: float = 2000.0) -> Dict[str, Any]:
+    """Extract OP2, OP3, OP4 amplitudes and OP2 implicit time.
+
+    Ported from Chapter 9's canonical extract_oscillatory_potentials
+    (free-function form). Uses the 75-300 Hz bandpass-filtered signal.
+    OP1 is excluded because its trough overlaps the b-wave ascending
+    limb; ISCEV 2022 does not define an OP1-OP4 numbering scheme.
+    """
+    op_mar_technical = hardware_lowpass_hz < 300.0
+    nan_result = {k: np.nan for k in
+                  ['op2_amp_uv', 'op3_amp_uv', 'op4_amp_uv',
+                   'op_sum_uv', 'op2_implicit_ms']}
+    nan_result['op_mar_technical'] = op_mar_technical
+
+    post_mask = (time_ms >= 0) & (time_ms <= 100)
+    if not post_mask.any():
+        return nan_result
+
+    post_amp = op_signal_uv[post_mask]
+    post_time = time_ms[post_mask]
+    min_dist_samples = int(min_dist_ms * fs / 1000)
+
+    peaks, _ = find_peaks(post_amp, prominence=min_prom_uv,
+                          distance=max(1, min_dist_samples))
+
+    if len(peaks) < 2:
+        return nan_result
+
+    valid_peaks = [p for p in peaks if post_time[p] >= 25.0]
+    if len(valid_peaks) < 2:
+        return nan_result
+
+    results = dict(nan_result)
+    op_amps = []
+    for i, label in enumerate(['op2', 'op3', 'op4']):
+        if i >= len(valid_peaks):
+            break
+        peak_idx = valid_peaks[i]
+        peak_amp = float(post_amp[peak_idx])
+        trough_start = valid_peaks[i - 1] if i > 0 else 0
+        trough_amp = float(post_amp[trough_start:peak_idx + 1].min())
+        op_amp_tp = peak_amp - trough_amp
+        results[f'{label}_amp_uv'] = round(op_amp_tp, 1)
+        if label == 'op2':
+            results['op2_implicit_ms'] = round(float(post_time[peak_idx]), 2)
+        op_amps.append(op_amp_tp)
+
+    if len(op_amps) >= 2:
+        results['op_sum_uv'] = round(sum(op_amps), 1)
+
+    return results
+
+
+def extract_all_features(signal: np.ndarray, fs_hz: float,
+                         protocol: str = 'DA 3',
+                         flash_onset_sample: int = 0,
+                         flash_duration_ms: float = 1.0,
+                         op_signal: np.ndarray = None,
+                         noise_rms_uv: float = 1.0,
+                         hardware_lowpass_hz: float = 300.0,
+                         hardware_highpass_hz: float = 0.3) -> Dict[str, Any]:
+    """Orchestrate all time-domain feature extractors for one ERG recording.
+
+    a-wave -> b-wave (using a-wave as reference) -> b/a ratio -> PhNR
+    (LA 3 only) -> OPs (DA 3 and DA 10 only), matching the order and
+    protocol gating of Chapter 9's canonical extract_time_domain_features.
+    Builds a flash-onset-aligned time axis (t=0 at stimulus) from
+    flash_onset_sample/fs_hz to match the free functions' time_ms contract.
+    """
+    time_ms = (np.arange(len(signal)) - flash_onset_sample) * 1000.0 / fs_hz
+    features = {'protocol': protocol}
+
+    a = extract_a_wave(signal, time_ms, protocol,
+                       hardware_lowpass_hz=hardware_lowpass_hz,
+                       flash_duration_ms=flash_duration_ms)
+    features.update(a)
+
+    b = extract_b_wave(signal, time_ms, protocol,
+                       a_time_ms=a.get('a_wave_implicit_time_ms', np.nan),
+                       flash_duration_ms=flash_duration_ms)
+    features.update(b)
+
+    features['ba_ratio'] = compute_ba_ratio(
+        b.get('b_wave_amplitude_uv', np.nan), a.get('a_wave_amplitude_uv', np.nan))
+
+    protocol_key = protocol.strip().upper()
+
+    if protocol_key == 'LA 3':
+        b_t = b.get('b_wave_implicit_time_ms', np.nan)
+        b_t = b_t if not np.isnan(b_t) else 50.0
+        features.update(extract_phnr(signal, time_ms, b_t, noise_rms_uv,
+                                     hardware_highpass_hz=hardware_highpass_hz))
+    else:
+        features['phnr_amp_uv'] = np.nan
+        features['phnr_polarity_atypical'] = False
+
+    if protocol_key in ('DA 3', 'DA 10') and op_signal is not None:
+        features.update(
+            extract_oscillatory_potentials(op_signal, time_ms,
+                                           hardware_lowpass_hz=hardware_lowpass_hz,
+                                           fs=fs_hz))
+    else:
+        for k in ['op2_amp_uv', 'op3_amp_uv', 'op4_amp_uv',
+                  'op_sum_uv', 'op2_implicit_ms']:
+            features[k] = np.nan
+
+    return features
 
 
 print("\n" + "=" * 60)
@@ -1190,11 +963,9 @@ print("=" * 60)
 print("Features: a-wave amplitude, a-wave implicit time, b-wave amplitude,")
 print("          b-wave implicit time, b/a ratio, flash midpoint correction")
 print("          Oscillatory Potentials (OP2-OP4) with OP sum = OP2+OP3+OP4")
-print("          + OP2 implicit time, PhNR amplitude and PhNR/b-wave ratio,")
-print("          Hurst Exponent, Approximate Entropy, six DWT band-energy")
-print("          descriptors, b-wave descending inflection time/gradient,")
-print("          peak frequency, spectral entropy, and harmonic ratio (LA 30Hz)")
-print("          PhNR amplitude (LA 3.0 protocol)")
+print("          + OP2 implicit time, PhNR amplitude (LA 3 protocol)")
+print("          Free-function structure ported from Chapter 9 canonical")
+print("          rebuild (chapters/ch09/feature_extraction_and_selection_pipeline.py)")
 print("=" * 60)
 
 # ============================================================================
@@ -2983,7 +2754,7 @@ environment_widget = widgets.Dropdown(
 flash_duration_widget = widgets.FloatText(
     value=1.0,
     description='Flash Duration (ms):',
-    help='For LED stimulators: ≥5 ms enables midpoint correction'
+    help='For LED stimulators: ≥1 ms enables midpoint correction'
 )
 patient_id_widget = widgets.Text(
     value='',
@@ -3149,22 +2920,52 @@ def run_pipeline(b):
                     print(f"✓ Filtering complete")
 
                     # Extract features
-                    extractor = ERGFeatureExtractor()
                     op_signal = None
                     if op_extract_widget.value and audit_result['oscillatory_potentials']['available']:
                         op_signal = filter_obj.extract_ops(filtered_signal, fs_hz)
                         print(f"✓ OP signal extracted (75-300 Hz)")
 
+                    # ── Step 2.5: Signal orientation auto-detection ──────────
+                    # ISCEV physiology: the a-wave is a negative deflection and
+                    # the b-wave is positive. Some recording systems invert the
+                    # amplifier output, producing a mirror-image waveform.
+                    # Detect this by summing the post-stimulus signal in the
+                    # 0-30 ms window: if the sum is positive (dominant positive
+                    # peak where the a-trough should be), the signal polarity
+                    # is inverted. Multiply by -1 to correct, and set the audit
+                    # flag for Layer 4 and FHIR reporting. Only applied to DA
+                    # protocols, where a large negative a-wave physiologically
+                    # dominates the 0-30 ms post-stimulus window (see prior
+                    # session notes for the full rationale). This step lives
+                    # here, not inside extract_all_features, matching Chapter
+                    # 5/9's separation of signal conditioning from feature
+                    # extraction.
+                    inverted_polarity_detected = False
+                    _DA_PROTOCOLS = {'DA 0.01', 'DA 3', 'DA 10'}
+                    if protocol_widget.value.strip().upper() in {p.upper() for p in _DA_PROTOCOLS}:
+                        post_stim_signal = filtered_signal[flash_onset_sample:]
+                        window_30ms_samples = min(int(30.0 * fs_hz / 1000), len(post_stim_signal))
+                        if window_30ms_samples > 0:
+                            window_sum = float(np.sum(post_stim_signal[:window_30ms_samples]))
+                            if window_sum > 0:
+                                filtered_signal = filtered_signal * -1.0
+                                if op_signal is not None:
+                                    op_signal = op_signal * -1.0
+                                inverted_polarity_detected = True
+
                     # Extract all features
-                    features = extractor.extract_all_features(
+                    features = extract_all_features(
                         signal=filtered_signal,
                         fs_hz=fs_hz,
                         protocol=protocol_widget.value,
                         flash_onset_sample=flash_onset_sample,
                         flash_duration_ms=flash_duration_widget.value,
                         op_signal=op_signal,
-                        noise_rms_uv=noise_rms_uv
+                        noise_rms_uv=noise_rms_uv,
+                        hardware_lowpass_hz=hardware_cutoff if hardware_cutoff is not None else 300.0,
+                        hardware_highpass_hz=0.3
                     )
+                    features['inverted_polarity_detected'] = inverted_polarity_detected
 
                     print(f"✓ Features extracted")
                     if 'a_wave_amplitude_uv' in features and not np.isnan(features['a_wave_amplitude_uv']):
@@ -3172,9 +2973,8 @@ def run_pipeline(b):
                         print(f"  b-wave: {features['b_wave_amplitude_uv']} µV @ {features['b_wave_implicit_time_ms']} ms")
                     if 'phnr_amp_uv' in features and not np.isnan(features['phnr_amp_uv']):
                         print(f"  PhNR: {features['phnr_amp_uv']} µV")
-                    if 'oscillatory_potentials' in features:
-                        ops = features['oscillatory_potentials']
-                        print(f"  OPs: OP2={ops.get('OP2',0)} µV, OP3={ops.get('OP3',0)} µV, OP4={ops.get('OP4',0)} µV")
+                    if 'op2_amp_uv' in features and not np.isnan(features.get('op2_amp_uv', np.nan)):
+                        print(f"  OPs: OP2={features['op2_amp_uv']} µV, OP3={features.get('op3_amp_uv', 0)} µV, OP4={features.get('op4_amp_uv', 0)} µV")
 
                     # Calculate processing time
                     processing_time_ms = (time.perf_counter() - t_start) * 1000
