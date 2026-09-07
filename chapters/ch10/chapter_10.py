@@ -286,7 +286,7 @@ def normalise_amplitude(a_measured:     float,
     norm_std : float, optional
         Laboratory normative SD in µV (available for future use).
     electrode_type : str, optional
-        Electrode type key for Method 3 ISCEV reference lookup.
+        Electrode type key for the Method 3 project-defined reference lookup.
 
     Returns
     -------
