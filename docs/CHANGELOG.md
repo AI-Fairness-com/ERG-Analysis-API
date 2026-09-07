@@ -16,9 +16,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sensitivity validation on real pathology recordings
 - External validation with clinically annotated datasets
 - Contact Lens and Skin electrode normative reference data (pending validated age-stratified dataset)
-- Real-time streaming filter mode (sosfilt causal pathway — stub in v2.3.2, implementation in v2.5.0)
+- Real-time streaming filter mode (sosfilt causal pathway — still a `NotImplementedError` stub as of the 2026-09-07 rebuild; no target version committed)
 - REST API deployment for remote access
 - Mobile/tablet interface for point-of-care use
+
+---
+## 2026-09-07 — Class-to-function rebuild (PIPELINE_VERSION unchanged: 2.5.0)
+
+### Structural rebuild
+
+`ERGFeatureExtractor`, `ERGFilter`, and `ERGAudit` converted from classes to free functions in `api/erg_v2_5_0.py`, matching the canonical structure already used in `chapters/ch05/filtering/complete_filter_pipeline.py` and `chapters/ch09/feature_extraction_and_selection_pipeline.py`. Full call graph mapped first (all three were instantiated/called from exactly one place, `run_pipeline()`) — no other call sites were affected.
+
+### Feature set reverted
+
+The V2.5.0/V2.5.1 28-feature design (below) is superseded by this rebuild. The pipeline now matches ch09's canonical 11-feature set: a-wave amplitude/implicit time, b-wave amplitude/implicit time, b/a ratio, PhNR amplitude (LA 3.0 only), OP2/OP3/OP4 amplitude, OP-sum, OP2 implicit time (DA 3.0/DA 10.0 only) — up to 10 features on a single recording, since PhNR and OPs are protocol-exclusive and never co-occur. The nonlinear (Hurst Exponent, Approximate Entropy), DWT band-energy, b-wave derivative, and frequency-domain (peak frequency, spectral entropy, harmonic ratio) descriptors added in V2.5.0/V2.5.1 are no longer part of this pipeline. Confirmed via grep before removal that none of these were referenced by `ERGReportGenerator` or `ERGFHIRGenerator` — zero downstream ripple.
+
+### Protocol-string convention standardized
+
+`'DA 3'` → `'DA 3.0'`, `'DA 10'` → `'DA 10.0'`, `'LA 3'` → `'LA 3.0'`, applied file-wide (code, widget options/default, `ISCEV_PROTOCOL_CODES`, docstrings/comments) — matches the convention already used in Chapters 1, 4, and 7.
+
+### Fixed
+
+- **Flash-midpoint-correction threshold bug**: the correction trigger was comparing `flash_duration_ms` against `ISCEV_FLASH_MAX_DURATION_MS` (5.0ms, the ISCEV compliance *ceiling*) instead of a separate ~1.0ms *trigger* threshold (new `FLASH_MIDPOINT_CORRECTION_THRESHOLD_MS` constant). Any real 1–5ms LED flash was silently skipping a correction it needed. Verified via execution: correction now correctly applies at `flash_duration_ms=1.0`, did not before.
+- **`analyze_oscillatory_potentials`'s `np.trapz` call**: the file's own header comment claimed this was already fixed to `np.trapezoid`, but wasn't — likely the cause of the previously-logged "Runtime np.trapezoid error" from Tier 1. `np.trapezoid` only exists in NumPy 2.0+, and this repo's `requirements.txt` pins `numpy==1.26.0`, so a naive switch would have broken the deployed environment; fixed with `getattr(np, 'trapezoid', None) or np.trapz` instead, which works on both.
+- **OP extraction algorithm**: changed from a per-fixed-window (OP2:20–28ms/OP3:28–38ms/OP4:38–65ms) argmax approach to `find_peaks(prominence=5.0, min_dist=8ms)` swept across 0–100ms, assigning the first 3 valid peaks (≥25ms) sequentially to OP2/OP3/OP4 — matches ch09's canonical algorithm.
+- 8 stale hardcoded version strings (comments/prints/FHIR fields still reading "2.3.2"/"2.4.0") updated to 2.5.0; `apply_streaming_filter`'s stale "Scheduled for v2.4.0" promise (still unimplemented) removed rather than re-dated.
+
+### Not changed
+
+`ERGConfig`, `ERGReportGenerator`, `SpectrogramPCAReducer`, `ERGSHAPExplainer`, `ERGFHIRGenerator` remain untouched. Synthetic validation (41/41) still pending re-run against this feature set.
 
 ---
 ## [2.5.1] — 2026-09-02
