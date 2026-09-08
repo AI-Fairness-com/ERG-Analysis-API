@@ -150,7 +150,7 @@ def compute_welch_psd(sweeps_uv: np.ndarray,
     fs_hz : float
         Sampling rate in Hz.
     nperseg : int, optional
-        Welch segment length in samples. Defaults to min(256, n_samples // 4).
+        Welch segment length in samples. Defaults to min(256, n_samples).
 
     Returns
     -------
