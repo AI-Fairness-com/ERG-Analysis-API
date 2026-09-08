@@ -64,7 +64,7 @@ def detect_mains_interference(signal_uv, fs_hz, notch_hz=50.0, threshold_db=6.0)
 
 def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=False,
                                notch_hz=50.0, highpass_hz=0.3, lowpass_hz=300.0,
-                               filter_order=4, notch_q=30.0):
+                               filter_order=4, notch_q=50.0):
     """
     Apply the complete ERG filter pipeline in the correct sequence:
     1. Median filter (spike removal) - must come first
@@ -86,7 +86,7 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=False,
     highpass_hz : float - Butterworth high-pass cutoff (default 0.3, ISCEV target)
     lowpass_hz : float - Butterworth low-pass cutoff (default 300.0, ISCEV target)
     filter_order : int - Butterworth filter order (default 4)
-    notch_q : float - Notch filter quality factor (default 30.0)
+    notch_q : float - Notch filter quality factor (default 50.0)
     
     Returns:
     dict - Original recording with added keys:
@@ -258,7 +258,7 @@ if __name__ == "__main__":
         highpass_hz=0.3,
         lowpass_hz=300.0,
         filter_order=4,
-        notch_q=30.0
+        notch_q=50.0
     )
     
     # Print filter log
