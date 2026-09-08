@@ -203,6 +203,7 @@ def detect_electrode_movement(sweep_uv:  np.ndarray,
     max_step = float(np.max(steps)) if len(steps) else 0.0
     flagged  = max_step > step_uv
     step_idx = int(np.argmax(steps)) + win_n if flagged and len(steps) else None
+    step_t   = (step_idx / fs_hz * 1000) if step_idx is not None else None
 
     return {
         'flagged':      flagged,
