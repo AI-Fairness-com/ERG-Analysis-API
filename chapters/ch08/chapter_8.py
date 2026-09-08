@@ -53,7 +53,7 @@ from sklearn.model_selection import StratifiedKFold
 # Any change to these values invalidates previously generated spectrograms and
 # requires retraining the classifier from scratch.
 STFT_CONFIG = {
-    'window'   : 'hamming',    # empirically validated on project dataset (§8.2)
+    'window'   : 'hamming',    # Albasu et al. (2024) default; validate on project dataset via §8.3.3 before locking
     'nperseg'  : 64,           # 32 ms window at 2000 Hz
     'noverlap' : 56,           # 87.5% overlap → 4 ms hop size
     'fs'       : 2000.0,       # Hz; must match recording metadata
@@ -201,9 +201,11 @@ def validate_windows(X_sweeps: np.ndarray,
 
     Notes
     -----
-    On the project dataset (Baker et al., 2025, N=407), 'hamming' achieved
-    the highest macro AUC-ROC and is the locked default in STFT_CONFIG.
-    Re-run this function if the training set changes materially.
+    Based on Albasu et al. (2024) (binary ERG classification, N=122),
+    'hamming' produced the highest AUC among eight window functions
+    tested. This has not yet been re-validated on this project's own
+    dataset -- run this function against the project training set before
+    locking a window into STFT_CONFIG.
     """
     lb      = LabelBinarizer().fit(y_labels)
     cv      = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
