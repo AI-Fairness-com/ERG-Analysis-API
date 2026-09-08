@@ -53,8 +53,8 @@ from sklearn.cluster import KMeans
 
 def detect_blink(sweep_uv:          np.ndarray,
                  fs_hz:             float,
-                 amp_ceiling_uv:    float = 500.0,
-                 slope_uv_per_50ms: float = 100.0) -> dict:
+                 amp_ceiling_uv:    float = 1600.0,  # contact lens default; overridden per-electrode by screen_sweep()
+                 slope_uv_per_50ms: float = 1150.0) -> dict:  # contact lens default; overridden per-electrode by screen_sweep()
     """Flag a single ERG sweep as containing a blink artifact.
 
     Two independent criteria are evaluated:
