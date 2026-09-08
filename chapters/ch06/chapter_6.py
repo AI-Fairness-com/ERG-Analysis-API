@@ -199,11 +199,10 @@ def detect_electrode_movement(sweep_uv:  np.ndarray,
                 'step_time_ms': None, 'reason': 'none'}
 
     means    = np.mean(sliding_window_view(sweep_uv, win_n), axis=1)
-    steps    = np.abs(np.diff(means))
-    max_step = float(np.max(steps))
+    steps    = np.abs(means[win_n:] - means[:-win_n])
+    max_step = float(np.max(steps)) if len(steps) else 0.0
     flagged  = max_step > step_uv
-    step_idx = int(np.argmax(steps)) + win_n // 2 if flagged else None
-    step_t   = (step_idx / fs_hz * 1000) if step_idx is not None else None
+    step_idx = int(np.argmax(steps)) + win_n if flagged and len(steps) else None
 
     return {
         'flagged':      flagged,
