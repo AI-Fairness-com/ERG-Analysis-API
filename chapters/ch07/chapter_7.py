@@ -161,7 +161,7 @@ def compute_welch_psd(sweeps_uv: np.ndarray,
     """
     n_sw, n_samp = sweeps_uv.shape
     avg    = sweeps_uv.mean(axis=0)
-    seg    = nperseg or min(256, n_samp // 4)
+    seg    = nperseg or min(256, n_samp)
     freqs, psd = welch(avg, fs=fs_hz, nperseg=seg,
                        noverlap=seg // 2, window='hann')
 
