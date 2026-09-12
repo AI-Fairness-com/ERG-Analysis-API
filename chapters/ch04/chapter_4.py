@@ -27,6 +27,11 @@ Provides five reusable functions:
 All functions accept the standardised ERG dict produced by the Chapter 3
 loaders (keys: time_ms, amplitude_uv, fs_hz, electrode_type, patient_id).
 
+plot_erg_waveform() takes an explicit stim_onset_ms parameter (default 0.0)
+so it works correctly whether stimulus onset is at t = 0 (most synthetic
+examples in this chapter) or at a later offset, as in Chapter 3's own
+sample data (stimulus at t = 100 ms).
+
 Repository : https://github.com/AI-Fairness-com/ERG-Analysis-API
 Author     : Hamid
 Licence    : See repo root LICENSE
@@ -37,6 +42,7 @@ Licence    : See repo root LICENSE
 #   !pip install mne scipy plotly -q
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.patches import RegularPolygon
@@ -47,6 +53,27 @@ import plotly.graph_objects as go
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 0. Chapter 3 CSV loader
+# ══════════════════════════════════════════════════════════════════════════════
+
+def load_recording_from_csv(csv_path: str) -> dict:
+    """Load a Chapter 3 standardized ERG CSV into the dict shape every
+    function in this module expects (time_ms, amplitude_uv, fs_hz,
+    electrode_type, patient_id)."""
+    df = pd.read_csv(csv_path)
+    t = df['time_ms'].values
+    fs = 1000 / (t[1] - t[0])
+    return {
+        'time_ms': t,
+        'amplitude_uv': df['amplitude_uV'].values,
+        'fs_hz': fs,
+        'electrode_type': df['electrode_type'].iloc[0],
+        'patient_id': df['patient_id'].iloc[0],
+        'protocol': df['protocol'].iloc[0],
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # 1. Annotated ERG waveform
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -54,6 +81,7 @@ def plot_erg_waveform(recording: dict,
                      norms:     dict  = None,
                      protocol:  str   = 'DA 3.0',
                      show_ops:  bool  = True,
+                     stim_onset_ms: float = 0.0,
                      title:     str   = None) -> plt.Figure:
     """Produce a fully annotated ERG waveform figure (ISCEV 2022 conventions).
 
@@ -68,6 +96,11 @@ def plot_erg_waveform(recording: dict,
         ISCEV protocol label for the figure title.
     show_ops : bool
         When True, adds a second panel with the 75–300 Hz OP-filtered trace.
+    stim_onset_ms : float
+        Time (ms) of stimulus onset within the recording. Defaults to 0.0
+        (stimulus at the start of the array). Chapter 3's own sample data
+        places stimulus onset 100 ms into the recording, so that data must
+        be loaded with stim_onset_ms=100.
     title : str, optional
         Override the auto-generated figure title.
 
@@ -80,13 +113,13 @@ def plot_erg_waveform(recording: dict,
     fs  = recording['fs_hz']
     elc = recording.get('electrode_type', 'unknown')
 
-    # Stimulus onset sample (closest sample to t = 0 ms).
-    s0 = int(np.argmin(np.abs(t)))
+    # Stimulus onset sample (closest sample to t = stim_onset_ms).
+    s0 = int(np.argmin(np.abs(t - stim_onset_ms)))
 
     # a-wave trough: first minimum in the 5–40 ms post-stimulus window.
     post_t   = t[s0:]
     post_amp = amp[s0:]
-    a_win    = (post_t >= 5) & (post_t <= 40)
+    a_win    = (post_t >= stim_onset_ms + 5) & (post_t <= stim_onset_ms + 40)
     if a_win.any():
         a_local = int(np.argmin(post_amp[a_win]))
         a_gi    = s0 + int(np.where(a_win)[0][0]) + a_local
@@ -98,8 +131,9 @@ def plot_erg_waveform(recording: dict,
 
     a_amp_uv  = amp[a_gi]               # baseline-to-trough (ISCEV)
     b_amp_uv  = amp[b_gi] - amp[a_gi]   # trough-to-peak (ISCEV)
-    a_time_ms = t[a_gi]
-    b_time_ms = t[b_gi]
+    # Implicit times are always reported relative to stimulus onset (ISCEV convention).
+    a_time_ms = t[a_gi] - stim_onset_ms
+    b_time_ms = t[b_gi] - stim_onset_ms
 
     n = 2 if show_ops else 1
     fig, axes = plt.subplots(
@@ -117,20 +151,20 @@ def plot_erg_waveform(recording: dict,
     ax.plot(t, amp, color='#2E75B6', linewidth=1.8,
             label=f'{protocol} ERG  |  {elc} electrode')
     ax.axhline(0, color='gray', linewidth=0.7, linestyle=':')
-    ax.axvline(0, color='red',  linewidth=1.0, linestyle='--', alpha=0.7,
-               label='Stimulus onset (t = 0 ms)')
+    ax.axvline(stim_onset_ms, color='red',  linewidth=1.0, linestyle='--', alpha=0.7,
+               label=f'Stimulus onset (t = {stim_onset_ms:.0f} ms)')
 
-    # a-wave: double-headed bracket from baseline to trough.
-    ax.annotate('', xy=(a_time_ms, amp[a_gi]), xytext=(a_time_ms, 0),
+    # a-wave: double-headed bracket from baseline to trough (plotted at its true x position).
+    ax.annotate('', xy=(t[a_gi], amp[a_gi]), xytext=(t[a_gi], 0),
                 arrowprops=dict(arrowstyle='<->', color='#C62828', lw=1.4))
-    ax.text(a_time_ms + 4, amp[a_gi] / 2,
+    ax.text(t[a_gi] + 4, amp[a_gi] / 2,
             f'a: {abs(a_amp_uv):.0f} µV\n@ {a_time_ms:.0f} ms',
             fontsize=8.5, color='#C62828', va='center')
 
     # b-wave: bracket from a-wave trough to b-wave peak (ISCEV trough-to-peak).
-    ax.annotate('', xy=(b_time_ms, amp[b_gi]), xytext=(b_time_ms, amp[a_gi]),
+    ax.annotate('', xy=(t[b_gi], amp[b_gi]), xytext=(t[b_gi], amp[a_gi]),
                 arrowprops=dict(arrowstyle='<->', color='#1F4E79', lw=1.4))
-    ax.text(b_time_ms + 4, (amp[b_gi] + amp[a_gi]) / 2,
+    ax.text(t[b_gi] + 4, (amp[b_gi] + amp[a_gi]) / 2,
             f'b: {b_amp_uv:.0f} µV\n@ {b_time_ms:.0f} ms',
             fontsize=8.5, color='#1F4E79', va='center')
 
@@ -575,6 +609,20 @@ if __name__ == '__main__':
     fig1 = plot_erg_waveform(recording, protocol='DA 3.0')
     fig1.savefig('ch4_fig1_waveform.png', dpi=150, bbox_inches='tight')
     print('Saved: ch4_fig1_waveform.png')
+
+    # 1b. Same function against a real Chapter 3 recording (stimulus at
+    # t = 100 ms, not t = 0 — this is what stim_onset_ms is for).
+    import subprocess
+    subprocess.run(['bash', '-c', 'mkdir -p data/samples'])
+    subprocess.run(['bash', '-c',
+        'curl -sL -o data/samples/normal_001_DA3.csv '
+        'https://raw.githubusercontent.com/AI-Fairness-com/ERG-Analysis-API/'
+        'main/data/samples/normal_001_DA3.csv'])
+    real_recording = load_recording_from_csv('data/samples/normal_001_DA3.csv')
+    fig1b = plot_erg_waveform(real_recording, protocol=real_recording['protocol'],
+                               stim_onset_ms=100)
+    fig1b.savefig('ch4_fig1b_waveform_real.png', dpi=150, bbox_inches='tight')
+    print('Saved: ch4_fig1b_waveform_real.png (real Chapter 3 data, stim_onset_ms=100)')
 
     # 2. STFT spectrogram
     fig2 = plot_erg_spectrogram(recording, protocol='DA 3.0')
