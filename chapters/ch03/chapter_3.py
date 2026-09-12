@@ -3,12 +3,10 @@
 Hands-On Electroretinography in the Age of AI
 Chapter 3 - Complete runnable script (EDF reading + CSV walkthrough)
 
-Before running: upload two files to this Colab session (folder icon,
-left sidebar -> upload arrow), dropped at the top level:
-  - normal_001_DA3.csv
-  - patient_001.edf
-Both are available in this repository at data/samples/.
-Then Run all (Runtime menu) or Shift+Enter through each cell.
+This script fetches its own sample data (normal_001_DA3.csv and
+patient_001.edf) from the repository automatically — no manual
+download or upload needed. Just paste this file into a Colab cell
+and Run all (Runtime menu) or Shift+Enter through each cell.
 """
 
 # Reading an EDF file with MNE-Python
@@ -16,7 +14,8 @@ Then Run all (Runtime menu) or Shift+Enter through each cell.
 !pip install mne imbalanced-learn shap timm plotly ipywidgets
 import mne
 !mkdir -p data/samples
-!if [ -f normal_001_DA3.csv ]; then mv normal_001_DA3.csv data/samples/; fi
+!curl -sL -o data/samples/normal_001_DA3.csv https://raw.githubusercontent.com/AI-Fairness-com/ERG-Analysis-API/main/data/samples/normal_001_DA3.csv
+!curl -sL -o patient_001.edf https://raw.githubusercontent.com/AI-Fairness-com/ERG-Analysis-API/main/data/samples/patient_001.edf
 
 # Load the EDF file (verbose=False suppresses the MNE console output)
 raw = mne.io.read_raw_edf('patient_001.edf', preload=True, verbose=False)
