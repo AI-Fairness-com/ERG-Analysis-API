@@ -851,7 +851,6 @@ def extract_flicker_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray,
         return {'b_amp_uv': np.nan, 'b_implicit_ms': np.nan,
                 'flicker_transient_exclusion_violated': True}
 
-    baseline_mask = time_ms < 0
     # ISCEV 2022: "The amplitude of the LA 30 Hz ERG is measured from
     # trough to peak of a typical wave" -- trough-to-peak within each
     # cycle, NOT referenced to the pre-stimulus baseline (baseline
