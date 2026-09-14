@@ -965,7 +965,11 @@ def extract_oscillatory_potentials(op_signal_uv: np.ndarray, time_ms: np.ndarray
     if len(peaks) < 2:
         return nan_result
 
-    valid_peaks = [p for p in peaks if post_time[p] >= 25.0]
+    # OP1 excluded: first valid peak must be >= 20.29 ms post-stimulus, the
+    # statistical crossover between OP1 (17.02 +/- 1.56 ms) and OP2
+    # (23.90 +/- 1.78 ms) normal distributions (Arias-Alvarez et al., 2024)
+    valid_peaks = [p for p in peaks if post_time[p] >= 20.29]
+                                        
     if len(valid_peaks) < 2:
         return nan_result
 
