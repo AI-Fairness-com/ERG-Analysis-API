@@ -520,9 +520,12 @@ def extract_time_domain_features(broadband_uv:   np.ndarray,
                        flash_duration_ms=flash_duration_ms)
     features.update(a)
 
-    b = extract_b_wave(broadband_uv, time_ms, protocol,
-                       a_time_ms=a['a_implicit_ms'],
-                       flash_duration_ms=flash_duration_ms)
+    if protocol.strip().upper() == 'LA 30 HZ':
+        b = extract_flicker_b_wave(broadband_uv, time_ms)
+    else:
+        b = extract_b_wave(broadband_uv, time_ms, protocol,
+                           a_time_ms=a['a_implicit_ms'],
+                           flash_duration_ms=flash_duration_ms)
     features.update(b)
 
     features['ba_ratio'] = compute_ba_ratio(b['b_amp_uv'], a['a_amp_uv'])
