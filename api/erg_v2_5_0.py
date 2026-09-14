@@ -822,6 +822,70 @@ def extract_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray, protocol: str,
             'flash_midpoint_correction_ms': correction_ms}
 
 
+def extract_flicker_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray,
+                            flicker_hz: float = 30.0,
+                            n_cycles_average: int = 3,
+                            exclude_transient_ms: float = 100.0) -> Dict[str, Any]:
+    """Extract LA 30 Hz flicker b-wave amplitude and implicit time.
+
+    ISCEV 2022 requires the initial transient response at the onset of
+    a flickering stimulus to be excluded before amplitude is measured,
+    so that only the stable, steady-state cycles are used. This function
+    averages the last n_cycles_average complete flicker cycles in the
+    recording; the exclusion of the first exclude_transient_ms is
+    enforced as a hard guard (the function returns NaN rather than
+    silently including transient-adjacent cycles if the recording is
+    too short to honor it), not merely assumed from cycle position.
+
+    Averaging the last three cycles, with the first ~100 ms excluded,
+    is this project's own literature-consistent convention for how
+    many cycles to average once the transient is past ISCEV mandates
+    that the transient be excluded, but does not specify a duration or
+    cycle count.
+    """
+    cycle_ms = 1000.0 / flicker_hz
+    recording_end_ms = float(time_ms[-1])
+    window_start_ms = recording_end_ms - n_cycles_average * cycle_ms
+
+    if window_start_ms < exclude_transient_ms:
+        return {'b_amp_uv': np.nan, 'b_implicit_ms': np.nan,
+                'flicker_transient_exclusion_violated': True}
+
+    baseline_mask = time_ms < 0
+    reference_level = float(signal_uv[baseline_mask].mean()) if baseline_mask.any() else 0.0
+
+    cycle_amps, cycle_lat = [], []
+    for k in range(n_cycles_average):
+        c_start = window_start_ms + k * cycle_ms
+        c_end = c_start + cycle_ms
+        cmask = (time_ms >= c_start) & (time_ms < c_end)
+        if not cmask.any():
+            continue
+        c_time = time_ms[cmask]
+        c_amp = signal_uv[cmask]
+        local_idx = int(np.argmax(c_amp))
+        peak_amp = float(c_amp[local_idx]) - reference_level
+        peak_time_abs = float(c_time[local_idx])
+        latency = peak_time_abs % cycle_ms
+        cycle_amps.append(peak_amp)
+        cycle_lat.append(latency)
+
+    if len(cycle_amps) < n_cycles_average:
+        return {'b_amp_uv': np.nan, 'b_implicit_ms': np.nan,
+                'flicker_cycles_used': len(cycle_amps)}
+
+    b_amp_uv = float(np.mean(cycle_amps))
+    b_implicit_ms = float(np.mean(cycle_lat))
+
+    if b_amp_uv <= 0:
+        return {'b_amp_uv': np.nan, 'b_implicit_ms': np.nan}
+
+    return {'b_amp_uv': round(b_amp_uv, 1),
+            'b_implicit_ms': round(b_implicit_ms, 1),
+            'flicker_cycles_averaged': n_cycles_average,
+            'flicker_transient_excluded_ms': exclude_transient_ms}
+
+
 def compute_ba_ratio(b_amp_uv: float, a_amp_uv: float) -> float:
     """Compute the b/a amplitude ratio. NaN if either is missing or a_amp_uv is 0."""
     if np.isnan(b_amp_uv) or np.isnan(a_amp_uv) or a_amp_uv == 0:
@@ -1136,9 +1200,12 @@ def extract_all_features(signal: np.ndarray, fs_hz: float,
                        hardware_lowpass_hz=hardware_lowpass_hz,
                        flash_duration_ms=flash_duration_ms)
     features.update(a)
-    b = extract_b_wave(signal, time_ms, protocol,
-                       a_time_ms=a['a_implicit_ms'],
-                       flash_duration_ms=flash_duration_ms)
+    if protocol.strip().upper() == 'LA 30 HZ':
+        b = extract_flicker_b_wave(signal, time_ms)
+    else:
+        b = extract_b_wave(signal, time_ms, protocol,
+                           a_time_ms=a['a_implicit_ms'],
+                           flash_duration_ms=flash_duration_ms)
     features.update(b)
     features['ba_ratio'] = compute_ba_ratio(b['b_amp_uv'], a['a_amp_uv'])
 
