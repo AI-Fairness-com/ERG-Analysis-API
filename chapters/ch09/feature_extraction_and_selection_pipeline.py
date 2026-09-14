@@ -247,7 +247,7 @@ def extract_b_wave(signal_uv:  np.ndarray,
 def extract_flicker_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray,
                             flicker_hz: float = 30.0,
                             n_cycles_average: int = 3,
-                            exclude_transient_ms: float = 100.0) -> dict:
+                            exclude_transient_ms: float = 150.0) -> dict:
     """Extract LA 30 Hz flicker b-wave amplitude and implicit time.
 
     ISCEV 2022 requires the initial transient response at the onset of
