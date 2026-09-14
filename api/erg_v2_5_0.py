@@ -852,8 +852,11 @@ def extract_flicker_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray,
                 'flicker_transient_exclusion_violated': True}
 
     baseline_mask = time_ms < 0
-    reference_level = float(signal_uv[baseline_mask].mean()) if baseline_mask.any() else 0.0
-
+    # ISCEV 2022: "The amplitude of the LA 30 Hz ERG is measured from
+    # trough to peak of a typical wave" -- trough-to-peak within each
+    # cycle, NOT referenced to the pre-stimulus baseline (baseline
+    # referencing is wrong here: it's insensitive to genuine trough
+    # depth and spuriously sensitive to post-stimulus DC drift).
     cycle_amps, cycle_lat = [], []
     for k in range(n_cycles_average):
         c_start = window_start_ms + k * cycle_ms
@@ -863,11 +866,12 @@ def extract_flicker_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray,
             continue
         c_time = time_ms[cmask]
         c_amp = signal_uv[cmask]
-        local_idx = int(np.argmax(c_amp))
-        peak_amp = float(c_amp[local_idx]) - reference_level
-        peak_time_abs = float(c_time[local_idx])
+        peak_idx = int(np.argmax(c_amp))
+        trough_idx = int(np.argmin(c_amp))
+        cycle_amp = float(c_amp[peak_idx]) - float(c_amp[trough_idx])
+        peak_time_abs = float(c_time[peak_idx])
         latency = peak_time_abs % cycle_ms
-        cycle_amps.append(peak_amp)
+        cycle_amps.append(cycle_amp)
         cycle_lat.append(latency)
 
     if len(cycle_amps) < n_cycles_average:
