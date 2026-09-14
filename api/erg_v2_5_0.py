@@ -837,7 +837,7 @@ def extract_flicker_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray,
     silently including transient-adjacent cycles if the recording is
     too short to honor it), not merely assumed from cycle position.
 
-    Averaging the last three cycles, with the first ~100 ms excluded,
+    Averaging the last three cycles, with the first ~150 ms excluded,
     is this project's own literature-consistent convention for how
     many cycles to average once the transient is past ISCEV mandates
     that the transient be excluded, but does not specify a duration or
