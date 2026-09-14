@@ -262,7 +262,7 @@ def extract_flicker_b_wave(signal_uv: np.ndarray, time_ms: np.ndarray,
     Amplitude is measured trough-to-peak within each averaged cycle,
     per ISCEV 2022: "The amplitude of the LA 30 Hz ERG is measured from
     trough to peak of a typical wave." Averaging the last three cycles,
-    with the first ~100 ms excluded, is this project's own
+    with the first ~150 ms excluded, is this project's own
     literature-consistent convention for how many cycles to average
     once the transient is past -- ISCEV mandates that the transient be
     excluded, but does not specify a duration or cycle count.
