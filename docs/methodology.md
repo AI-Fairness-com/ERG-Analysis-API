@@ -134,7 +134,7 @@ Source: Chapter 8; Blueprint Section 4.5, Step 3
 | Sampling rate (fs) | 2000 Hz | Safety margin above Nyquist limit for 300 Hz OP band |
 | Frequency range | 0–300 Hz | ISCEV 2022 specified passband |
 | Output resolution | 224 × 224 pixels | Compatible with Vision Transformer (ViT) input |
-| Overlap (noverlap) | 58 samples | Resolves individual OP peaks (~7 ms apart, Arias-Alvarez et al., 2024) rather than merely detecting the OP burst; 90.625% overlap, 3 ms hop |
+
 
 ### STFT Mathematical Definition
 
