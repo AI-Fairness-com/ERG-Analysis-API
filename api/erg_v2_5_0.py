@@ -117,7 +117,7 @@ class ERGConfig:
     # ========================================================================
     STFT_WINDOW: str = 'hamming'           # Default for deep learning
     STFT_NPERSEG: int = 64                 # 32 ms at 2000 Hz
-    STFT_NOVERLAP: int = 56                # 87.5% overlap
+    STFT_NOVERLAP: int = 58                # 90.625% overlap, 3 ms hop
     STFT_FMIN_HZ: float = 0.0              # Full ISCEV passband
     STFT_FMAX_HZ: float = 300.0            # ISCEV upper cutoff
     STFT_OUTPUT_H: int = 224               # ViT input height
@@ -1903,7 +1903,7 @@ print("=" * 60)
 # ============================================================================
 # CELL 7: STFT SPECTROGRAM GENERATION (Chapter 8)
 # Generates normalized 2D spectrograms for deep learning classifiers
-# Default parameters: Hamming window, 64 samples, 56 overlap, 224x224 output
+# Default parameters: Hamming window, 64 samples, 58 overlap, 224x224 output
 # ============================================================================
 
 import numpy as np
@@ -1918,7 +1918,7 @@ from skimage.transform import resize
 STFT_CONFIG = {
     'window': 'hamming',      # Default for deep learning (-43 dB sidelobe)
     'nperseg': 64,            # 32 ms window at 2000 Hz
-    'noverlap': 56,           # 87.5% overlap, 4 ms hop
+    'noverlap': 58,           # 90.625% overlap, 3 ms hop
     'fs': 2000.0,             # Hz; must match recording metadata
     'fmin_hz': 0.0,           # Full ISCEV passband
     'fmax_hz': 300.0,         # ISCEV upper cutoff
@@ -2142,7 +2142,7 @@ def augment_spectrogram(S_norm: np.ndarray,
 # ============================================================================
 
 def validate_windows(X_sweeps: np.ndarray, y_labels: np.ndarray,
-                     nperseg: int = 64, noverlap: int = 56, fs: float = 2000.0) -> dict:
+                     nperseg: int = 64, noverlap: int = 58, fs: float = 2000.0) -> dict:
     """
     Evaluate five window functions on ERG training set and return AUC-ROC table.
 
@@ -2151,7 +2151,7 @@ def validate_windows(X_sweeps: np.ndarray, y_labels: np.ndarray,
     X_sweeps : (n_recordings, n_samples) filtered ERG array
     y_labels : (n_recordings,) integer class labels
     nperseg : STFT window size (default 64)
-    noverlap : STFT overlap (default 56)
+    noverlap : STFT overlap (default 58)
     fs : Sampling rate in Hz (default 2000.0)
 
     Returns
