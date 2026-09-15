@@ -202,7 +202,7 @@ def plot_erg_spectrogram(recording: dict,
                          fmin_hz:   float = 0.0,
                          fmax_hz:   float = 300.0,
                          nperseg:   int   = 64,
-                         noverlap:  int   = 56,
+                         noverlap:  int   = 58,
                          title:     str   = None) -> plt.Figure:
     """Compute and display an STFT spectrogram of an ERG recording.
 
@@ -229,9 +229,11 @@ def plot_erg_spectrogram(recording: dict,
     amp = recording['amplitude_uv']
     fs  = recording['fs_hz']
 
-    # STFT with Hann window to minimise spectral leakage.
+    # STFT with Hamming window, matching the window function Albasu et al.
+    # (2024) found to perform best across deep-learning architectures,
+    # including ViT Small.
     freqs, t_stft, Zxx = stft(amp, fs=fs, nperseg=nperseg,
-                               noverlap=noverlap, window='hann')
+                               noverlap=noverlap, window='hamming')
 
     # Align STFT time axis to stimulus onset at t = 0 ms.
     stim_idx = int(np.argmin(np.abs(t)))
