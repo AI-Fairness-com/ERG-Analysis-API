@@ -125,19 +125,19 @@ class ERGConfig:
     STFT_NORM: str = 'db_zscore'           # Z-score normalization
 
 
-    def get_electrode_snr_status(self, electrode_type: str, snr_db: float) -> Tuple[str, str]:
-        """Return (status, message) for given electrode type and SNR"""
+    def get_electrode_snr_status(self, electrode_type: str, snr: float) -> Tuple[str, str]:
+        """Return (status, message) for given electrode type and SNR (linear ratio, §2.2.1)"""
         electrode_key = electrode_type.lower().replace(' ', '_')
         if electrode_key not in self.ELECTRODE_SNR_THRESHOLDS:
             return "UNKNOWN", f"Unknown electrode type: {electrode_type}"
 
         thresholds = self.ELECTRODE_SNR_THRESHOLDS[electrode_key]
-        if snr_db >= thresholds['pass']:
-            return "PASS", f"SNR {snr_db:.1f} dB ≥ {thresholds['pass']} dB threshold"
-        elif snr_db >= thresholds['warning_min']:
-            return "WARNING", f"SNR {snr_db:.1f} dB is below PASS threshold ({thresholds['pass']} dB)"
+        if snr >= thresholds['pass']:
+            return "PASS", f"SNR {snr:.1f} ≥ {thresholds['pass']} threshold"
+        elif snr >= thresholds['warning_min']:
+            return "WARNING", f"SNR {snr:.1f} is below PASS threshold ({thresholds['pass']})"
         else:
-            return "FAIL", f"SNR {snr_db:.1f} dB is below WARNING threshold ({thresholds['warning_min']} dB)"
+            return "FAIL", f"SNR {snr:.1f} is below WARNING threshold ({thresholds['warning_min']})"
 
     def get_prestimulus_status(self, prestimulus_ms: float) -> Tuple[str, str]:
         """Return (status, message) for pre-stimulus baseline duration"""
@@ -302,22 +302,42 @@ def validate_iscev_requirements(fs_hz: float, prestimulus_ms: float, total_durat
     return results
 
 
-def calculate_snr(signal_uv: np.ndarray, fs_hz: float, prestimulus_samples: int = 0) -> float:
+def calculate_snr(signal_uv: np.ndarray, fs_hz: float, prestimulus_samples: int = 0,
+                   a_search_start_ms: float = 5.0, a_search_end_ms: float = 40.0,
+                   b_search_end_ms: float = 150.0, smooth_ms: float = 9.0) -> float:
     """
-    Calculate SNR using time-domain RMS per Chapter 2 §2.2.1.
-    SNR = 20 * log10(post-stimulus RMS / pre-stimulus RMS)
+    Calculate SNR per Chapter 2 §2.2.1: SNR = signal amplitude / noise
+    amplitude, where signal amplitude = (b-wave peak) - (a-wave trough)
+    and noise amplitude = RMS of the pre-stimulus baseline. Returns the
+    LINEAR ratio (not dB) -- the pipeline's Pass/Warning/Fail thresholds
+    (§2.2.2/§2.3) are defined on the linear scale.
 
-    fs_hz is used to guard against aliasing: if the derived sampling rate
-    from the pre-stimulus window is inconsistent with fs_hz the function
-    returns 0.0 rather than producing a meaningless SNR value.
+    The post-stimulus signal is smoothed with a short centered moving
+    average (smooth_ms, the same technique extract_phnr uses for noise
+    reduction) before the a-wave trough and b-wave peak are located.
+    Without this smoothing, a raw max/min over a window is a biased
+    estimator: noise inflates the apparent peak-to-trough amplitude, and
+    the bias is worst exactly at the Pass/Warning boundary. A 9 ms
+    window was chosen by simulation: it tracked the true linear SNR most
+    closely across a range of noise levels (linear SNR 2-21), while
+    wider windows under-estimate genuine peaks and narrower windows
+    retain more of the noise bias.
 
     Args:
         signal_uv: Full signal in microvolts
         fs_hz: Sampling rate in Hz
         prestimulus_samples: Number of samples before flash onset
+        a_search_start_ms / a_search_end_ms: post-stimulus window (ms)
+            searched for the a-wave trough (most negative point)
+        b_search_end_ms: upper bound (ms, post-stimulus) searched for
+            the b-wave peak (most positive point after the a-wave trough)
+        smooth_ms: centered moving-average window (ms) applied before
+            peak/trough search
 
     Returns:
-        SNR in decibels (dB), or 0.0 if insufficient pre-stimulus samples
+        Linear SNR ((b-wave peak - a-wave trough) / pre-stimulus RMS),
+        or 0.0 if insufficient pre-stimulus samples or no valid a-wave/
+        b-wave could be located
     """
     if prestimulus_samples < 5 or prestimulus_samples >= len(signal_uv):
         return 0.0
@@ -330,13 +350,44 @@ def calculate_snr(signal_uv: np.ndarray, fs_hz: float, prestimulus_samples: int 
 
     # Noise RMS from pre-stimulus baseline
     noise_rms = float(np.sqrt(np.mean(signal_uv[:prestimulus_samples] ** 2)))
+    if noise_rms <= 0:
+        return 0.0
 
-    # Signal RMS from post-stimulus window
-    signal_rms = float(np.sqrt(np.mean(signal_uv[prestimulus_samples:] ** 2)))
+    post_signal = signal_uv[prestimulus_samples:]
+    t_post_ms = np.arange(len(post_signal)) * 1000.0 / fs_hz
 
-    # SNR in dB — coefficient 20 per Chapter 2 §2.2.1 (amplitude ratio)
-    snr_linear = signal_rms / (noise_rms + 1e-12)
-    return float(20.0 * np.log10(snr_linear + 1e-12))
+    # Smooth before peak/trough search to suppress noise-driven extrema
+    from numpy.lib.stride_tricks import sliding_window_view
+    win = max(1, int(round(smooth_ms * fs_hz / 1000.0)))
+    if win % 2 == 0:
+        win += 1
+    if win > 1 and len(post_signal) >= win:
+        pad = win // 2
+        padded = np.pad(post_signal, (pad, pad), mode='edge')
+        smoothed = np.mean(sliding_window_view(padded, win), axis=1)
+    else:
+        smoothed = post_signal
+
+    # a-wave trough: most negative point in the early post-stimulus window
+    a_mask = (t_post_ms >= a_search_start_ms) & (t_post_ms <= a_search_end_ms)
+    if not a_mask.any():
+        return 0.0
+    a_indices = np.where(a_mask)[0]
+    a_local_idx = int(np.argmin(smoothed[a_mask]))
+    a_global_idx = int(a_indices[a_local_idx])
+    a_trough_uv = float(smoothed[a_global_idx])
+
+    # b-wave peak: most positive point after the a-wave trough
+    b_mask = (t_post_ms > t_post_ms[a_global_idx]) & (t_post_ms <= b_search_end_ms)
+    if not b_mask.any():
+        return 0.0
+    b_peak_uv = float(np.max(smoothed[b_mask]))
+
+    signal_amp_uv = b_peak_uv - a_trough_uv
+    if signal_amp_uv <= 0:
+        return 0.0
+
+    return float(signal_amp_uv / noise_rms)
 
 # ============================================================================
 # CELL 3: STAGE 1 - PRE-PROCESSING AUDIT (Fixed np.trapezoid)
@@ -372,8 +423,8 @@ def run_full_audit(signal_uv: np.ndarray, fs_hz: float,
             f"{config.ISCEV_FLASH_MAX_DURATION_MS} ms (Page 4, Col 2, Para 2)"
         )
         iscev_compliance['overall_compliant'] = False
-    snr_db = calculate_snr(signal_clean, fs_hz, prestimulus_samples)
-    snr_status, snr_msg = config.get_electrode_snr_status(electrode_type, snr_db)
+    snr_linear = calculate_snr(signal_clean, fs_hz, prestimulus_samples)
+    snr_status, snr_msg = config.get_electrode_snr_status(electrode_type, snr_linear)
 
     bandwidth_result = analyze_bandwidth(signal_clean, fs_hz, config)
     op_result = analyze_oscillatory_potentials(signal_clean, fs_hz, config)
@@ -387,7 +438,7 @@ def run_full_audit(signal_uv: np.ndarray, fs_hz: float,
     return {
         'prestimulus': {'status': prestimulus_status, 'message': prestimulus_msg, 'ms': prestimulus_ms},
         'iscev_compliance': iscev_compliance,
-        'snr': {'db': round(snr_db, 1), 'electrode_type': electrode_type, 'status': snr_status, 'message': snr_msg},
+        'snr': {'linear': round(snr_linear, 1), 'electrode_type': electrode_type, 'status': snr_status, 'message': snr_msg},
         'bandwidth': bandwidth_result,
         'oscillatory_potentials': op_result,
         'mains_interference': mains_result,
@@ -3209,7 +3260,7 @@ def run_pipeline(b):
 
                     print(f"✓ Audit complete: Grade {audit_result['quality']['grade']}")
                     print(f"  OP Available: {audit_result['oscillatory_potentials']['available']}")
-                    print(f"  SNR: {audit_result['snr']['db']} dB ({audit_result['snr']['status']})")
+                    print(f"  SNR: {audit_result['snr']['linear']} ({audit_result['snr']['status']})")
 
                     # Run filter pipeline
                     hardware_cutoff = audit_result['bandwidth'].get('hardware_cutoff_hz')
