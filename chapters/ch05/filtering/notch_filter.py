@@ -9,7 +9,7 @@ for removing 50 Hz (UK/Europe) or 60 Hz (North America) mains interference.
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import iirnotch, tf2sos, sosfiltfilt, freqz, welch
+from scipy.signal import iirnotch, tf2sos, sosfiltfilt, sosfreqz, welch
 
 def design_notch_filter(notch_hz, quality_factor, fs_hz):
     """
@@ -17,7 +17,7 @@ def design_notch_filter(notch_hz, quality_factor, fs_hz):
     
     Parameters:
     notch_hz : float - Mains frequency (50.0 or 60.0 Hz)
-    quality_factor : float - Higher Q = narrower notch (typical: 30-50)
+    quality_factor : float - Higher Q = narrower notch (project standard: Q=50)
     fs_hz : float - Sampling rate in Hz
     
     Returns:
@@ -27,7 +27,7 @@ def design_notch_filter(notch_hz, quality_factor, fs_hz):
     sos = tf2sos(b, a)
     return sos
 
-def apply_notch_filter(signal_uv, fs_hz, notch_hz=50.0, quality_factor=30.0):
+def apply_notch_filter(signal_uv, fs_hz, notch_hz=50.0, quality_factor=50.0):
     """
     Apply zero-phase notch filter to remove mains interference.
     
@@ -67,11 +67,11 @@ def detect_mains_interference(signal_uv, fs_hz, notch_hz=50.0, threshold_db=6.0)
     # Power at notch frequency
     p_notch = 10 * np.log10(psd[idx] + 1e-30)
     
-    # Average power in adjacent frequencies (±5 Hz, excluding the notch bin)
-    left_start = max(0, idx - 5)
-    right_end = min(len(psd), idx + 6)
-    shoulder = np.concatenate([psd[left_start:idx], psd[idx+1:right_end]])
-    p_shoulder = 10 * np.log10(np.mean(shoulder) + 1e-30)
+    # Average power in a +/-5 Hz shoulder (in Hz, not bins -- Welch's bin
+    # width shrinks with signal length, so a fixed bin count would span a
+    # much wider, less representative range for short epochs)
+    shoulder_mask = (np.abs(freqs - notch_hz) <= 5.0) & (freqs != freqs[idx])
+    p_shoulder = 10 * np.log10(np.mean(psd[shoulder_mask]) + 1e-30)
     
     return (p_notch - p_shoulder) > threshold_db
 
@@ -100,9 +100,9 @@ def plot_notch_response(sos, fs_hz, notch_hz, quality_factor):
 
 # Example usage
 if __name__ == "__main__":
-    FS_HZ = 1000
+    FS_HZ = 2000
     NOTCH_HZ = 50.0
-    Q = 30.0
+    Q = 50.0
     
     # Design and plot filter
     sos = design_notch_filter(NOTCH_HZ, Q, FS_HZ)
