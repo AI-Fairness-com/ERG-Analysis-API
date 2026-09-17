@@ -24,7 +24,9 @@ def apply_median_filter(signal_uv, kernel_samples=5):
     Parameters:
     signal_uv : ndarray - ERG signal in microvolts
     kernel_samples : int - Window size (must be odd). 
-                     Default 5 samples = 5 ms at 1000 Hz sampling.
+                     Default 5 samples = 2.5 ms at the project's locked
+                     2000 Hz sampling rate (5 ms at the ISCEV minimum of
+                     1000 Hz).
     
     Returns:
     filtered : ndarray - Median-filtered signal
@@ -115,7 +117,7 @@ def compare_kernel_sizes(signal_uv, fs_hz, kernels=[3, 5, 7, 11]):
 
 # Example usage
 if __name__ == "__main__":
-    FS_HZ = 1000
+    FS_HZ = 2000
     KERNEL = 5
     
     # Create test signal with spike
@@ -130,6 +132,7 @@ if __name__ == "__main__":
     # Optional: compare different kernel sizes
     # compare_kernel_sizes(noisy, FS_HZ, [3, 5, 7, 11])
     
+    kernel_ms = KERNEL / FS_HZ * 1000
     print(f"Median filter applied with kernel size: {KERNEL} samples")
-    print(f"At {FS_HZ} Hz sampling, this equals {KERNEL} ms window duration")
+    print(f"At {FS_HZ} Hz sampling, this equals {kernel_ms:.1f} ms window duration")
     print(f"Spike removed. Waveform preserved.")
