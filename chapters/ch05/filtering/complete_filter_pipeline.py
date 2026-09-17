@@ -254,6 +254,10 @@ if __name__ == "__main__":
         apply_median=True,
         apply_notch=False,  # ISCEV 2022 default (off); True requires explicit caller consent
         notch_hz=50.0,
+        highpass_hz=0.3,
+        lowpass_hz=300.0,
+        filter_order=4,
+        notch_q=50.0
     )
     
     # Print filter log
