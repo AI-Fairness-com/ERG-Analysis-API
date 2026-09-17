@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import butter, sosfiltfilt, sosfreqz
 
 # ISCEV Standard Parameters
-FS_HZ = 1000                    # Sampling rate (Hz)
+FS_HZ = 2000                    # Sampling rate (Hz) -- project's locked rate
 LOWCUT_HZ = 0.3                 # High-pass cutoff (preserves PhNR)
 HIGHCUT_HZ = 300                # Low-pass cutoff (preserves OPs)
 ORDER = 4                       # 4th-order Butterworth
