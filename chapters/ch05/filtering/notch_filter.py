@@ -79,7 +79,7 @@ def plot_notch_response(sos, fs_hz, notch_hz, quality_factor):
     """
     Plot the frequency response of the notch filter.
     """
-    w, h = freqz(sos, worN=5000, fs=fs_hz)
+    w, h = sosfreqz(sos, worN=5000, fs=fs_hz)
     mag_db = 20 * np.log10(np.abs(h) + 1e-12)
     
     fig, ax = plt.subplots(figsize=(10, 4))
