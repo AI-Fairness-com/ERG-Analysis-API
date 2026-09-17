@@ -52,10 +52,8 @@ def detect_mains_interference(signal_uv, fs_hz, notch_hz=50.0, threshold_db=6.0)
     freqs, psd = welch(signal_uv, fs=fs_hz, nperseg=min(1024, len(signal_uv)))
     idx = int(np.argmin(np.abs(freqs - notch_hz)))
     p_notch = 10 * np.log10(psd[idx] + 1e-30)
-    left_start = max(0, idx - 5)
-    right_end = min(len(psd), idx + 6)
-    shoulder = np.concatenate([psd[left_start:idx], psd[idx+1:right_end]])
-    p_shoulder = 10 * np.log10(np.mean(shoulder) + 1e-30)
+    shoulder_mask = (np.abs(freqs - notch_hz) <= 5.0) & (freqs != freqs[idx])
+    p_shoulder = 10 * np.log10(np.mean(psd[shoulder_mask]) + 1e-30)
     return (p_notch - p_shoulder) > threshold_db
 
 # ============================================================================
@@ -142,7 +140,8 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=False,
     # Step 1: Median filter (spike removal)
     if apply_median:
         sig = apply_median_filter(sig, kernel_samples=5)
-        log.append('Median filter applied: kernel=5 samples (5 ms at 1000 Hz)')
+        kernel_ms = 5 / fs * 1000
+        log.append(f'Median filter applied: kernel=5 samples ({kernel_ms:.1f} ms at {fs:.0f} Hz)')
 
     # Step 2: Notch filter (mains interference) -- OFF by default (ISCEV 2022)
     mains_detected = detect_mains_interference(sig, fs, notch_hz)
@@ -222,7 +221,7 @@ def plot_before_after(recording, fs_hz, protocol_name='ERG'):
 
 if __name__ == "__main__":
     # Create a synthetic test recording
-    FS_HZ = 1000
+    FS_HZ = 2000
     DURATION_MS = 250
     t = np.arange(0, DURATION_MS / 1000, 1/FS_HZ)
     
@@ -253,12 +252,8 @@ if __name__ == "__main__":
     filtered_recording = apply_erg_filter_pipeline(
         recording,
         apply_median=True,
-        apply_notch=None,  # Auto-detect
+        apply_notch=False,  # ISCEV 2022 default (off); True requires explicit caller consent
         notch_hz=50.0,
-        highpass_hz=0.3,
-        lowpass_hz=300.0,
-        filter_order=4,
-        notch_q=50.0
     )
     
     # Print filter log
