@@ -172,11 +172,26 @@ def detect_emg(sweep_uv:     np.ndarray,
 # 3. Electrode movement detection
 # ══════════════════════════════════════════════════════════════════════════════
 
-def detect_electrode_movement(sweep_uv:  np.ndarray,
-                               fs_hz:    float,
-                               step_uv:  float = 150.0,
-                               window_ms: float = 10.0) -> dict:
+def detect_electrode_movement(sweep_uv:      np.ndarray,
+                               fs_hz:        float,
+                               step_uv:      float = 385.0,
+                               smoothing_ms: float = 10.0,
+                               comparison_ms: float = 20.0) -> dict:
     """Detect abrupt step changes caused by electrode movement or contact loss.
+
+    The sweep is first smoothed with a short running-mean window
+    (smoothing_ms) to suppress sample-to-sample noise, then compared against
+    itself offset by a longer comparison window (comparison_ms) to detect a
+    sustained shift in the local mean. A genuine ERG response develops
+    gradually and is bounded by the a-wave's/b-wave's own amplitude and
+    timing; an electrode movement or contact-loss event produces a shift
+    that is both faster and larger than any transition a healthy waveform
+    can produce.
+
+    step_uv must be set per electrode type (contact_lens=1150, gold_foil=650,
+    dtl/dtl_fiber=385, skin=100 µV — see screen_sweep()'s movement_ceilings);
+    the default here (385 µV, the DTL/fiber value) applies only when the
+    function is called directly without an electrode-specific override.
 
     Parameters
     ----------
@@ -186,23 +201,31 @@ def detect_electrode_movement(sweep_uv:  np.ndarray,
         Sampling rate in Hz.
     step_uv : float
         Minimum change in windowed mean (µV) that constitutes a step event.
-    window_ms : float
-        Window length (ms) over which the local mean is computed.
+        Electrode-specific; see screen_sweep().
+    smoothing_ms : float
+        Window length (ms) over which the local baseline mean is smoothed.
+    comparison_ms : float
+        Window length (ms) separating the two means compared for a step.
 
     Returns
     -------
     dict with keys: flagged, max_step_uv, step_time_ms, reason
     """
-    win_n = max(2, int(window_ms * fs_hz / 1000))
-    if len(sweep_uv) < win_n * 2:
+    smooth_n = max(2, int(smoothing_ms * fs_hz / 1000))
+    comp_n   = max(1, int(comparison_ms * fs_hz / 1000))
+    if len(sweep_uv) < smooth_n + comp_n:
         return {'flagged': False, 'max_step_uv': 0.0,
                 'step_time_ms': None, 'reason': 'none'}
 
-    means    = np.mean(sliding_window_view(sweep_uv, win_n), axis=1)
-    steps    = np.abs(means[win_n:] - means[:-win_n])
+    means    = np.mean(sliding_window_view(sweep_uv, smooth_n), axis=1)
+    if len(means) <= comp_n:
+        return {'flagged': False, 'max_step_uv': 0.0,
+                'step_time_ms': None, 'reason': 'none'}
+
+    steps    = np.abs(means[comp_n:] - means[:-comp_n])
     max_step = float(np.max(steps)) if len(steps) else 0.0
     flagged  = max_step > step_uv
-    step_idx = int(np.argmax(steps)) + win_n if flagged and len(steps) else None
+    step_idx = int(np.argmax(steps)) + smooth_n + comp_n if flagged and len(steps) else None
     step_t   = (step_idx / fs_hz * 1000) if step_idx is not None else None
 
     return {
@@ -212,7 +235,6 @@ def detect_electrode_movement(sweep_uv:  np.ndarray,
         'reason':       (f'Step {max_step:.0f} µV > threshold {step_uv:.0f} µV'
                          f' at {step_t:.1f} ms') if flagged else 'none',
     }
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 4. Combined sweep-level screener
@@ -253,13 +275,23 @@ def screen_sweep(sweep_uv:   np.ndarray,
         'contact_lens': 1150, 'gold_foil': 670,
         'dtl': 420, 'dtl_fiber': 420, 'skin': 190,
     }
+    # Electrode movement / step-change thresholds (Ch.6 §6.2.3): ~72% of each
+    # electrode's blink-amplitude ceiling for contact lens / gold foil / DTL
+    # fiber, and a deliberately tighter 50% margin for skin (closest to the
+    # noise floor, so a missed contact-loss event is more costly there).
+    movement_ceilings = {
+        'contact_lens': 1150, 'gold_foil': 650,
+        'dtl': 385, 'dtl_fiber': 385, 'skin': 100,
+    }
     key = electrode.lower().replace(' ', '_')
     ceil = amp_ceilings.get(key, 540)
     slope_ceil = slope_ceilings.get(key, 420)
+    move_ceil = movement_ceilings.get(key, 385)
 
     b = detect_blink(sweep_uv, fs_hz, amp_ceiling_uv=ceil, slope_uv_per_50ms=slope_ceil)
     e = detect_emg(sweep_uv, fs_hz, pre_samples)
-    m = detect_electrode_movement(sweep_uv, fs_hz)
+    m = detect_electrode_movement(sweep_uv, fs_hz, step_uv=move_ceil,
+                                   smoothing_ms=10.0, comparison_ms=20.0)
 
     triggered = []
     if b['flagged']: triggered.append('BLINK')
@@ -553,8 +585,10 @@ if __name__ == '__main__':
     sweeps[9][emg_mask] += rng.normal(0, 80, emg_mask.sum())
 
     # Sweep 15: electrode movement step at 150 ms post-stimulus
+    # (450 µV, above the DTL/fiber movement threshold of 385 µV used by
+    # screen_all_sweeps(electrode='dtl') below — see §6.2.3)
     step_idx = int((pre_ms + 150) * fs / 1000)
-    sweeps[15][step_idx:] += 200
+    sweeps[15][step_idx:] += 450
 
     # ── 1. Screen all sweeps ──────────────────────────────────────────────
     result = screen_all_sweeps(sweeps, fs_hz=fs,
