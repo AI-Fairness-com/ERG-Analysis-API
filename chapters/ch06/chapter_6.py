@@ -399,12 +399,23 @@ def ica_artifact_removal(sweeps:            np.ndarray,
                           fs_hz:            float,
                           pre_samples:      int,
                           n_components:     int   = None,
-                          template_corr_thr: float = 0.3) -> dict:
+                          template_corr_thr: float = 0.3,
+                          variance_ratio_thr: float = 3.0) -> dict:
     """Apply FastICA to the sweep stack to separate ERG from artifact components.
 
     Each sweep is treated as one observation; each time-point as one variable.
-    Components whose mixing vector correlates weakly with a synthetic ERG
-    template are classified as artifact and zeroed before reconstruction.
+    A component is classified as artifact when BOTH of the following hold:
+      1. its mixing vector correlates weakly with a synthetic ERG template
+         (template_corr < template_corr_thr), and
+      2. the inter-sweep variance of its per-sweep reconstructed amplitude
+         exceeds variance_ratio_thr times the mean inter-sweep variance of
+         the components that pass the correlation criterion.
+    A component failing only one of the two conditions is kept as signal.
+    Note: when very few components pass the correlation criterion (e.g. one),
+    the variance baseline is estimated from that small a reference set and
+    can be unstable — in the limit of a single reference component, no other
+    component can ever be flagged, since the reference to compare against IS
+    that component's own variance.
 
     Requires at least 8 sweeps. For shorter recordings use screen_all_sweeps
     (sweep rejection) instead.
@@ -420,8 +431,12 @@ def ica_artifact_removal(sweeps:            np.ndarray,
     n_components : int, optional
         Number of ICA components (default: min(n_sweeps, 8)).
     template_corr_thr : float
-        Components with template correlation below this value are labelled
-        'artifact' and removed.
+        Components with template correlation below this value are candidates
+        for 'artifact' (see variance_ratio_thr for the second condition).
+    variance_ratio_thr : float
+        A low-correlation component is only labelled 'artifact' if its
+        per-sweep amplitude variance also exceeds this many times the mean
+        per-sweep amplitude variance of the high-correlation components.
 
     Returns
     -------
@@ -429,6 +444,8 @@ def ica_artifact_removal(sweeps:            np.ndarray,
       reconstructed_sweeps   – np.ndarray (n_sweeps, n_samples)
       component_labels       – list of 'signal' or 'artifact' per component
       template_corr          – np.ndarray of correlation scores
+      per_sweep_variance     – np.ndarray, inter-sweep variance of each
+                                component's per-sweep amplitude (uV^2)
       n_artifact_components  – int
     """
     n_sw, n_samp = sweeps.shape
@@ -453,7 +470,23 @@ def ica_artifact_removal(sweeps:            np.ndarray,
 
     corr   = np.array([np.abs(np.corrcoef(A[:, k], template)[0, 1])
                        for k in range(n_comp)])
-    labels = ['signal' if c >= template_corr_thr else 'artifact' for c in corr]
+
+    # Per-sweep amplitude of each component's own reconstructed physical
+    # contribution (uV): |activation| * peak-to-peak of its mixing vector.
+    # (S itself is unit-variance by construction in FastICA and cannot be
+    # used directly as an amplitude measure.)
+    per_sweep_amp = np.abs(S) * np.ptp(A, axis=0)[None, :]   # (n_sw, n_comp)
+    per_sweep_var = np.var(per_sweep_amp, axis=0)            # (n_comp,)
+
+    high_corr_mask = corr >= template_corr_thr
+    baseline_var = (float(np.mean(per_sweep_var[high_corr_mask]))
+                     if high_corr_mask.any() else float(np.mean(per_sweep_var)))
+
+    labels = []
+    for k in range(n_comp):
+        is_artifact = (corr[k] < template_corr_thr and
+                       per_sweep_var[k] > variance_ratio_thr * baseline_var)
+        labels.append('artifact' if is_artifact else 'signal')
 
     signal_mask   = np.array([l == 'signal' for l in labels])
     S_clean       = S.copy()
@@ -467,9 +500,9 @@ def ica_artifact_removal(sweeps:            np.ndarray,
         'reconstructed_sweeps':  reconstructed,
         'component_labels':      labels,
         'template_corr':         corr,
+        'per_sweep_variance':    per_sweep_var,
         'n_artifact_components': int((~signal_mask).sum()),
     }
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. EMD + k-means artifact removal (single sweep)
