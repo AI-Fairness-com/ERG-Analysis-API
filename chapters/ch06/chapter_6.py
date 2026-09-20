@@ -458,7 +458,10 @@ def ica_artifact_removal(sweeps:            np.ndarray,
     signal_mask   = np.array([l == 'signal' for l in labels])
     S_clean       = S.copy()
     S_clean[:, ~signal_mask] = 0
-    reconstructed = S_clean @ A.T
+    # FastICA subtracts and stores the per-sample mean (ica.mean_) before
+    # whitening; it must be added back or the reconstruction collapses to
+    # ~0 amplitude regardless of which components are kept.
+    reconstructed = S_clean @ A.T + ica.mean_
 
     return {
         'reconstructed_sweeps':  reconstructed,
