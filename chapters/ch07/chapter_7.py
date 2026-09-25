@@ -364,8 +364,8 @@ if __name__ == '__main__':
 
     def make_normal(rng_seed: int = 0) -> np.ndarray:
         sig  = np.zeros(N)
-        sig += -178 * np.exp(-((t_ms - (pre + 14)) ** 2) / (2 * 8  ** 2))
-        sig +=  280 * np.exp(-((t_ms - (pre + 53)) ** 2) / (2 * 18 ** 2))
+        sig += -178 * np.exp(-((t_ms - (pre + 15.5)) ** 2) / (2 * 8  ** 2))
+        sig +=  280 * np.exp(-((t_ms - (pre + 52)) ** 2) / (2 * 18 ** 2))
         for op_t, op_a in [(28, 18), (35, 22), (45, 16), (58, 10)]:
             sig += (op_a
                     * np.sin(2 * np.pi * 120 * (t_ms - (pre + op_t)) / 1000)
