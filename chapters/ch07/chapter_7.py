@@ -363,6 +363,14 @@ if __name__ == '__main__':
     t_ms    = np.linspace(0, epoch, N, endpoint=False)
 
     def make_normal(rng_seed: int = 0) -> np.ndarray:
+        # a-wave/b-wave targets are the DESIGN CENTER for a single representative
+        # trace (ISCEV 2022 / Baker et al. 2025 DA 3.0: a-wave 119-238uV/13.5-16ms,
+        # b-wave 191-404uV/45.5-58.5ms). With noise_sd=5 (shared with Ch2/5/6),
+        # a raw per-sweep argmin/argmax measurement can drift outside Baker's
+        # narrow a-wave timing window on individual noisy sweeps of the
+        # 20-sweep stack below (range(20)) -- this is expected sampling
+        # variability, not a per-sweep clinical claim. seed=0, the only sweep
+        # actually plotted (Fig 4 / CWT / DWT demo), is verified in-range.
         sig  = np.zeros(N)
         sig += -178 * np.exp(-((t_ms - (pre + 15.5)) ** 2) / (2 * 8  ** 2))
         sig +=  280 * np.exp(-((t_ms - (pre + 52)) ** 2) / (2 * 18 ** 2))
