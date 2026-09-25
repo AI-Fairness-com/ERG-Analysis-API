@@ -25,9 +25,9 @@ Implements three complementary frequency-domain analyses:
 
 DWT level-to-frequency mapping at fs = 2000 Hz (db4, 6-level):
   D1  500–1000 Hz  Electronic noise (excluded from feature vector)
-  D2   250–500 Hz    Above OP band (minimal clinical content)
-  D3   125–250 Hz    Upper OP band (OP1–OP2)
-  D4   62.5–125 Hz   Lower OP band (OP3–OP4) / transition
+  D2   250–500 Hz    Transition band above the OP band (minor OP energy only)
+  D3   125–250 Hz    Primary OP band (Dimopoulos et al. 2014, ~145–155 Hz carrier)
+  D4   62.5–125 Hz   Transition band toward b-wave range (minor OP energy only)
   D5   31.25–62.5 Hz b-wave ascending limb
   D6   15.6–31.25 Hz b-wave main body / a-wave onset
   A6   0–15.6 Hz   Slow components: baseline trend, PhNR, slow b-wave return
@@ -335,9 +335,14 @@ def compute_dwt(signal_uv: np.ndarray,
 
     feature_vector = np.concatenate([log_energies, stats])
 
+    # Explicit level labels, matching level_energies' and log_energies'
+    # actual order (pywt returns coarsest detail first, not D1..Dn)
+    level_names = ['A' + str(lvl)] + ['D' + str(l) for l in range(lvl, 0, -1)]
+
     return {
         'coeffs':         coeffs,
         'level_energies': detail_energies,
+        'level_names':    level_names,
         'approx_energy':  approx_energy,
         'feature_vector': feature_vector,
         'n_features':     len(feature_vector),
@@ -359,8 +364,8 @@ if __name__ == '__main__':
 
     def make_normal(rng_seed: int = 0) -> np.ndarray:
         sig  = np.zeros(N)
-        sig += -120 * np.exp(-((t_ms - (pre + 20)) ** 2) / (2 * 8  ** 2))
-        sig +=  280 * np.exp(-((t_ms - (pre + 60)) ** 2) / (2 * 18 ** 2))
+        sig += -178 * np.exp(-((t_ms - (pre + 14)) ** 2) / (2 * 8  ** 2))
+        sig +=  280 * np.exp(-((t_ms - (pre + 53)) ** 2) / (2 * 18 ** 2))
         for op_t, op_a in [(28, 18), (35, 22), (45, 16), (58, 10)]:
             sig += (op_a
                     * np.sin(2 * np.pi * 120 * (t_ms - (pre + op_t)) / 1000)
