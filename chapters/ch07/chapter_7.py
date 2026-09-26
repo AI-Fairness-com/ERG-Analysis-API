@@ -23,11 +23,11 @@ Implements three complementary frequency-domain analyses:
   plot_cwt          – Time-frequency scalogram plot
   compute_dwt       – Discrete Wavelet Transform decomposition + feature vector
 
-DWT level-to-frequency mapping at fs = 2000 Hz (db4, 6-level):
+DWT level-to-frequency mapping at fs = 2000 Hz (Haar, 6-level):
   D1  500–1000 Hz  Electronic noise (excluded from feature vector)
-  D2   250–500 Hz    Transition band above the OP band (minor OP energy only)
-  D3   125–250 Hz    Primary OP band (Dimopoulos et al. 2014, ~145–155 Hz carrier)
-  D4   62.5–125 Hz   Transition band toward b-wave range (minor OP energy only)
+  D2   250–500 Hz    Transition band above the OP band; minor, secondary OP energy share, but its own band energy is dominated by a-wave/b-wave edge leakage, not OPs
+  D3   125–250 Hz    Primary OP band (Dimopoulos et al. 2014, ~145–155 Hz carrier); largest single share of OP energy, though still under half the total given leakage into neighboring bands
+  D4   62.5–125 Hz   Transition band toward b-wave range; OP-energy share comparable to D2's, but its own band energy is likewise dominated by a-wave/b-wave edge leakage, not OPs
   D5   31.25–62.5 Hz b-wave ascending limb
   D6   15.6–31.25 Hz b-wave main body / a-wave onset
   A6   0–15.6 Hz   Slow components: baseline trend, PhNR, slow b-wave return
@@ -281,7 +281,7 @@ def plot_cwt(cwt_result: dict,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def compute_dwt(signal_uv: np.ndarray,
-                wavelet:   str = 'db4',
+                wavelet:   str = 'haar',
                 level:     int = None) -> dict:
     """Compute the DWT of a single ERG sweep and extract a compact feature vector.
 
@@ -295,10 +295,15 @@ def compute_dwt(signal_uv: np.ndarray,
     signal_uv : np.ndarray
         Single filtered ERG sweep in µV.
     wavelet : str
-        PyWavelets wavelet name. 'db4' (Daubechies 4) is the standard choice
-        for ERG because its smooth shape closely matches the ERG waveform
-        morphology, improving the concentration of signal energy into fewer
-        coefficients.
+        PyWavelets wavelet name. 'haar' is the standard choice for ERG:
+        Gauvin, Lachapelle, and colleagues used it consistently across their
+        published DWT-based ERG feature-extraction work (2014, 2015, 2016,
+        2017), and Haendel et al. (2026)'s six-wavelet comparison on real ERG
+        waveforms found Haar (and sym2) gave the strongest, most focal energy
+        localization, versus broader/weaker distributions for db4, sym4,
+        coif1, and sym8. Haar's abrupt step shape matches the ERG's brief,
+        sharp-edged components (the OP wavelets, the a-wave's steep descent)
+        better than smoother wavelets.
     level : int, optional
         Decomposition depth. Defaults to min(max_possible, 6) per §7.4.2.
         Do not exceed 6 at fs ≥ 1000 Hz: deeper levels only isolate progressively narrower low-frequency bands (level 7's approximation band is already 0–7.8 Hz) that carry no clinically distinct information beyond what A6 already captures.
@@ -433,8 +438,8 @@ if __name__ == '__main__':
     print('Saved: ch7_fig3_cwt_scalogram.png')
 
     # ── 4. DWT feature vector ─────────────────────────────────────────────
-    dwt_normal = compute_dwt(normal, wavelet='db4', level=6)
-    dwt_rp     = compute_dwt(rp,     wavelet='db4', level=6)
+    dwt_normal = compute_dwt(normal, wavelet='haar', level=6)
+    dwt_rp     = compute_dwt(rp,     wavelet='haar', level=6)
 
     print(f'\nDWT feature vector length: {dwt_normal["n_features"]} features')
     print(f'Normal  approx energy (A6): {dwt_normal["approx_energy"]:.2f}')
@@ -453,7 +458,7 @@ if __name__ == '__main__':
         axes4[i].axhline(0, color='gray', lw=0.5, ls=':')
         axes4[i].grid(True, alpha=0.2)
     axes4[-1].set_xlabel('Coefficient index', fontsize=10)
-    fig4.suptitle('DWT Decomposition – Normal DA 3.0 (db4, 6 levels)',
+    fig4.suptitle('DWT Decomposition – Normal DA 3.0 (Haar, 6 levels)',
                   fontsize=12, fontweight='bold')
     plt.tight_layout()
     fig4.savefig('ch7_fig4_dwt_decomposition.png', dpi=150, bbox_inches='tight')
