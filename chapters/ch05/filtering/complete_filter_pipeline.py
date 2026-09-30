@@ -121,7 +121,7 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=False,
 
     # Check hardware bandwidth constraint (low-pass side)
     hw_cutoff_ok = hw_lp >= lowpass_hz
-    effective_lp = min(lowpass_hz, hw_lp * 0.95)
+    effective_lp = lowpass_hz if hw_cutoff_ok else hw_lp * 0.95
 
     if not hw_cutoff_ok:
         log.append(f'WARNING: hardware cutoff {hw_lp} Hz < requested {lowpass_hz} Hz. '
@@ -130,7 +130,7 @@ def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=False,
 
     # Check hardware bandwidth constraint (high-pass side)
     hw_highpass_ok = hw_hp <= highpass_hz
-    effective_hp = max(highpass_hz, hw_hp * 1.05)
+    effective_hp = highpass_hz if hw_highpass_ok else hw_hp * 1.05
 
     if not hw_highpass_ok:
         log.append(f'WARNING: hardware high-pass {hw_hp} Hz > requested {highpass_hz} Hz. '
