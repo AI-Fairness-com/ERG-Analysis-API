@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile/tablet interface for point-of-care use
 
 ---
+## 2026-10-18 — Upload form updated to v2.5.0 (PIPELINE_VERSION unchanged: 2.5.0)
+
+### Changed
+
+- `api/templates/ERG_API_v2_4.html` renamed to `ERG_API_v2_5.html`; `api/erg_server.py` now loads `templates/ERG_API_v2_5.html`.
+- Version labels updated to v2.5.0 (page title, header tag, processing label, text report header).
+- Validation badge now reads "41/41 Synthetic (v2.4.0)". The 41/41 result applies to v2.4.0; re-validation on the 28-feature v2.5.0 set is pending.
+- Normative count corrected to 96 µ/σ values (5 protocols × 3 strata × 2 electrodes) in both places.
+- Oscillatory potential text and the text report now use the v2.5.0 flat keys (`op2_amp_uv`, `op3_amp_uv`, `op4_amp_uv`, `op_sum_uv`); OP1 is no longer listed.
+- "GDPR Compliant" badge replaced by "Anonymous IDs Only".
+- On localhost the form posts to the local server; elsewhere it posts to the hosted service.
+
+---
 ## 2026-09-07 — Class-to-function rebuild (PIPELINE_VERSION unchanged: 2.5.0)
 
 ### Structural rebuild
