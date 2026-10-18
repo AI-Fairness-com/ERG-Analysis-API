@@ -122,7 +122,7 @@ load_erg_csv        = pipeline.load_erg_csv
 
 # ── 2. Flask app ──────────────────────────────────────────────────────────────
 
-HTML_PATH = os.path.join(os.path.dirname(__file__), "ERG_API_v2_4.html")
+HTML_PATH = os.path.join(os.path.dirname(__file__), "templates", "ERG_API_v2_5.html")
 if not os.path.exists(HTML_PATH):
     HTML_PATH = os.path.join(os.path.dirname(__file__), "ERG_API_updated.html")
 
