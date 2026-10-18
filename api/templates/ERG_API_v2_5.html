@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ERG Analysis API v2.4.0 — Clinical Decision Support</title>
+  <title>ERG Analysis API v2.5.0 — Clinical Decision Support</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -1461,7 +1461,7 @@
         </div>
         <h1 class="hero-logo">
           ERG Analysis API
-          <span class="version">v2.4.0</span>
+          <span class="version">v2.5.0</span>
         </h1>
         <p class="hero-subtitle">
           Full-field electroretinography signal processing, Z-score classification,
@@ -1470,7 +1470,7 @@
         <div class="hero-badges">
           <span class="badge"><i class="fas fa-layer-group" aria-hidden="true"></i> 4-Layer Report</span>
           <span class="badge"><i class="fas fa-database" aria-hidden="true"></i> N=407 Baker 2025</span>
-          <span class="badge"><i class="fas fa-check-double" aria-hidden="true"></i> 13/13 Validated</span>
+          <span class="badge"><i class="fas fa-check-double" aria-hidden="true"></i> 41/41 Synthetic (v2.4.0)</span>
           <span class="badge"><i class="fas fa-shield-alt" aria-hidden="true"></i> GDPR Compliant</span>
         </div>
         <a href="#upload" class="hero-cta">
@@ -1821,7 +1821,7 @@
       </div>
       <div class="about-item">
         <div class="about-item-label">Age Strata</div>
-        <div class="about-item-value"><span class="mono">≤35y · 36–59y · ≥60y</span><br>48 validated µ/σ values · tolerance &lt;0.02</div>
+        <div class="about-item-value"><span class="mono">≤35y · 36–59y · ≥60y</span><br>96 validated µ/σ values · tolerance &lt;0.02</div>
       </div>
       <div class="about-item">
         <div class="about-item-label">Output</div>
@@ -2111,7 +2111,7 @@
             <div class="toggle-info">
               <div class="toggle-title">Extract Oscillatory Potentials (75–300 Hz)</div>
               <div class="toggle-desc" id="opDesc">
-                Extracts OP1–OP4 via high-pass filter. OP sum = OP2+OP3+OP4 per ISCEV 2022.
+                Extracts OP2–OP4 amplitudes and OP2 implicit time via high-pass filter. OP sum = OP2+OP3+OP4 per ISCEV 2022.
                 Recommended for DA 3 and DA 10 protocols. Requires adequate SNR (Grade B or above).
               </div>
             </div>
@@ -2177,7 +2177,7 @@
       </div>
       <div class="loading-title" id="loadingTitle">Processing ERG Signal…</div>
       <div style="font-size:0.85rem;color:rgba(255,255,255,0.45);margin-top:6px;">
-        Pipeline v2.4.0 · Baker 2025 normative framework
+        Pipeline v2.5.0 · Baker 2025 normative framework
       </div>
       <div class="loading-stages" id="loadingStages">
         <span class="stage-pill active" id="stage-audit">Signal Audit</span>
@@ -2313,7 +2313,7 @@
       <a href="https://ai-fairness.com/baker-2025-normative-data/" class="feature-tile">
         <div class="feature-tile-icon" aria-hidden="true"><i class="fas fa-database"></i></div>
         <div class="feature-tile-title">Baker 2025 Normative Data</div>
-        <div class="feature-tile-text">48 µ/σ values from N=407 healthy subjects. Age-stratified into three Baker strata. All values verified to &lt;0.02 µV/ms tolerance against source data.</div>
+        <div class="feature-tile-text">96 µ/σ values from N=407 healthy subjects. Age-stratified into three Baker strata. All values verified to &lt;0.02 µV/ms tolerance against source data.</div>
       </a>
       <a href="https://ai-fairness.com/fhir-r4-output/" class="feature-tile">
         <div class="feature-tile-icon" aria-hidden="true"><i class="fas fa-file-medical-alt"></i></div>
@@ -3100,10 +3100,10 @@
                ? (d.fhir_observation.subject.reference || 'UNKNOWN')
                : 'UNKNOWN';
     const proc = d.processing_ms != null ? d.processing_ms.toFixed(0)+' ms' : 'N/A';
-    const ops  = (ft.oscillatory_potentials || {});
+    const ops  = ft;
     const lines = [
       '====================================================================',
-      '  ERG ANALYSIS FULL REPORT  —  v2.4.0',
+      '  ERG ANALYSIS FULL REPORT  —  v2.5.0',
       '====================================================================',
       'Generated : ' + new Date().toLocaleString(),
       'Patient   : ' + pid,
@@ -3175,10 +3175,10 @@
 
     lines.push('');
     lines.push('── OSCILLATORY POTENTIALS ──────────────────────────────────────────────');
-    if (ops && ops.OP_sum_uv != null) {
-      lines.push('OP1 / OP2 / OP3 / OP4 : ' +
-        [ops.OP1, ops.OP2, ops.OP3, ops.OP4].map(v => v!=null ? Number(v).toFixed(1) : 'N/A').join(' / ') + ' µV');
-      lines.push('OP sum (OP2+OP3+OP4) : ' + (ops.OP_sum_uv!=null ? Number(ops.OP_sum_uv).toFixed(1)+' µV' : 'N/A'));
+    if (ops && ops.op_sum_uv != null) {
+      lines.push('OP2 / OP3 / OP4 : ' +
+        [ops.op2_amp_uv, ops.op3_amp_uv, ops.op4_amp_uv].map(v => v!=null ? Number(v).toFixed(1) : 'N/A').join(' / ') + ' µV');
+      lines.push('OP sum (OP2+OP3+OP4) : ' + (ops.op_sum_uv!=null ? Number(ops.op_sum_uv).toFixed(1)+' µV' : 'N/A'));
     } else {
       lines.push('Oscillatory potentials: not extracted for this protocol/quality');
     }
