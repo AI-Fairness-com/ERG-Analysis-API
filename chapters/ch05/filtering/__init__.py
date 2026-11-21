@@ -1,53 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Chapter 5: ERG-Specific Filtering
+Chapter 5: ERG filtering.
 
-This module contains all filter implementations for ERG signal processing:
-- Butterworth bandpass filter (ISCEV 0.3-300 Hz, 4th order)
-- Notch filter for power-line interference (50/60 Hz)
-- Median filter for spike removal
-- Complete filter pipeline combining all three
+The scripts in this folder hold the code of Chapter 5:
+  butterworth_bandpass.py      Butterworth band-pass filter (§5.3.1)
+  notch_filter.py              notch filter and mains detector
+  median_filter.py             median filter for spikes
+  complete_filter_pipeline.py  the full chapter script: all filters, the
+                               complete pipeline, and the streaming filter
+Each script runs on its own from the repository folder.
 """
-
-from .butterworth_bandpass import (
-    design_butterworth_bandpass,
-    apply_bandpass_filter,
-    plot_filter_response
-)
-
-from .notch_filter import (
-    design_notch_filter,
-    apply_notch_filter,
-    detect_mains_interference,
-    plot_notch_response
-)
-
-from .median_filter import (
-    apply_median_filter,
-    create_test_signal_with_spike,
-    visualize_median_filter_effect
-)
-
-from .complete_filter_pipeline import (
-    apply_erg_filter_pipeline,
-    plot_before_after
-)
-
-__all__ = [
-    # Butterworth
-    'design_butterworth_bandpass',
-    'apply_bandpass_filter',
-    'plot_filter_response',
-    # Notch
-    'design_notch_filter',
-    'apply_notch_filter',
-    'detect_mains_interference',
-    'plot_notch_response',
-    # Median
-    'apply_median_filter',
-    'create_test_signal_with_spike',
-    'visualize_median_filter_effect',
-    # Pipeline
-    'apply_erg_filter_pipeline',
-    'plot_before_after'
-]

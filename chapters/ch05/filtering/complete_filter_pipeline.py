@@ -1,276 +1,321 @@
-# -*- coding: utf-8 -*-
-"""
-Chapter 5: ERG-Specific Filtering
-Complete Filter Pipeline: Median + Notch + Butterworth Bandpass
-
-This script assembles all three filters into a single pipeline function
-that processes ERG recordings in the correct order and with proper
-parameter handling.
-"""
+# Chapter 5: complete ERG filter pipeline, the chapter's full script
+# The code of Chapter 5 in the order of the book: the Butterworth
+# band-pass filter, the notch filter and mains detector, the median
+# filter, the complete pipeline with its ISCEV checks, and the streaming
+# filter. Run from the repository folder:
+#     python chapters/ch05/filtering/complete_filter_pipeline.py
 
 import numpy as np
+import pandas as pd
+
+
+# load_recording_from_csv() is the loader of Chapter 4, §4.1.4, repeated
+# here so that this script runs on its own.
+def load_recording_from_csv(csv_path: str) -> dict:
+    """Read a standardized ERG CSV file (Chapter 3, §3.4.4) into a dictionary."""
+    df = pd.read_csv(csv_path)
+    t = df['time_ms'].values
+    return {
+        'time_ms': t,                                  # time points (ms)
+        'amplitude_uv': df['amplitude_uV'].values,     # voltages (µV)
+        'fs_hz': 1000 / (t[1] - t[0]),                 # sampling rate (Hz)
+        'electrode_type': df['electrode_type'].iloc[0],
+        'protocol': df['protocol'].iloc[0],
+    }
+
+
+# ── Butterworth band-pass filter, run forward and backward ─────────
+import numpy as np
 import matplotlib.pyplot as plt
-from scipy.signal import butter, sosfiltfilt, sosfreqz, iirnotch, tf2sos, medfilt, welch
+from scipy.signal import butter, sosfiltfilt, sosfreqz
 
-# ============================================================================
-# Individual Filter Functions (imported or redefined for completeness)
-# ============================================================================
+ISCEV_HIGHPASS_HZ = 0.3     # target high-pass corner (ISCEV: 0.3 Hz or lower)
+ISCEV_LOWPASS_HZ = 300.0    # target low-pass corner (ISCEV: 300 Hz or higher)
+FILTER_ORDER = 4            # this project's choice (§5.3.1)
 
-def apply_median_filter(signal_uv, kernel_samples=5):
-    """Remove spikes using median filter. Kernel must be odd."""
-    if kernel_samples % 2 == 0:
-        kernel_samples += 1
-    return medfilt(signal_uv, kernel_size=kernel_samples)
 
-def design_butterworth_bandpass(highpass_hz, lowpass_hz, fs_hz, order=4):
-    """Design Butterworth bandpass filter using SOS format."""
-    nyquist = fs_hz / 2.0
-    low = highpass_hz / nyquist
-    high = lowpass_hz / nyquist
-    if high >= 1.0:
-        raise ValueError(f'Low-pass cutoff {lowpass_hz} Hz exceeds Nyquist ({nyquist} Hz)')
-    sos = butter(order, [low, high], btype='bandpass', output='sos')
-    return sos
+def per_pass_corners(highpass_hz: float, lowpass_hz: float,
+                     order: int = FILTER_ORDER) -> tuple:
+    """Corners for each pass, so that two passes are 3 dB down at the targets.
 
-def apply_bandpass_filter(signal_uv, fs_hz, highpass_hz=0.3, lowpass_hz=300.0, order=4):
-    """Apply zero-phase Butterworth bandpass filter."""
+    Two passes double every loss in decibels, so each pass may lose only
+    1.5 dB at the target corners (§5.3.1, Fig. 5.1B).
+    """
+    c = (10 ** 0.15 - 1) ** (1 / (2 * order))     # about 0.895 for order 4
+    return highpass_hz * c, lowpass_hz / c
+
+
+def design_butterworth_bandpass(highpass_hz: float, lowpass_hz: float,
+                                fs_hz: float,
+                                order: int = FILTER_ORDER) -> np.ndarray:
+    """Design the band-pass filter as second-order sections (see box)."""
+    lo, hi = per_pass_corners(highpass_hz, lowpass_hz, order)
+    if hi >= fs_hz / 2:   # half the sampling rate, the Nyquist frequency
+        raise ValueError(f'Low-pass corner {hi:.0f} Hz must be below half the '
+                         f'sampling rate ({fs_hz / 2:.0f} Hz).')
+    return butter(order, [lo, hi], btype='bandpass', fs=fs_hz, output='sos')
+
+
+def apply_bandpass(signal_uv: np.ndarray, fs_hz: float,
+                   highpass_hz: float = ISCEV_HIGHPASS_HZ,
+                   lowpass_hz: float = ISCEV_LOWPASS_HZ,
+                   order: int = FILTER_ORDER) -> np.ndarray:
+    """Filter forward, then backward (sosfiltfilt): peaks keep their times."""
     sos = design_butterworth_bandpass(highpass_hz, lowpass_hz, fs_hz, order)
     return sosfiltfilt(sos, signal_uv)
 
-def design_notch_filter(notch_hz, quality_factor, fs_hz):
-    """Design IIR notch filter."""
+
+def plot_filter_response(sos: np.ndarray, fs_hz: float) -> tuple:
+    """Plot the two-pass gain of the filter and return its 3 dB band."""
+    f = np.logspace(-2, np.log10(fs_hz / 2 * 0.999), 20000)   # log-spaced, Hz
+    _, h = sosfreqz(sos, worN=f, fs=fs_hz)
+    gain_db = 2 * 20 * np.log10(np.abs(h) + 1e-12)            # two passes
+    inside = f[gain_db >= -3]
+    low, high = inside[0], inside[-1]
+
+    fig, ax = plt.subplots(figsize=(8, 3.5))
+    ax.semilogx(f, gain_db, color='#2E75B6', lw=1.8)
+    ax.axhline(-3, color='gray', ls=':', label='−3 dB')
+    for x in (low, high):
+        ax.axvline(x, color='red', ls='--', lw=1.0)
+    ax.set_ylim(-80, 5)
+    ax.set_xlabel('Frequency (Hz)')
+    ax.set_ylabel('Gain, two passes (dB)')
+    ax.set_title(f'3 dB band of the two passes: {low:.2f} to {high:.0f} Hz')
+    ax.legend()
+    plt.show()
+    return low, high
+
+
+# Example: the pipeline filter at this book's sampling rate of 2000 Hz.
+sos = design_butterworth_bandpass(ISCEV_HIGHPASS_HZ, ISCEV_LOWPASS_HZ,
+                                  fs_hz=2000)
+low, high = plot_filter_response(sos, fs_hz=2000)
+print(f'3 dB band of the two passes: {low:.2f} to {high:.0f} Hz')
+
+# Expected output:
+# 3 dB band of the two passes: 0.30 to 305 Hz
+
+# ── Notch filter and mains detector ─────────────────────────────────
+from scipy.signal import iirnotch, tf2sos, welch
+
+
+def apply_notch_filter(signal_uv: np.ndarray, fs_hz: float,
+                       notch_hz: float = 50.0,
+                       quality_factor: float = 50.0) -> np.ndarray:
+    """Remove a narrow band around notch_hz, forward and backward.
+
+    notch_hz       : 50.0 in the UK and Europe, 60.0 in North America.
+    quality_factor : Q; the notch is notch_hz / Q wide at -3 dB (one pass).
+    Off by default in the pipeline (ISCEV: notch filters should not be used).
+    """
     b, a = iirnotch(notch_hz, quality_factor, fs=fs_hz)
-    return tf2sos(b, a)
+    return sosfiltfilt(tf2sos(b, a), signal_uv)
 
-def apply_notch_filter(signal_uv, fs_hz, notch_hz=50.0, quality_factor=50.0):
-    """Apply zero-phase notch filter."""
-    sos = design_notch_filter(notch_hz, quality_factor, fs_hz)
-    return sosfiltfilt(sos, signal_uv)
 
-def detect_mains_interference(signal_uv, fs_hz, notch_hz=50.0, threshold_db=6.0):
-    """Detect if mains interference is present."""
+def detect_mains_interference(signal_uv: np.ndarray, fs_hz: float,
+                              notch_hz: float = 50.0,
+                              threshold_db: float = 6.0,
+                              shoulder_hz: float = 5.0) -> bool:
+    """Return True if the spectrum has a clear peak at the mains frequency.
+
+    The power at notch_hz is compared with the average power within
+    shoulder_hz on either side. A peak more than threshold_db above it
+    counts as interference (this project's threshold).
+    """
+    # welch() estimates the power of the signal at each frequency.
     freqs, psd = welch(signal_uv, fs=fs_hz, nperseg=min(1024, len(signal_uv)))
-    idx = int(np.argmin(np.abs(freqs - notch_hz)))
-    p_notch = 10 * np.log10(psd[idx] + 1e-30)
-    shoulder_mask = (np.abs(freqs - notch_hz) <= 5.0) & (freqs != freqs[idx])
-    p_shoulder = 10 * np.log10(np.mean(psd[shoulder_mask]) + 1e-30)
-    return (p_notch - p_shoulder) > threshold_db
+    k = int(np.argmin(np.abs(freqs - notch_hz)))
+    near = np.abs(freqs - notch_hz) <= shoulder_hz
+    side = near & (np.arange(freqs.size) != k)      # neighbors, not the peak
+    peak_db = 10 * np.log10(psd[k] + 1e-30)
+    side_db = 10 * np.log10(np.mean(psd[side]) + 1e-30)
+    return bool(peak_db - side_db > threshold_db)
 
-# ============================================================================
-# Complete Pipeline Function
-# ============================================================================
 
-def apply_erg_filter_pipeline(recording, apply_median=True, apply_notch=False,
-                               notch_hz=50.0, highpass_hz=0.3, lowpass_hz=300.0,
-                               filter_order=4, notch_q=50.0):
+# Example: a 2 s test signal with and without 20 µV of 50 Hz hum.
+fs = 2000.0
+t_s = np.arange(0, 2.0, 1 / fs)
+noise = np.random.default_rng(0).normal(0, 5, t_s.size)
+hum = 20 * np.sin(2 * np.pi * 50 * t_s)
+print('With hum:   ', detect_mains_interference(noise + hum, fs))
+print('Without hum:', detect_mains_interference(noise, fs))
+
+
+def amplitude_at(signal_uv, fs_hz, freq_hz):
+    """Amplitude (µV) of one frequency, from a 1 s middle segment."""
+    mid = signal_uv[len(signal_uv) // 4: len(signal_uv) // 4 + int(fs_hz)]
+    spectrum = np.fft.rfft(mid) * 2 / len(mid)       # 1 Hz per bin
+    return abs(spectrum[int(freq_hz)])
+
+
+cleaned = apply_notch_filter(noise + hum, fs)
+print(f'50 Hz amplitude before: {amplitude_at(noise + hum, fs, 50):.1f} µV, '
+      f'after: {amplitude_at(cleaned, fs, 50):.1f} µV')
+
+# Expected output:
+# With hum:    True
+# Without hum: False
+# 50 Hz amplitude before: 20.1 µV, after: 0.6 µV
+
+# ── Median filter for high-frequency spike suppression ──────────
+from scipy.signal import medfilt
+
+def apply_median_filter(signal_uv:np.ndarray, kernel_samples:int=5) -> np.ndarray:
     """
-    Apply the complete ERG filter pipeline in the correct sequence:
-    1. Median filter (spike removal) - must come first
-    2. Notch filter (mains interference) - OFF by default (ISCEV 2022: "Such
-       filters should not be used"); applied only if the caller explicitly
-       passes apply_notch=True, which is the deliberate action ISCEV's
-       guidance implies is needed before overriding the default.
-    3. Butterworth bandpass (ISCEV 0.3-300 Hz or hardware-limited)
-
-    Parameters:
-    recording : dict - Must contain 'amplitude_uv' and 'fs_hz' keys.
-                Optional: 'hardware_lowpass_hz', 'hardware_highpass_hz',
-                'prestimulus_uv' (used for the ISCEV pre-stimulus baseline
-                duration check below; omit to skip that check).
-    apply_median : bool - Whether to apply median filter
-    apply_notch : bool - Off by default per ISCEV 2022 guidance. Caller
-                  must explicitly pass True to apply a notch filter.
-    notch_hz : float - Mains frequency (50.0 or 60.0 Hz)
-    highpass_hz : float - Butterworth high-pass cutoff (default 0.3, ISCEV target)
-    lowpass_hz : float - Butterworth low-pass cutoff (default 300.0, ISCEV target)
-    filter_order : int - Butterworth filter order (default 4)
-    notch_q : float - Notch filter quality factor (default 50.0)
-    
-    Returns:
-    dict - Original recording with added keys:
-           'filtered_uv' : filtered signal array
-           'filter_log' : list of processing steps
-           'hw_cutoff_ok' : bool, whether hardware allows full low-pass band
-           'hw_highpass_ok' : bool, whether hardware allows full high-pass band
-           'iscev_compliance' : dict of compliance flags (sampling_rate_ok,
-                                 prestimulus_ok, bandwidth_ok, notch_applied)
-           'notch_applied' : bool, whether a notch filter was actually applied
-           'mains_detected' : bool, whether mains interference was detected
-                               (independent of whether notch was applied)
+    Remove high-amplitude short-duration spikes using a median filter.
+    kernel_samples : must be odd; 5 samples is the default, corresponding
+    to 2.5 ms at this book's sampling rate of 2000 Hz (5 ms at the
+    ISCEV minimum of 1000 Hz).
+    This filter is applied first in the pipeline (see §5.3.4),
+    before the bandpass and notch filters, to prevent spike-induced ringing.
     """
-    # Extract signal and parameters
-    sig = recording['amplitude_uv'].copy()
+    if kernel_samples % 2 == 0:
+        kernel_samples += 1  # scipy.signal.medfilt requires an odd kernel
+    return medfilt(signal_uv, kernel_size=kernel_samples)
+
+# ── Complete ERG filter pipeline (ISCEV settings: Robson et al., 2022) ──
+def apply_erg_filter_pipeline(recording: dict,
+                              stim_onset_ms: float = 0.0,
+                              apply_median: bool = True,
+                              apply_notch: bool = False,
+                              notch_hz: float = 50.0,
+                              hardware_highpass_hz: float = None,
+                              hardware_lowpass_hz: float = None,
+                              highpass_hz: float = ISCEV_HIGHPASS_HZ,
+                              lowpass_hz: float = ISCEV_LOWPASS_HZ) -> dict:
+    """Filter a recording in a fixed order and log every step.
+
+    Order: 1. median filter (on by default), 2. notch filter (off by
+    default; runs only if apply_notch=True), 3. Butterworth band-pass,
+    forward and backward. The hardware corners are optional (§5.1.3).
+    Returns a copy of the recording with filtered_uv and filter_log added.
+    """
+    sig = np.asarray(recording['amplitude_uv'], dtype=float).copy()
+    t = recording['time_ms']
     fs = recording['fs_hz']
-    hw_lp = recording.get('hardware_lowpass_hz', 300.0)
-    hw_hp = recording.get('hardware_highpass_hz', 0.3)
-
     log = []
 
-    # ISCEV 2022: digitize at >= 1 kHz per channel
-    iscev_sampling_compliant = fs >= 1000.0
-    if not iscev_sampling_compliant:
-        log.append(f'WARNING: Sampling rate {fs} Hz is below ISCEV minimum 1000 Hz. '
-                    'Implicit time measurements may be unreliable.')
+    # ISCEV checks: sampling rate and pre-flash baseline (Robson et al., 2022)
+    pre_ms = stim_onset_ms - t[0]
+    sampling_ok = bool(fs >= 1000.0)
+    prestimulus_ok = bool(pre_ms >= 20.0)
+    log.append(f'Sampling rate {fs:.0f} Hz (ISCEV: 1000 Hz or higher)')
+    log.append(f'Pre-flash baseline {pre_ms:.0f} ms (ISCEV: at least 20 ms)')
 
-    # ISCEV 2022: stored records need >= 20 ms pre-stimulus baseline
-    prestimulus_samples_needed = int(0.020 * fs)
-    has_prestimulus = len(recording.get('prestimulus_uv', [])) >= prestimulus_samples_needed
-    if not has_prestimulus:
-        log.append('WARNING: Pre-stimulus baseline < 20 ms (ISCEV minimum). '
-                    'Filter transient may affect early waveform features.')
+    # Hardware corners: the software band must lie inside them (§5.1.3)
+    if hardware_lowpass_hz is not None and hardware_lowpass_hz < lowpass_hz:
+        lowpass_hz = 0.95 * hardware_lowpass_hz
+        log.append(f'WARNING: hardware low-pass {hardware_lowpass_hz:.0f} Hz;'
+                   f' software corner set to {lowpass_hz:.0f} Hz')
+    if hardware_highpass_hz is not None and hardware_highpass_hz > highpass_hz:
+        highpass_hz = 1.05 * hardware_highpass_hz
+        log.append(f'WARNING: hardware high-pass {hardware_highpass_hz} Hz;'
+                   f' software corner set to {highpass_hz:.2f} Hz')
+    bandwidth_ok = bool(highpass_hz <= 0.3 and lowpass_hz >= 300.0)
 
-    # Check hardware bandwidth constraint (low-pass side)
-    hw_cutoff_ok = hw_lp >= lowpass_hz
-    effective_lp = lowpass_hz if hw_cutoff_ok else hw_lp * 0.95
-
-    if not hw_cutoff_ok:
-        log.append(f'WARNING: hardware cutoff {hw_lp} Hz < requested {lowpass_hz} Hz. '
-                   f'Software low-pass set to {effective_lp:.1f} Hz. '
-                   f'OP features may be unreliable.')
-
-    # Check hardware bandwidth constraint (high-pass side)
-    hw_highpass_ok = hw_hp <= highpass_hz
-    effective_hp = highpass_hz if hw_highpass_ok else hw_hp * 1.05
-
-    if not hw_highpass_ok:
-        log.append(f'WARNING: hardware high-pass {hw_hp} Hz > requested {highpass_hz} Hz. '
-                   f'Software high-pass set to {effective_hp:.1f} Hz. '
-                   f'PhNR features may be unreliable.')
-
-    # Step 1: Median filter (spike removal)
+    # Step 1: median filter (spike removal, §5.3.3)
     if apply_median:
+        before = sig.copy()
         sig = apply_median_filter(sig, kernel_samples=5)
-        kernel_ms = 5 / fs * 1000
-        log.append(f'Median filter applied: kernel=5 samples ({kernel_ms:.1f} ms at {fs:.0f} Hz)')
+        # A spike sample changed by more than 10 times the typical
+        # sample-to-sample noise (a robust estimate from the median).
+        d = np.diff(before)
+        noise_uv = 1.4826 * np.median(np.abs(d - np.median(d))) / np.sqrt(2)
+        n_spikes = int(np.sum(np.abs(before - sig) > 10 * noise_uv))
+        log.append(f'Median filter: 5 samples; {n_spikes} spike sample(s)'
+                   ' removed')
 
-    # Step 2: Notch filter (mains interference) -- OFF by default (ISCEV 2022)
+    # Step 2: notch filter, off by default (ISCEV: should not be used)
     mains_detected = detect_mains_interference(sig, fs, notch_hz)
     if mains_detected:
-        log.append(f'Detection: {notch_hz} Hz mains interference present. '
-                     'ISCEV 2022 advises against notch filters due to waveform distortion.')
-
-    notch_applied = False
+        log.append(f'Mains interference detected at {notch_hz:.0f} Hz')
     if apply_notch:
-        sig = apply_notch_filter(sig, fs, notch_hz, notch_q)
-        notch_applied = True
-        log.append(f'NOTCH APPLIED: {notch_hz} Hz, Q={notch_q} (caller overrode ISCEV default). '
-                     'Output waveform may be distorted.')
+        sig = apply_notch_filter(sig, fs, notch_hz)
+        log.append(f'NOTCH APPLIED at {notch_hz:.0f} Hz on request;'
+                   ' output flagged')
     else:
-        log.append('Notch filter: OFF (ISCEV 2022 compliant default)')
-        if mains_detected:
-            log.append(f'  -> {notch_hz} Hz interference remains in signal; '
-                         'consider post-acquisition removal if clinically justified.')
+        log.append('Notch filter: not applied')
 
-    # Step 3: Butterworth bandpass
-    sig = apply_bandpass_filter(sig, fs, effective_hp, effective_lp, filter_order)
-    log.append(f'Butterworth bandpass: order={filter_order}, {effective_hp:.1f}-{effective_lp:.1f} Hz '
-               f'(zero-phase, sosfiltfilt)')
+    # Step 3: Butterworth band-pass, forward and backward (§5.3.1)
+    sig = apply_bandpass(sig, fs, highpass_hz, lowpass_hz)
+    log.append(f'Band-pass: order 4, {highpass_hz:.2f} to {lowpass_hz:.0f}'
+               ' Hz, forward and backward')
 
-    # Return enriched recording
-    result = recording.copy()
-    result['filtered_uv'] = sig
-    result['filter_log'] = log
-    result['hw_cutoff_ok'] = hw_cutoff_ok
-    result['hw_highpass_ok'] = hw_highpass_ok
-    result['notch_applied'] = notch_applied
-    result['mains_detected'] = mains_detected
-    result['iscev_compliance'] = {
-        'sampling_rate_ok': iscev_sampling_compliant,
-        'prestimulus_ok': has_prestimulus,
-        'bandwidth_ok': hw_cutoff_ok and hw_highpass_ok,
-        'notch_applied': notch_applied,
-        'notch_iscev_compliant': not notch_applied,
-    }
-
+    result = dict(recording)
+    result.update({
+        'filtered_uv': sig,
+        'filter_log': log,
+        'notch_applied': apply_notch,
+        'mains_detected': mains_detected,
+        'iscev_checks': {'sampling_rate_ok': sampling_ok,
+                         'prestimulus_ok': prestimulus_ok,
+                         'bandwidth_ok': bandwidth_ok,
+                         'notch_not_used': not apply_notch},
+    })
     return result
 
 
-def plot_before_after(recording, fs_hz, protocol_name='ERG'):
-    """
-    Create a side-by-side comparison of raw and filtered waveforms.
-    
-    Parameters:
-    recording : dict - Must contain 'amplitude_uv' and 'filtered_uv'
-    fs_hz : float - Sampling rate
-    protocol_name : str - Name of the ERG protocol (for title)
-    """
-    t = np.arange(len(recording['amplitude_uv'])) / fs_hz
-    
-    fig, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
-    
-    # Raw signal
-    axes[0].plot(t, recording['amplitude_uv'], color='red', lw=0.8)
-    axes[0].set_ylabel('Amplitude (µV)')
-    axes[0].set_title(f'{protocol_name} - Raw Signal (Unfiltered)')
-    axes[0].grid(True, alpha=0.3)
-    
-    # Filtered signal
-    axes[1].plot(t, recording['filtered_uv'], color='#2E75B6', lw=0.8)
-    axes[1].set_xlabel('Time (ms)')
-    axes[1].set_ylabel('Amplitude (µV)')
-    axes[1].set_title(f'{protocol_name} - After Filter Pipeline')
-    axes[1].grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.show()
-    
+# Example: the Chapter 3 sample file (flash at 100 ms), loaded with
+# load_recording_from_csv() from §4.1.4. A one-sample spike and 20 µV of
+# 50 Hz hum are added, so that every step has something to do.
+recording = load_recording_from_csv('data/samples/normal_001_DA3.csv')
+t_s = recording['time_ms'] / 1000
+noisy = dict(recording)
+noisy['amplitude_uv'] = (recording['amplitude_uv']
+                         + 20 * np.sin(2 * np.pi * 50 * t_s))
+i_spike = int(np.argmin(np.abs(recording['time_ms'] - 300)))   # at 300 ms
+noisy['amplitude_uv'][i_spike] += 300
 
-# ============================================================================
-# Example Usage
-# ============================================================================
+filtered = apply_erg_filter_pipeline(noisy, stim_onset_ms=100)
+print('\n'.join(filtered['filter_log']))
+print(filtered['iscev_checks'])
 
-if __name__ == "__main__":
-    # Create a synthetic test recording
-    FS_HZ = 2000
-    DURATION_MS = 250
-    t = np.arange(0, DURATION_MS / 1000, 1/FS_HZ)
-    
-    # Simulated ERG waveform
-    clean_erg = 2.0 * np.exp(-((t - 0.025) / 0.008)**2) - \
-                 1.5 * np.exp(-((t - 0.015) / 0.005)**2)  # Simple a/b-wave shape
-    
-    # Add noise: 50 Hz hum + spike + broadband noise
-    noise_50hz = 0.3 * np.sin(2 * np.pi * 50 * t)
-    spike = np.zeros_like(t)
-    spike_idx = int(0.08 * FS_HZ)
-    if spike_idx < len(spike):
-        spike[spike_idx] = 3.0
-    broadband_noise = 0.1 * np.random.randn(len(t))
-    
-    noisy_signal = clean_erg + noise_50hz + spike + broadband_noise
-    
-    # Create recording dictionary (matching Chapter 3 format)
-    recording = {
-        'amplitude_uv': noisy_signal,
-        'fs_hz': FS_HZ,
-        'hardware_lowpass_hz': 300.0,
-        'patient_id': 'TEST001',
-        'protocol': 'DA 3.0'
-    }
-    
-    # Apply pipeline
-    filtered_recording = apply_erg_filter_pipeline(
-        recording,
-        apply_median=True,
-        apply_notch=False,  # ISCEV 2022 default (off); True requires explicit caller consent
-        notch_hz=50.0,
-        highpass_hz=0.3,
-        lowpass_hz=300.0,
-        filter_order=4,
-        notch_q=50.0
-    )
-    
-    # Print filter log
-    print("=" * 60)
-    print("FILTER PIPELINE LOG")
-    print("=" * 60)
-    for step in filtered_recording['filter_log']:
-        print(f"  {step}")
-    print("=" * 60)
-    
-    # Plot before/after
-    plot_before_after(filtered_recording, FS_HZ, 'DA 3.0 (Synthetic)')
-    
-    # Verify that filtered signal is same length as input
-    assert len(filtered_recording['filtered_uv']) == len(recording['amplitude_uv'])
-    print(f"\nVerification passed: filtered signal length = {len(filtered_recording['filtered_uv'])} samples")
+# Expected output:
+# Sampling rate 2000 Hz (ISCEV: 1000 Hz or higher)
+# Pre-flash baseline 100 ms (ISCEV: at least 20 ms)
+# Median filter: 5 samples; 1 spike sample(s) removed
+# Mains interference detected at 50 Hz
+# Notch filter: not applied
+# Band-pass: order 4, 0.30 to 300 Hz, forward and backward
+# {'sampling_rate_ok': True, 'prestimulus_ok': True, 'bandwidth_ok': True,
+#  'notch_not_used': True}
+
+# ── Streaming mode: causal filter that keeps its state ──────────────
+from scipy.signal import sosfilt
+
+
+class StreamingERGFilter:
+    """Causal (one-pass) band-pass filter for signals that arrive in chunks.
+
+    For stored recordings, use apply_erg_filter_pipeline() instead (§5.3.4).
+    """
+
+    def __init__(self, fs_hz: float, highpass_hz: float = 0.3,
+                 lowpass_hz: float = 300.0, order: int = FILTER_ORDER):
+        # One pass only, so the ISCEV corners are used directly (§5.4.2).
+        self.sos = butter(order, [highpass_hz, lowpass_hz], btype='bandpass',
+                          fs=fs_hz, output='sos')
+        self.reset()
+
+    def reset(self):
+        """Clear the filter state; call once at the start of a session."""
+        self.state = np.zeros((self.sos.shape[0], 2))
+
+    def process_chunk(self, chunk: np.ndarray) -> np.ndarray:
+        """Filter one chunk and keep the state for the next chunk."""
+        filtered, self.state = sosfilt(self.sos, chunk, zi=self.state)
+        return filtered
+
+
+# Example: filtering in chunks of 50 samples gives the same output as
+# filtering the whole recording at once, because the state is carried over.
+x = recording['amplitude_uv']
+stream = StreamingERGFilter(fs_hz=2000)
+chunks = [stream.process_chunk(x[i:i + 50]) for i in range(0, len(x), 50)]
+whole = sosfilt(stream.sos, x)
+print('Same as one pass over the whole recording:',
+      np.allclose(np.concatenate(chunks), whole))
+
+# Expected output:
+# Same as one pass over the whole recording: True

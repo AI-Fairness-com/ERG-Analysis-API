@@ -1,122 +1,68 @@
-# -*- coding: utf-8 -*-
-"""
-Chapter 5: ERG-Specific Filtering
-Notch Filter for Power-Line Interference Removal
-
-This script demonstrates the notch filter design and application
-for removing 50 Hz (UK/Europe) or 60 Hz (North America) mains interference.
-"""
+# Chapter 5: notch filter and mains interference detector
+# Run from the repository folder:
+#     python chapters/ch05/filtering/notch_filter.py
 
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.signal import iirnotch, tf2sos, sosfiltfilt, sosfreqz, welch
+from scipy.signal import sosfiltfilt
 
-def design_notch_filter(notch_hz, quality_factor, fs_hz):
-    """
-    Design an IIR notch filter for power-line interference removal.
-    
-    Parameters:
-    notch_hz : float - Mains frequency (50.0 or 60.0 Hz)
-    quality_factor : float - Higher Q = narrower notch (project standard: Q=50)
-    fs_hz : float - Sampling rate in Hz
-    
-    Returns:
-    sos : ndarray - Second-order sections for stable filtering
+# ── Notch filter and mains detector ─────────────────────────────────
+from scipy.signal import iirnotch, tf2sos, welch
+
+
+def apply_notch_filter(signal_uv: np.ndarray, fs_hz: float,
+                       notch_hz: float = 50.0,
+                       quality_factor: float = 50.0) -> np.ndarray:
+    """Remove a narrow band around notch_hz, forward and backward.
+
+    notch_hz       : 50.0 in the UK and Europe, 60.0 in North America.
+    quality_factor : Q; the notch is notch_hz / Q wide at -3 dB (one pass).
+    Off by default in the pipeline (ISCEV: notch filters should not be used).
     """
     b, a = iirnotch(notch_hz, quality_factor, fs=fs_hz)
-    sos = tf2sos(b, a)
-    return sos
+    return sosfiltfilt(tf2sos(b, a), signal_uv)
 
-def apply_notch_filter(signal_uv, fs_hz, notch_hz=50.0, quality_factor=50.0):
-    """
-    Apply zero-phase notch filter to remove mains interference.
-    
-    Parameters:
-    signal_uv : ndarray - ERG signal in microvolts
-    fs_hz : float - Sampling rate in Hz
-    notch_hz : float - Mains frequency (50.0 or 60.0 Hz)
-    quality_factor : float - Notch sharpness (higher = narrower)
-    
-    Returns:
-    filtered : ndarray - Notch-filtered signal
-    """
-    sos = design_notch_filter(notch_hz, quality_factor, fs_hz)
-    return sosfiltfilt(sos, signal_uv)
 
-def detect_mains_interference(signal_uv, fs_hz, notch_hz=50.0, threshold_db=6.0):
+def detect_mains_interference(signal_uv: np.ndarray, fs_hz: float,
+                              notch_hz: float = 50.0,
+                              threshold_db: float = 6.0,
+                              shoulder_hz: float = 5.0) -> bool:
+    """Return True if the spectrum has a clear peak at the mains frequency.
+
+    The power at notch_hz is compared with the average power within
+    shoulder_hz on either side. A peak more than threshold_db above it
+    counts as interference (this project's threshold).
     """
-    Detect whether mains interference is present in the signal.
-    
-    Uses Welch's method to compute power spectral density and compares
-    power at notch_frequency to surrounding noise floor.
-    
-    Parameters:
-    signal_uv : ndarray - ERG signal in microvolts
-    fs_hz : float - Sampling rate in Hz
-    notch_hz : float - Mains frequency to check (50.0 or 60.0 Hz)
-    threshold_db : float - Minimum peak-to-floor ratio to trigger detection
-    
-    Returns:
-    bool : True if mains interference detected, False otherwise
-    """
+    # welch() estimates the power of the signal at each frequency.
     freqs, psd = welch(signal_uv, fs=fs_hz, nperseg=min(1024, len(signal_uv)))
-    
-    # Find index of notch frequency
-    idx = int(np.argmin(np.abs(freqs - notch_hz)))
-    
-    # Power at notch frequency
-    p_notch = 10 * np.log10(psd[idx] + 1e-30)
-    
-    # Average power in a +/-5 Hz shoulder (in Hz, not bins -- Welch's bin
-    # width shrinks with signal length, so a fixed bin count would span a
-    # much wider, less representative range for short epochs)
-    shoulder_mask = (np.abs(freqs - notch_hz) <= 5.0) & (freqs != freqs[idx])
-    p_shoulder = 10 * np.log10(np.mean(psd[shoulder_mask]) + 1e-30)
-    
-    return (p_notch - p_shoulder) > threshold_db
+    k = int(np.argmin(np.abs(freqs - notch_hz)))
+    near = np.abs(freqs - notch_hz) <= shoulder_hz
+    side = near & (np.arange(freqs.size) != k)      # neighbors, not the peak
+    peak_db = 10 * np.log10(psd[k] + 1e-30)
+    side_db = 10 * np.log10(np.mean(psd[side]) + 1e-30)
+    return bool(peak_db - side_db > threshold_db)
 
-def plot_notch_response(sos, fs_hz, notch_hz, quality_factor):
-    """
-    Plot the frequency response of the notch filter.
-    """
-    w, h = sosfreqz(sos, worN=5000, fs=fs_hz)
-    mag_db = 20 * np.log10(np.abs(h) + 1e-12)
-    
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(w, mag_db, color='#2E75B6', lw=1.8)
-    ax.axvline(notch_hz, color='red', ls='--', lw=1.0, label=f'Notch at {notch_hz} Hz')
-    ax.axhline(-3, color='gray', ls=':', lw=0.8, label='-3 dB')
-    ax.axhline(-40, color='gray', ls=':', lw=0.5, alpha=0.5)
-    
-    ax.set_xlim(notch_hz - 15, notch_hz + 15)
-    ax.set_ylim(-60, 3)
-    ax.set_xlabel('Frequency (Hz)')
-    ax.set_ylabel('Magnitude (dB)')
-    ax.set_title(f'Notch Filter: {notch_hz} Hz, Q = {quality_factor}')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.show()
 
-# Example usage
-if __name__ == "__main__":
-    FS_HZ = 2000
-    NOTCH_HZ = 50.0
-    Q = 50.0
-    
-    # Design and plot filter
-    sos = design_notch_filter(NOTCH_HZ, Q, FS_HZ)
-    plot_notch_response(sos, FS_HZ, NOTCH_HZ, Q)
-    
-    # Create a test signal with 50 Hz interference
-    t = np.arange(0, 0.25, 1/FS_HZ)
-    clean_signal = np.sin(2 * np.pi * 10 * t)  # 10 Hz ERG-like signal
-    noise_50hz = 0.5 * np.sin(2 * np.pi * 50 * t)  # 50 Hz mains hum
-    noisy_signal = clean_signal + noise_50hz
-    
-    # Detect and filter
-    detected = detect_mains_interference(noisy_signal, FS_HZ, NOTCH_HZ)
-    filtered = apply_notch_filter(noisy_signal, FS_HZ, NOTCH_HZ, Q)
-    
-    print(f"Mains interference detected: {detected}")
-    print(f"Notch filter applied at {NOTCH_HZ} Hz with Q = {Q}")
+# Example: a 2 s test signal with and without 20 µV of 50 Hz hum.
+fs = 2000.0
+t_s = np.arange(0, 2.0, 1 / fs)
+noise = np.random.default_rng(0).normal(0, 5, t_s.size)
+hum = 20 * np.sin(2 * np.pi * 50 * t_s)
+print('With hum:   ', detect_mains_interference(noise + hum, fs))
+print('Without hum:', detect_mains_interference(noise, fs))
+
+
+def amplitude_at(signal_uv, fs_hz, freq_hz):
+    """Amplitude (µV) of one frequency, from a 1 s middle segment."""
+    mid = signal_uv[len(signal_uv) // 4: len(signal_uv) // 4 + int(fs_hz)]
+    spectrum = np.fft.rfft(mid) * 2 / len(mid)       # 1 Hz per bin
+    return abs(spectrum[int(freq_hz)])
+
+
+cleaned = apply_notch_filter(noise + hum, fs)
+print(f'50 Hz amplitude before: {amplitude_at(noise + hum, fs, 50):.1f} µV, '
+      f'after: {amplitude_at(cleaned, fs, 50):.1f} µV')
+
+# Expected output:
+# With hum:    True
+# Without hum: False
+# 50 Hz amplitude before: 20.1 µV, after: 0.6 µV
