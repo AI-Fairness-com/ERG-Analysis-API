@@ -955,6 +955,8 @@
     .tl-amber .tl-dot { background: var(--amber); }
     .tl-red { background: var(--red-bg); color: var(--red); }
     .tl-red .tl-dot { background: var(--red); }
+    .tl-atyp { background: #E8EEF7; color: #1D4E89; }
+    .tl-atyp .tl-dot { background: #1D4E89; }
     .tl-unavail { background: var(--unavail-bg); color: var(--unavail); }
     .tl-unavail .tl-dot { background: var(--unavail); }
     .tl-desc {
@@ -1111,6 +1113,7 @@
     .result-header.amber  { background: var(--amber-bg); border-bottom: 2px solid var(--amber); }
     .result-header.red    { background: var(--red-bg);   border-bottom: 2px solid var(--red); }
     .result-header.unavail{ background: var(--unavail-bg); border-bottom: 2px solid var(--unavail); }
+    .result-header.atyp   { background: #E8EEF7; border-bottom: 2px solid #1D4E89; }
 
     .result-tl-icon {
       font-size: 2.8rem;
@@ -1126,32 +1129,16 @@
     .result-tl-signal.amber  { color: var(--amber); }
     .result-tl-signal.red    { color: var(--red); }
     .result-tl-signal.unavail{ color: var(--unavail); }
+    .result-tl-signal.atyp   { color: #1D4E89; font-size: 1.4rem; }
     .result-tl-msg {
       font-size: 0.9rem;
       color: var(--slate);
       margin-top: 4px;
       max-width: 520px;
     }
-    .result-confidence {
-      margin-left: auto;
-      text-align: right;
-    }
-    .result-confidence-val {
-      font-size: 2rem;
-      font-weight: 800;
-      color: var(--ink);
-      font-family: 'DM Mono', monospace;
-    }
-    .result-confidence-label {
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--slate);
-    }
-
     .result-metrics {
       display: grid;
-      grid-template-columns: repeat(6, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       background: var(--white);
     }
     .result-metric {
@@ -1185,9 +1172,19 @@
       margin-top: 2px;
       color: var(--slate);
     }
-    .z-norm   { color: var(--green); }
-    .z-border { color: var(--amber); }
-    .z-abn    { color: var(--red); }
+    .zone-table td.zone-green { color: var(--green); }
+    .zone-table td.zone-amber { color: var(--amber); }
+    .zone-table td.zone-red   { color: var(--red); }
+    .zone-table td.zone-atyp  { color: #1D4E89; }
+    .zone-table td.zone-none  { color: var(--slate); }
+    .zone-table-wrap { padding: 14px 22px 6px; background: var(--white); overflow-x: auto; }
+    .zone-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    .zone-table th { text-align: left; font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
+                     letter-spacing: 0.08em; color: var(--slate); padding: 6px 8px; border-bottom: 1px solid var(--mist); }
+    .zone-table td { padding: 7px 8px; border-bottom: 1px solid var(--mist); color: var(--ink); }
+    .zone-table td.num { font-family: 'DM Mono', monospace; }
+    .zone-table td.zone { font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em; }
+    .zone-table-note { font-size: 0.75rem; color: var(--slate); padding: 6px 0 10px; }
 
     /* ── Waveform panel ────────────────────────────────────────────── */
     .waveform-panel {
@@ -1464,7 +1461,7 @@
           <span class="version">v2.5.0</span>
         </h1>
         <p class="hero-subtitle">
-          Full-field electroretinography signal processing, Z-score classification,
+          Full-field electroretinography signal processing, reference-limit Traffic Light,
           and four-layer clinical decision support. No code required.
         </p>
         <div class="hero-badges">
@@ -1825,7 +1822,7 @@
       </div>
       <div class="about-item">
         <div class="about-item-label">Output</div>
-        <div class="about-item-value">Traffic Light + Z-scores<br>FHIR R4 bundle · LOINC <span class="mono">79894-2</span></div>
+        <div class="about-item-value">Traffic Light against reference limits<br>FHIR R4 bundle · LOINC <span class="mono">79894-2</span></div>
       </div>
     </div>
 
@@ -1959,21 +1956,21 @@
               </div>
             </label>
             <label class="protocol-option">
-              <input type="radio" name="protocol" value="DA 3" checked aria-label="DA 3 maximal combined response"/>
+              <input type="radio" name="protocol" value="DA 3.0" checked aria-label="DA 3.0 maximal combined response"/>
               <div class="protocol-card">
                 <span class="protocol-card-code">DA 3</span>
                 <span class="protocol-card-name">Maximal combined response</span>
               </div>
             </label>
             <label class="protocol-option">
-              <input type="radio" name="protocol" value="DA 10" aria-label="DA 10 cone-rod maximal"/>
+              <input type="radio" name="protocol" value="DA 10.0" aria-label="DA 10.0 cone-rod maximal"/>
               <div class="protocol-card">
                 <span class="protocol-card-code">DA 10</span>
                 <span class="protocol-card-name">Cone-rod maximal</span>
               </div>
             </label>
             <label class="protocol-option">
-              <input type="radio" name="protocol" value="LA 3" aria-label="LA 3 photopic single-flash"/>
+              <input type="radio" name="protocol" value="LA 3.0" aria-label="LA 3.0 photopic single-flash"/>
               <div class="protocol-card">
                 <span class="protocol-card-code">LA 3</span>
                 <span class="protocol-card-name">Photopic single-flash</span>
@@ -2003,7 +2000,7 @@
                   <div class="electrode-card-name">Gold Foil</div>
                   <div class="electrode-card-sub">Corneal · Burian-Allen variant</div>
                 </div>
-                <span class="electrode-z-badge z-supported">Z-score ✓</span>
+                <span class="electrode-z-badge z-supported">Limits ✓</span>
               </div>
             </label>
             <label class="electrode-option">
@@ -2014,7 +2011,7 @@
                   <div class="electrode-card-name">DTL Fiber</div>
                   <div class="electrode-card-sub">Silver thread · Fornix placement</div>
                 </div>
-                <span class="electrode-z-badge z-supported">Z-score ✓</span>
+                <span class="electrode-z-badge z-supported">Limits ✓</span>
               </div>
             </label>
             <label class="electrode-option">
@@ -2042,7 +2039,7 @@
           </div>
           <div class="field-hint" style="margin-top:10px;">
             <i class="fas fa-info-circle" aria-hidden="true"></i>
-            Gold Foil and DTL produce Z-score traffic light classification. Contact Lens and Skin return raw feature values with UNAVAILABLE classification — no validated normative dataset exists for these electrode types within this framework (Baker 2025).
+            DTL Fiber values are compared with the Baker et al. (2025) silver thread reference limits; Gold Foil amplitudes are first converted to silver thread equivalents. Contact Lens and Skin return the measured values with UNAVAILABLE zones, because no reference limits are held for these electrodes.
           </div>
         </div>
 
@@ -2136,15 +2133,19 @@
                   <span class="tl-dot" aria-hidden="true"></span>
                   <span class="tl-label">RED</span>
                 </span>
-                <span class="tl tl-unavail" aria-label="Unavailable — no normative data for this electrode type">
+                <span class="tl tl-atyp" aria-label="Atypical direction — outside a limit, opposite to disease; check the recording">
+                  <span class="tl-dot" aria-hidden="true"></span>
+                  <span class="tl-label">ATYPICAL</span>
+                </span>
+                <span class="tl tl-unavail" aria-label="Unavailable — no reference limits for this electrode type">
                   <span class="tl-dot" aria-hidden="true"></span>
                   <span class="tl-label">UNAVAILABLE</span>
                 </span>
               </div>
             </div>
             <div class="tl-desc" style="max-width:220px;">
-              Based on Baker 2025 Z-score thresholds:<br>
-              <span class="mono" style="font-size:0.72rem;">|Z|≤2.0 · 2.0&lt;|Z|≤3.0 · |Z|&gt;3.0</span>
+              Baker et al. (2025) percentile reference limits:<br>
+              <span style="font-size:0.72rem;">GREEN within the limits · AMBER beyond a limit, within its 90% CI · RED beyond the CI · ATYPICAL opposite to disease</span>
             </div>
           </div>
         </div>
@@ -2183,7 +2184,7 @@
         <span class="stage-pill active" id="stage-audit">Signal Audit</span>
         <span class="stage-pill" id="stage-filter">Filtering</span>
         <span class="stage-pill" id="stage-features">Feature Extraction</span>
-        <span class="stage-pill" id="stage-zscore">Z-Score</span>
+        <span class="stage-pill" id="stage-zscore">Zones</span>
         <span class="stage-pill" id="stage-report">4-Layer Report</span>
         <span class="stage-pill" id="stage-fhir">FHIR Bundle</span>
       </div>
@@ -2193,40 +2194,20 @@
       <div class="result-header green" id="resultHeader">
         <div class="result-tl-icon" id="resultIcon" aria-hidden="true">🟢</div>
         <div class="result-tl-info">
-          <div class="result-tl-signal green" id="resultSignal" aria-label="Normal — within normal limits">GREEN</div>
-          <div class="result-tl-msg" id="resultMsg">All ERG parameters within normal limits. No immediate action required.</div>
-        </div>
-        <div class="result-confidence">
-          <div class="result-confidence-val" id="resultConf">95%</div>
-          <div class="result-confidence-label">Confidence</div>
+          <div class="result-tl-signal green" id="resultSignal" aria-label="Within the reference limits">GREEN</div>
+          <div class="result-tl-msg" id="resultMsg">All ERG parameters with published limits are within the reference limits.</div>
         </div>
       </div>
 
+      <div class="zone-table-wrap">
+        <table class="zone-table" aria-label="ERG parameters, reference limits and zones">
+          <thead><tr><th scope="col">Parameter</th><th scope="col">Value</th><th scope="col">Reference limits</th><th scope="col">Zone</th></tr></thead>
+          <tbody id="resZoneRows"><tr><td colspan="4">—</td></tr></tbody>
+        </table>
+        <div class="zone-table-note" id="resZoneNote"></div>
+      </div>
+
       <div class="result-metrics">
-        <div class="result-metric">
-          <div class="result-metric-label">a-wave</div>
-          <div class="result-metric-value" id="resAamp">—</div>
-          <div class="result-metric-unit">µV amplitude</div>
-          <div class="result-z" id="resAz">—</div>
-        </div>
-        <div class="result-metric">
-          <div class="result-metric-label">b-wave</div>
-          <div class="result-metric-value" id="resBamp">—</div>
-          <div class="result-metric-unit">µV amplitude</div>
-          <div class="result-z" id="resBz">—</div>
-        </div>
-        <div class="result-metric">
-          <div class="result-metric-label">Implicit Time</div>
-          <div class="result-metric-value" id="resBimp">—</div>
-          <div class="result-metric-unit">ms (b-wave)</div>
-          <div class="result-z" id="resBimpZ">—</div>
-        </div>
-        <div class="result-metric">
-          <div class="result-metric-label">b/a Ratio</div>
-          <div class="result-metric-value" id="resBA">—</div>
-          <div class="result-metric-unit">normal 1.8–3.5</div>
-          <div class="result-z" id="resBAz">—</div>
-        </div>
         <div class="result-metric">
           <div class="result-metric-label">Quality Grade</div>
           <div class="result-metric-value" id="resGrade">—</div>
@@ -2313,7 +2294,7 @@
       <a href="https://ai-fairness.com/baker-2025-normative-data/" class="feature-tile">
         <div class="feature-tile-icon" aria-hidden="true"><i class="fas fa-database"></i></div>
         <div class="feature-tile-title">Baker 2025 Normative Data</div>
-        <div class="feature-tile-text">96 µ/σ values from N=407 healthy subjects. Age-stratified into three Baker strata. All values verified to &lt;0.02 µV/ms tolerance against source data.</div>
+        <div class="feature-tile-text">Percentile reference limits with 90% confidence intervals from N=407 healthy subjects (Baker et al., 2025, Tables 4 and 5), in three age groups, for silver thread electrodes. Gold foil amplitudes are converted with the published model.</div>
       </a>
       <a href="https://ai-fairness.com/fhir-r4-output/" class="feature-tile">
         <div class="feature-tile-icon" aria-hidden="true"><i class="fas fa-file-medical-alt"></i></div>
@@ -2661,7 +2642,7 @@
     html += `<path d="${path}" fill="none" stroke="#4ecdc4" stroke-width="1.6" opacity="0.95"/>`;
 
     // Helper: sample the actual recorded signal value nearest to time t.
-    // Never use a derived/clinical distance (e.g. b_wave_amplitude_uv) as a
+    // Never use a derived/clinical distance (e.g. b_amp_uv) as a
     // y-coordinate — only the real trace value guarantees the dot sits on
     // the visible signal. See erg_report_generator.py _sample_at() — keep
     // both implementations identical.
@@ -2686,7 +2667,7 @@
     }
 
     // Annotate a-wave trough — dot placed at the REAL sampled trace value
-    const aImp = features.a_wave_implicit_time_ms;
+    const aImp = features.a_implicit_ms;
     let aX = null, aY = null, aRaw = null;
     if (aImp != null) {
       aRaw = sampleAt(t, preMs + aImp);
@@ -2702,10 +2683,10 @@
     }
 
     // Annotate b-wave peak — dot placed at the REAL sampled trace value,
-    // NEVER at ty(bAmp). bAmp (b_wave_amplitude_uv) is a peak-to-trough
+    // NEVER at ty(bAmp). bAmp (b_amp_uv) is a peak-to-trough
     // DISTANCE, not a height, and is shown only via the bracket below.
-    const bAmp = features.b_wave_amplitude_uv;
-    const bImp = features.b_wave_implicit_time_ms;
+    const bAmp = features.b_amp_uv;
+    const bImp = features.b_implicit_ms;
     let bX = null, bY = null, bRaw = null;
     if (bImp != null) {
       bRaw = sampleAt(t, preMs + bImp);
@@ -2802,72 +2783,62 @@
   function renderResult(data) {
     const tl = data.traffic_light || {};
     const sig = tl.signal || 'UNAVAILABLE';
-    const iconMap   = { GREEN:'🟢', AMBER:'🟡', RED:'🔴', UNAVAILABLE:'⬜' };
-    const colorMap  = { GREEN:'green', AMBER:'amber', RED:'red', UNAVAILABLE:'unavail' };
-    const confMap   = { GREEN:'95%', AMBER:'85%', RED:'90%', UNAVAILABLE:'N/A' };
-    const labelMap  = { 
-      GREEN: 'Normal — within normal limits', 
-      AMBER: 'Borderline — specialist review recommended', 
-      RED: 'Abnormal — urgent review required',
-      UNAVAILABLE: 'Not available — manual interpretation required'
+    const iconMap   = { GREEN:'🟢', AMBER:'🟡', RED:'🔴', 'ATYPICAL DIRECTION':'🔵', UNAVAILABLE:'⬜' };
+    const colorMap  = { GREEN:'green', AMBER:'amber', RED:'red', 'ATYPICAL DIRECTION':'atyp', UNAVAILABLE:'unavail' };
+    const labelMap  = {
+      GREEN: 'Within the reference limits',
+      AMBER: 'Outside a reference limit, within its 90% confidence interval — clinical review',
+      RED: 'Beyond the 90% confidence interval of a reference limit — prompt clinical review',
+      'ATYPICAL DIRECTION': 'Outside a limit in the direction opposite to disease — check the recording',
+      UNAVAILABLE: 'No reference limits for this electrode — manual interpretation required'
     };
 
     const header = document.getElementById('resultHeader');
     header.className = 'result-header ' + (colorMap[sig] || 'unavail');
-    
+
     const iconEl = document.getElementById('resultIcon');
     iconEl.textContent = iconMap[sig] || '⬜';
     iconEl.setAttribute('aria-hidden', 'true');
-    
+
     const sigEl = document.getElementById('resultSignal');
     sigEl.textContent = sig;
     sigEl.className = 'result-tl-signal ' + (colorMap[sig] || 'unavail');
     sigEl.setAttribute('aria-label', labelMap[sig] || '');
-    
+
     document.getElementById('resultMsg').textContent = tl.message || '';
-    document.getElementById('resultConf').textContent = tl.confidence ? Math.round(tl.confidence*100)+'%' : confMap[sig];
 
     const features = data.features || {};
-    const zscores  = data.z_scores  || {};
+    const zones    = data.parameter_zones || [];
     const audit    = (data.audit_results || {}).quality || {};
 
-    function zClass(z) {
-      if (z === null || z === undefined) return '';
-      const abs = Math.abs(z);
-      if (abs <= 2.0) return 'z-norm';
-      if (abs <= 3.0) return 'z-border';
-      return 'z-abn';
-    }
-    function zStr(key) {
-      const v = zscores[key];
-      if (v === undefined || v === null) return '—';
-      return 'Z = ' + (v >= 0 ? '+' : '') + v.toFixed(2);
-    }
-
-    document.getElementById('resAamp').textContent = features.a_wave_amplitude_uv != null
-      ? features.a_wave_amplitude_uv + ' µV' : '—';
-    const zaEl = document.getElementById('resAz');
-    zaEl.textContent = zStr('a_wave_amplitude');
-    zaEl.className = 'result-z ' + zClass(zscores['a_wave_amplitude']);
-
-    document.getElementById('resBamp').textContent = features.b_wave_amplitude_uv != null
-      ? features.b_wave_amplitude_uv + ' µV' : '—';
-    const zbEl = document.getElementById('resBz');
-    zbEl.textContent = zStr('b_wave_amplitude');
-    zbEl.className = 'result-z ' + zClass(zscores['b_wave_amplitude']);
-
-    document.getElementById('resBimp').textContent = features.b_wave_implicit_time_ms != null
-      ? features.b_wave_implicit_time_ms + ' ms' : '—';
-    const zbimpEl = document.getElementById('resBimpZ');
-    zbimpEl.textContent = zStr('b_wave_implicit_time');
-    zbimpEl.className = 'result-z ' + zClass(zscores['b_wave_implicit_time']);
-
-    const baVal = features.ba_ratio;
-    document.getElementById('resBA').textContent = (baVal != null && !isNaN(baVal))
-      ? baVal.toFixed(2) : '—';
-    const baZEl = document.getElementById('resBAz');
-    baZEl.textContent = zStr('ba_ratio');
-    baZEl.className = 'result-z ' + zClass(zscores['ba_ratio']);
+    // Parameter table: value, reference limits, zone (Chapter 10 §10.4)
+    const zoneClass = { GREEN:'zone-green', AMBER:'zone-amber', RED:'zone-red',
+                        'ATYPICAL DIRECTION':'zone-atyp' };
+    const esc = v => String(v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const fmt = (v, unit) => (v == null || isNaN(v)) ? '—' : (Number(v) + (unit ? ' ' + unit : ''));
+    const rowsEl = document.getElementById('resZoneRows');
+    let converted = false;
+    rowsEl.innerHTML = zones.length ? zones.map(r => {
+      const unit = r.unit || '';
+      let value = r.value == null ? 'Not measured' : fmt(r.value, unit);
+      if (r.converted_from_gold_foil && r.value_compared != null) {
+        value += ' (silver thread equiv. ' + fmt(r.value_compared, unit) + ')';
+        converted = true;
+      }
+      const limits = r.lower_limit != null
+        ? r.lower_limit + ' to ' + r.upper_limit + (unit ? ' ' + unit : '')
+        : 'None published';
+      const zone = r.zone === 'NOT ZONED' ? 'Not zoned'
+                 : r.zone === 'NOT MEASURED' ? '—' : (r.zone || '—');
+      const label = r.label ? (r.label.startsWith('b/a') ? r.label : r.label[0].toUpperCase() + r.label.slice(1)) : '';
+      return '<tr><td>' + esc(label) + '</td><td class="num">' + esc(value) + '</td><td class="num">' +
+             esc(limits) + '</td><td class="zone ' + (zoneClass[r.zone] || 'zone-none') + '">' + esc(zone) + '</td></tr>';
+    }).join('') : '<tr><td colspan="4">No parameters measured</td></tr>';
+    const stratum = { le35:'≤35 years', '36to59':'36–59 years', ge60:'≥60 years' }[data.age_stratum] || '';
+    document.getElementById('resZoneNote').textContent =
+      (stratum ? 'Baker et al. (2025) silver thread limits, ' + stratum + '. ' : '') +
+      (converted ? 'Gold foil amplitudes are converted to silver thread equivalents before comparison. ' : '') +
+      'The b/a ratio and the PhNR have no published limits and are not zoned.';
 
     document.getElementById('resGrade').textContent     = audit.grade || '—';
     document.getElementById('resGradeDesc').textContent = audit.description || '';
@@ -2879,7 +2850,7 @@
     const phnrRaw      = (data.features || {}).phnr_amp_uv;
     const phnrAtypical = (data.features || {}).phnr_polarity_atypical === true;
     const protocolUsed = (data.features || {}).protocol || '';
-    if (protocolUsed === 'LA 3') {
+    if (protocolUsed === 'LA 3.0') {
       if (phnrRaw != null && !isNaN(phnrRaw)) {
         // phnr_amp_uv is now signed at source (v2.4.1): negative = typical
         // below-baseline deflection, positive = atypical above-baseline.
@@ -3087,13 +3058,12 @@
     const d   = window._lastResult;
     const tl  = d.traffic_light  || {};
     const ft  = d.features       || {};
-    const zs  = d.z_scores       || {};
+    const zones = d.parameter_zones || [];
     const aud = d.audit_results  || {};
     const q   = aud.quality      || {};
     const snr = aud.snr          || {};
     const ts  = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
 
-    function zStr(v) { return (v==null) ? 'N/A' : (v>=0?'+':'')+Number(v).toFixed(2); }
     function val(v, unit) { return (v==null||isNaN(v)) ? 'N/A' : Number(v).toFixed(1)+' '+unit; }
 
     const pid  = (d.fhir_observation && d.fhir_observation.subject)
@@ -3112,16 +3082,20 @@
       '── LAYER 1: TRAFFIC LIGHT ──────────────────────────────────────────',
       'Signal    : ' + (tl.signal  || 'N/A'),
       'Message   : ' + (tl.message || 'N/A'),
-      'Confidence: ' + (tl.confidence!=null ? Math.round(tl.confidence*100)+'%' : 'N/A'),
       '',
       '── LAYER 2: CLINICAL SUMMARY ───────────────────────────────────────',
-      'A-wave amplitude : ' + val(ft.a_wave_amplitude_uv,'µV') + '  Z = ' + zStr(zs.a_wave_amplitude),
-      'B-wave amplitude : ' + val(ft.b_wave_amplitude_uv,'µV') + '  Z = ' + zStr(zs.b_wave_amplitude),
-      'B-wave impl. time: ' + val(ft.b_wave_implicit_time_ms,'ms') + '  Z = ' + zStr(zs.b_wave_implicit_time),
-      'B/A ratio        : ' + (ft.ba_ratio!=null&&!isNaN(ft.ba_ratio) ? Number(ft.ba_ratio).toFixed(2) : 'N/A') + '  Z = ' + zStr(zs.ba_ratio),
+      'Reference limits : Baker et al. (2025), silver thread, ' + ({ le35:'≤35y', '36to59':'36–59y', ge60:'≥60y' }[d.age_stratum] || 'N/A'),
+      ...zones.filter(r => r.parameter !== 'phnr_amp_uv').map(r => {
+        const unit = r.unit ? ' ' + r.unit : '';
+        let v = r.value == null ? 'Not measured' : r.value + unit;
+        if (r.converted_from_gold_foil && r.value_compared != null) v += ' (ST equiv. ' + r.value_compared + unit + ')';
+        const lim = r.lower_limit != null ? r.lower_limit + ' to ' + r.upper_limit + unit : 'none published';
+        const zone = r.zone === 'NOT ZONED' ? 'not zoned' : r.zone;
+        return (r.label + '                    ').slice(0, 21) + ': ' + v + '  [limits ' + lim + ']  ' + zone;
+      }),
       ...((() => {
         const proto = (ft.protocol || '');
-        if (proto !== 'LA 3') return [];
+        if (proto !== 'LA 3.0') return [];
         const pv = ft.phnr_amp_uv;
         const atypical = ft.phnr_polarity_atypical === true;
         // phnr_amp_uv is signed at source (v2.4.1): negative = typical
@@ -3131,7 +3105,7 @@
           const sign = pv > 0 ? '+' : '';
           pvStr = sign + Number(pv).toFixed(1) + ' µV';
         }
-        const lines = ['PhNR amplitude  : ' + pvStr + '  [LA 3 — ref. range under development]'];
+        const lines = ['PhNR amplitude       : ' + pvStr + '  [no published limits, not zoned]'];
         if (atypical) {
           lines.push('  *** DATA QUALITY WARNING: atypical positive polarity ***');
           lines.push('  PhNR is defined as a negative deflection in all published normative and');
@@ -3164,8 +3138,8 @@
     const elec = (d.audit_results||{}).snr ? (d.audit_results.snr.electrode_type||'') : '';
     if (elec === 'contact_lens' || elec === 'skin') {
       lines.push('');
-      lines.push('NOTE: Z-scores unavailable for ' + elec + ' electrode (Baker 2025 normative');
-      lines.push('      data covers Gold Foil and DTL only). Z = — is expected.');
+      lines.push('NOTE: Zones unavailable for the ' + elec + ' electrode. The Baker et al. (2025)');
+      lines.push('      reference limits cover DTL fiber, and gold foil after conversion.');
     }
 
     if ((iscev.warnings||[]).length) {
@@ -3231,7 +3205,7 @@
 
   document.querySelectorAll('input[name="protocol"]').forEach(r => {
     r.addEventListener('change', function() {
-      const opProtocols = ['DA 3', 'DA 10'];
+      const opProtocols = ['DA 3.0', 'DA 10.0'];
       opToggle.checked = opProtocols.includes(this.value);
     });
   });
