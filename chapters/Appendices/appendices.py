@@ -113,17 +113,18 @@ def appendix_c1():
 # ============================================================================
 # Appendix C, §C.2: Table 10.2 reproduced with pmsampsize
 # ============================================================================
-# In Colab, install the package first:  !pip install -q pmsampsize
-# Locally:  pip install pmsampsize  (the package needs Python 3.12 or later)
+# Run this part in Google Colab, as §C.2 does:  !pip install -q pmsampsize
+# pmsampsize needs NumPy 2 and SciPy 1.16 or later, newer than the versions
+# pinned in requirements.txt, so it is not part of the local environment.
+# To run it locally, use a separate environment:  pip install pmsampsize
 
 def appendix_c2():
     print('Appendix C, §C.2: Table 10.2 with pmsampsize (Riley et al., 2020)')
     try:
         from pmsampsize.pmsampsize import pmsampsize
     except ImportError:
-        print('  pmsampsize is not installed. Run this cell in Google '
-              'Colab, or install it with "pip install pmsampsize" '
-              '(Python 3.12 or later).')
+        print('  pmsampsize is not installed. Run §C.2 in Google Colab, '
+              'or in a separate environment with "pip install pmsampsize".')
         return
     result = pmsampsize(type='b',          # binary outcome
                         cstatistic=0.681,  # anticipated AUC
