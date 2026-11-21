@@ -1624,6 +1624,13 @@ class ERGReportGenerator:
             }
             if not supported:
                 row['zone'] = 'UNAVAILABLE'
+            elif value in (-9999.0, 9999.0):
+                # Not recordable: a physiological absence, coded with
+                # the sentinel of Chapter 11 (Section 11.1), is RED
+                row['value'] = None
+                row['not_recordable'] = True
+                row['zone'] = 'RED'
+                row['direction'] = 'below' if kind == 'amplitude' else 'above'
             elif value is None:
                 row['zone'] = 'NOT MEASURED'
             else:
