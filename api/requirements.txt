@@ -1,0 +1,11 @@
+# ERG Analysis API server only (Render and local Mode B).
+# The book's full library list is in the repository root requirements.txt.
+numpy==1.26.0
+scipy==1.13.0
+pandas==2.2.0
+pywavelets==1.5.0
+scikit-image==0.22.0
+reportlab==4.2.0
+flask==3.0.0
+flask-cors==4.0.1
+gunicorn==22.0.0
