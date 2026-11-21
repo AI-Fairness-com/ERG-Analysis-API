@@ -46,13 +46,14 @@ FEATURE = {'a-wave amplitude': 'a_amp_uv',
 
 def zone_table(rows, age, electrode='dtl_fiber'):
     """
-    rows: (protocol, parameter, value, zone printed in the book).
-    Parameters without published limits (PhNR, OPs, b/a ratio) are
+    rows: (protocol, parameter, value, zone printed in the book), and
+    optionally the (lower, upper) limits printed in the book, which
+    are then checked against the normative file too. Parameters without published limits (PhNR, OPs, b/a ratio) are
     listed as 'NOT ZONED'. Returns the table and the composite
     Traffic Light (the most severe zone).
     """
     out, zoned = [], []
-    for protocol, parameter, value, book in rows:
+    for protocol, parameter, value, book, *printed in rows:
         if parameter not in FEATURE:
             out.append([protocol, parameter, value, '', 'NOT ZONED',
                         book, book.upper() in ('NOT ZONED', '')])
@@ -64,8 +65,12 @@ def zone_table(rows, age, electrode='dtl_fiber'):
         limits = (f"{r['lower_limit']:g} to {r['upper_limit']:g} "
                   f"(L_lo {r['lower_ci_low']:g}, U_hi "
                   f"{r['upper_ci_high']:g})")
+        match = r['zone'] == book.upper()
+        if printed:
+            match = match and tuple(printed[0]) == (r['lower_limit'],
+                                                    r['upper_limit'])
         out.append([protocol, parameter, value, limits, r['zone'], book,
-                    r['zone'] == book.upper()])
+                    match])
     table = pd.DataFrame(out, columns=[
         'Protocol', 'Parameter', 'Value', 'Limits', 'Zone (code)',
         'Zone (book)', 'Match'])
