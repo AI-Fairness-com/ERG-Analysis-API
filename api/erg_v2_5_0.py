@@ -1423,6 +1423,8 @@ def _finite(value) -> Optional[float]:
 
 def describe_value(row: Dict) -> str:
     """'131.6 µV', or for gold foil '131.6 µV (silver thread equivalent 81.9 µV)'."""
+    if row.get('not_recordable'):
+        return '(not recordable)'
     unit = f" {row['unit']}" if row.get('unit') else ''
     text = f"{row['value']:g}{unit}"
     if row.get('converted_from_gold_foil'):
