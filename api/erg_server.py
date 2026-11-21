@@ -121,6 +121,20 @@ ERGReportGenerator  = pipeline.ERGReportGenerator
 ERGFHIRGenerator    = pipeline.ERGFHIRGenerator
 load_erg_csv        = pipeline.load_erg_csv
 
+def _eye_from_csv(path):
+    """Return OD or OS from the CSV's eye column (Appendix A), or None."""
+    try:
+        import pandas as pd
+        col = pd.read_csv(path, nrows=5)
+        col.columns = [c.strip().lower() for c in col.columns]
+        if "eye" in col.columns:
+            value = str(col["eye"].dropna().iloc[0]).strip().upper()
+            return value if value in ("OD", "OS") else None
+    except Exception:
+        pass
+    return None
+
+
 # ── 2. Flask app ──────────────────────────────────────────────────────────────
 
 HTML_PATH = os.path.join(os.path.dirname(__file__), "templates", "ERG_API_v2_5.html")
@@ -209,6 +223,7 @@ def analyse():
     apply_notch     = request.form.get("apply_notch",   "false").lower() == "true"
     notch_consent   = request.form.get("notch_consent", "false").lower() == "true"
     extract_ops     = request.form.get("extract_ops",   "true").lower()  == "true"
+    eye             = request.form.get("eye", "").strip().upper()  # OD or OS, optional
 
     # Map Baker et al. (2025) age strata → ERGConfig vocabulary for ERGAudit.
     # ERGReportGenerator already understands Baker strings natively (line 1119).
@@ -302,8 +317,12 @@ def analyse():
                 audit_results=audit_result,
                 electrode_type=electrode_type,
                 protocol=protocol,
+                eye=eye or _eye_from_csv(temp_path),
+                recording_date=recording_date or None,
             )
+            fhir_bundle = fhir_gen.generate_bundle(fhir_observation, full_report)
             full_report["fhir_observation"] = fhir_observation
+            full_report["fhir_bundle"] = fhir_bundle
 
             tl       = full_report["layer_1_traffic_light"]
             z_scores = full_report["layer_2_clinical_summary"]["z_scores"]
@@ -328,6 +347,7 @@ def analyse():
                 "z_scores":         z_scores,
                 "audit_results":    audit_result,
                 "fhir_observation": fhir_observation,
+                "fhir_bundle":      fhir_bundle,
                 "processing_ms":    processing_time_ms,
                 "waveform": {
                     "time_ms":          waveform_t,
