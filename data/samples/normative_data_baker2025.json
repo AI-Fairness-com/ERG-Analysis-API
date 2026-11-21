@@ -1,9 +1,15 @@
 {
   "version": "baker2025",
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "doi": "10.1007/s10633-025-10009-2",
   "citation": "Baker RA, Leo SM, Clowes WIN, et al. ISCEV standard full-field ERG reference limits from 407 healthy subjects. Doc Ophthalmol. 2025;150(2):47-64.",
-  "n_subjects": 407,
+  "source": {
+    "amplitude": "Baker et al. (2025), Table 5: age-specific nonparametric reference limits for amplitude, silver thread electrodes in the fornix position",
+    "timing": "Baker et al. (2025), Table 4: age-specific nonparametric reference limits for timing, silver thread electrodes in the fornix position",
+    "electrode_transform": "Baker et al. (2025), Table 2: linear model for gold foil amplitudes"
+  },
+  "reference_electrode": "dtl_fiber",
+  "reference_electrode_note": "Limits are for silver thread electrodes in the lower fornix (DTL fiber). Gold foil amplitudes are converted to silver thread equivalents with the Table 2 model before comparison; gold foil peak times are compared without adjustment (Baker et al., 2025). Contact lens and skin electrodes have no limits here.",
   "age_strata": [
     "le35",
     "36to59",
@@ -14,534 +20,906 @@
     "36to59": "36-59y",
     "ge60": ">=60y"
   },
-  "electrodes": [
-    "gold_foil",
-    "dtl_fiber"
-  ],
-  "electrode_note": "DTL Fiber currently shares Gold Foil normative values. Deming regression correction (Baker 2025 Table 2) deferred to Tier 2 Step 2.4.",
-  "parameters": [
-    "a_amp",
-    "a_imp",
-    "b_amp",
-    "b_imp"
-  ],
-  "parameter_units": {
-    "a_amp": "uV",
-    "a_imp": "ms",
-    "b_amp": "uV",
-    "b_imp": "ms"
+  "parameters": {
+    "a_amp": {
+      "kind": "amplitude",
+      "unit": "uV",
+      "feature": "a_amp_uv"
+    },
+    "a_imp": {
+      "kind": "implicit_time",
+      "unit": "ms",
+      "feature": "a_implicit_ms"
+    },
+    "b_amp": {
+      "kind": "amplitude",
+      "unit": "uV",
+      "feature": "b_amp_uv"
+    },
+    "b_imp": {
+      "kind": "implicit_time",
+      "unit": "ms",
+      "feature": "b_implicit_ms"
+    }
   },
-  "null_convention": "null indicates parameter not applicable for this protocol",
-  "ba_ratio": {
-    "mean": 2.65,
-    "sigma": 0.425,
-    "protocol": "DA 3.0",
-    "note": "Normal range 1.8-3.5; modelled as mean=2.65 SD=0.425 so +-2SD approx [1.8,3.5]. DA 3 only."
+  "limit_fields": {
+    "lower": "2.5th percentile reference limit (L)",
+    "lower_ci": "90% confidence interval of L; its first value is L_lo",
+    "upper": "97.5th percentile reference limit (U)",
+    "upper_ci": "90% confidence interval of U; its second value is U_hi",
+    "ci_proportion": "width of each confidence interval as a proportion of the reference interval, as printed",
+    "n": "number of reference subjects"
   },
-  "protocols": {
+  "notes": [
+    "LA 30 Hz values are the flicker peak amplitude (b_amp) and peak time (b_imp).",
+    "DA 10 b-wave timing has one set of limits for all ages (Table 4: 'see <= 35 years'); it is repeated under each stratum.",
+    "Timings are rounded to the nearest 0.5 ms in the source.",
+    "DA 10 a-wave amplitude, 36-59y: the upper-limit interval is printed as 257-384 (0.18) in Table 5; the proportion implies about 284. The printed value is kept. It is not used by Equation 10.2, because an amplitude above the upper limit is ATYPICAL DIRECTION."
+  ],
+  "limits": {
     "DA 0.01": {
-      "gold_foil": {
+      "b_amp": {
         "le35": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 203.85,
-            "sigma": 40.99
-          },
-          "b_imp": {
-            "mu": 84.65,
-            "sigma": 6.17
-          }
+          "n": 126,
+          "lower": 138,
+          "lower_ci": [
+            130,
+            142
+          ],
+          "upper": 297,
+          "upper_ci": [
+            283,
+            319
+          ],
+          "ci_proportion": [
+            0.08,
+            0.23
+          ]
         },
         "36to59": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 189.48,
-            "sigma": 38.42
-          },
-          "b_imp": {
-            "mu": 90.33,
-            "sigma": 7.6
-          }
+          "n": 130,
+          "lower": 115,
+          "lower_ci": [
+            102,
+            133
+          ],
+          "upper": 279,
+          "upper_ci": [
+            266,
+            315
+          ],
+          "ci_proportion": [
+            0.19,
+            0.3
+          ]
         },
         "ge60": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 185.53,
-            "sigma": 46.36
-          },
-          "b_imp": {
-            "mu": 97.29,
-            "sigma": 7.81
-          }
+          "n": 123,
+          "lower": 107,
+          "lower_ci": [
+            100,
+            119
+          ],
+          "upper": 288,
+          "upper_ci": [
+            277,
+            290
+          ],
+          "ci_proportion": [
+            0.11,
+            0.07
+          ]
         }
       },
-      "dtl_fiber": {
+      "b_imp": {
         "le35": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 203.85,
-            "sigma": 40.99
-          },
-          "b_imp": {
-            "mu": 84.65,
-            "sigma": 6.17
-          }
+          "n": 126,
+          "lower": 72,
+          "lower_ci": [
+            66.5,
+            75.5
+          ],
+          "upper": 99.5,
+          "upper_ci": [
+            95,
+            106
+          ],
+          "ci_proportion": [
+            0.32,
+            0.4
+          ]
         },
         "36to59": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 189.48,
-            "sigma": 38.42
-          },
-          "b_imp": {
-            "mu": 90.33,
-            "sigma": 7.6
-          }
+          "n": 130,
+          "lower": 77.5,
+          "lower_ci": [
+            73,
+            80
+          ],
+          "upper": 107.5,
+          "upper_ci": [
+            104,
+            118.5
+          ],
+          "ci_proportion": [
+            0.23,
+            0.48
+          ]
         },
         "ge60": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 185.53,
-            "sigma": 46.36
-          },
-          "b_imp": {
-            "mu": 97.29,
-            "sigma": 7.81
-          }
+          "n": 123,
+          "lower": 78,
+          "lower_ci": [
+            77.5,
+            86.5
+          ],
+          "upper": 115,
+          "upper_ci": [
+            112.5,
+            116
+          ],
+          "ci_proportion": [
+            0.3,
+            0.09
+          ]
         }
       }
     },
     "DA 3.0": {
-      "gold_foil": {
+      "a_amp": {
         "le35": {
-          "a_amp": {
-            "mu": 175.7,
-            "sigma": 30.93
-          },
-          "a_imp": {
-            "mu": 14.98,
-            "sigma": 0.65
-          },
-          "b_amp": {
-            "mu": 281.45,
-            "sigma": 53.29
-          },
-          "b_imp": {
-            "mu": 51.41,
-            "sigma": 3.18
-          }
+          "n": 130,
+          "lower": 119,
+          "lower_ci": [
+            109,
+            125
+          ],
+          "upper": 238,
+          "upper_ci": [
+            227,
+            261
+          ],
+          "ci_proportion": [
+            0.13,
+            0.29
+          ]
         },
         "36to59": {
-          "a_amp": {
-            "mu": 157.86,
-            "sigma": 31.63
-          },
-          "a_imp": {
-            "mu": 15.69,
-            "sigma": 0.68
-          },
-          "b_amp": {
-            "mu": 272.0,
-            "sigma": 51.91
-          },
-          "b_imp": {
-            "mu": 51.45,
-            "sigma": 2.9
-          }
+          "n": 138,
+          "lower": 100,
+          "lower_ci": [
+            90,
+            105
+          ],
+          "upper": 226,
+          "upper_ci": [
+            218,
+            239
+          ],
+          "ci_proportion": [
+            0.12,
+            0.17
+          ]
         },
         "ge60": {
-          "a_amp": {
-            "mu": 141.46,
-            "sigma": 35.25
-          },
-          "a_imp": {
-            "mu": 16.08,
-            "sigma": 0.82
-          },
-          "b_amp": {
-            "mu": 259.25,
-            "sigma": 62.43
-          },
-          "b_imp": {
-            "mu": 52.45,
-            "sigma": 3.02
-          }
+          "n": 130,
+          "lower": 80,
+          "lower_ci": [
+            72,
+            89
+          ],
+          "upper": 220,
+          "upper_ci": [
+            201,
+            234
+          ],
+          "ci_proportion": [
+            0.12,
+            0.23
+          ]
         }
       },
-      "dtl_fiber": {
+      "b_amp": {
         "le35": {
-          "a_amp": {
-            "mu": 175.7,
-            "sigma": 30.93
-          },
-          "a_imp": {
-            "mu": 14.98,
-            "sigma": 0.65
-          },
-          "b_amp": {
-            "mu": 281.45,
-            "sigma": 53.29
-          },
-          "b_imp": {
-            "mu": 51.41,
-            "sigma": 3.18
-          }
+          "n": 130,
+          "lower": 191,
+          "lower_ci": [
+            178,
+            203
+          ],
+          "upper": 404,
+          "upper_ci": [
+            374,
+            421
+          ],
+          "ci_proportion": [
+            0.12,
+            0.22
+          ]
         },
         "36to59": {
-          "a_amp": {
-            "mu": 157.86,
-            "sigma": 31.63
-          },
-          "a_imp": {
-            "mu": 15.69,
-            "sigma": 0.68
-          },
-          "b_amp": {
-            "mu": 272.0,
-            "sigma": 51.91
-          },
-          "b_imp": {
-            "mu": 51.45,
-            "sigma": 2.9
-          }
+          "n": 138,
+          "lower": 167,
+          "lower_ci": [
+            163,
+            199
+          ],
+          "upper": 377,
+          "upper_ci": [
+            361,
+            469
+          ],
+          "ci_proportion": [
+            0.17,
+            0.52
+          ]
         },
         "ge60": {
-          "a_amp": {
-            "mu": 141.46,
-            "sigma": 35.25
-          },
-          "a_imp": {
-            "mu": 16.08,
-            "sigma": 0.82
-          },
-          "b_amp": {
-            "mu": 259.25,
-            "sigma": 62.43
-          },
-          "b_imp": {
-            "mu": 52.45,
-            "sigma": 3.02
-          }
+          "n": 130,
+          "lower": 162,
+          "lower_ci": [
+            151,
+            171
+          ],
+          "upper": 407,
+          "upper_ci": [
+            377,
+            458
+          ],
+          "ci_proportion": [
+            0.08,
+            0.33
+          ]
+        }
+      },
+      "a_imp": {
+        "le35": {
+          "n": 130,
+          "lower": 13.5,
+          "lower_ci": [
+            13,
+            14
+          ],
+          "upper": 16,
+          "upper_ci": [
+            16,
+            17
+          ],
+          "ci_proportion": [
+            0.42,
+            0.42
+          ]
+        },
+        "36to59": {
+          "n": 138,
+          "lower": 14.5,
+          "lower_ci": [
+            14.5,
+            14.5
+          ],
+          "upper": 17,
+          "upper_ci": [
+            17,
+            17.5
+          ],
+          "ci_proportion": [
+            0.0,
+            0.2
+          ]
+        },
+        "ge60": {
+          "n": 130,
+          "lower": 14.5,
+          "lower_ci": [
+            14,
+            15
+          ],
+          "upper": 18,
+          "upper_ci": [
+            17.5,
+            18.5
+          ],
+          "ci_proportion": [
+            0.3,
+            0.3
+          ]
+        }
+      },
+      "b_imp": {
+        "le35": {
+          "n": 130,
+          "lower": 45.5,
+          "lower_ci": [
+            42.5,
+            47
+          ],
+          "upper": 58.5,
+          "upper_ci": [
+            57.5,
+            60
+          ],
+          "ci_proportion": [
+            0.35,
+            0.19
+          ]
+        },
+        "36to59": {
+          "n": 138,
+          "lower": 46.5,
+          "lower_ci": [
+            45,
+            47
+          ],
+          "upper": 59.5,
+          "upper_ci": [
+            56.5,
+            59.5
+          ],
+          "ci_proportion": [
+            0.16,
+            0.24
+          ]
+        },
+        "ge60": {
+          "n": 130,
+          "lower": 46.5,
+          "lower_ci": [
+            45.5,
+            47.5
+          ],
+          "upper": 58,
+          "upper_ci": [
+            57,
+            60
+          ],
+          "ci_proportion": [
+            0.18,
+            0.26
+          ]
         }
       }
     },
     "DA 10.0": {
-      "gold_foil": {
+      "a_amp": {
         "le35": {
-          "a_amp": {
-            "mu": 202.99,
-            "sigma": 34.59
-          },
-          "a_imp": {
-            "mu": 11.99,
-            "sigma": 0.98
-          },
-          "b_amp": {
-            "mu": 291.01,
-            "sigma": 50.92
-          },
-          "b_imp": {
-            "mu": 51.82,
-            "sigma": 3.08
-          }
+          "n": 134,
+          "lower": 136,
+          "lower_ci": [
+            130,
+            148
+          ],
+          "upper": 274,
+          "upper_ci": [
+            258,
+            283
+          ],
+          "ci_proportion": [
+            0.14,
+            0.18
+          ]
         },
         "36to59": {
-          "a_amp": {
-            "mu": 188.6,
-            "sigma": 35.09
-          },
-          "a_imp": {
-            "mu": 12.83,
-            "sigma": 1.07
-          },
-          "b_amp": {
-            "mu": 283.69,
-            "sigma": 50.41
-          },
-          "b_imp": {
-            "mu": 51.94,
-            "sigma": 3.04
-          }
+          "n": 136,
+          "lower": 124,
+          "lower_ci": [
+            118,
+            131
+          ],
+          "upper": 277,
+          "upper_ci": [
+            257,
+            384
+          ],
+          "ci_proportion": [
+            0.08,
+            0.18
+          ]
         },
         "ge60": {
-          "a_amp": {
-            "mu": 170.81,
-            "sigma": 39.57
-          },
-          "a_imp": {
-            "mu": 13.42,
-            "sigma": 1.09
-          },
-          "b_amp": {
-            "mu": 275.75,
-            "sigma": 62.12
-          },
-          "b_imp": {
-            "mu": 52.21,
-            "sigma": 3.32
-          }
+          "n": 131,
+          "lower": 101,
+          "lower_ci": [
+            97,
+            110
+          ],
+          "upper": 253,
+          "upper_ci": [
+            235,
+            280
+          ],
+          "ci_proportion": [
+            0.09,
+            0.3
+          ]
         }
       },
-      "dtl_fiber": {
+      "b_amp": {
         "le35": {
-          "a_amp": {
-            "mu": 202.99,
-            "sigma": 34.59
-          },
-          "a_imp": {
-            "mu": 11.99,
-            "sigma": 0.98
-          },
-          "b_amp": {
-            "mu": 291.01,
-            "sigma": 50.92
-          },
-          "b_imp": {
-            "mu": 51.82,
-            "sigma": 3.08
-          }
+          "n": 133,
+          "lower": 202,
+          "lower_ci": [
+            192,
+            208
+          ],
+          "upper": 409,
+          "upper_ci": [
+            376,
+            413
+          ],
+          "ci_proportion": [
+            0.08,
+            0.18
+          ]
         },
         "36to59": {
-          "a_amp": {
-            "mu": 188.6,
-            "sigma": 35.09
-          },
-          "a_imp": {
-            "mu": 12.83,
-            "sigma": 1.07
-          },
-          "b_amp": {
-            "mu": 283.69,
-            "sigma": 50.41
-          },
-          "b_imp": {
-            "mu": 51.94,
-            "sigma": 3.04
-          }
+          "n": 132,
+          "lower": 191,
+          "lower_ci": [
+            171,
+            210
+          ],
+          "upper": 387,
+          "upper_ci": [
+            379,
+            481
+          ],
+          "ci_proportion": [
+            0.2,
+            0.52
+          ]
         },
         "ge60": {
-          "a_amp": {
-            "mu": 170.81,
-            "sigma": 39.57
-          },
-          "a_imp": {
-            "mu": 13.42,
-            "sigma": 1.09
-          },
-          "b_amp": {
-            "mu": 275.75,
-            "sigma": 62.12
-          },
-          "b_imp": {
-            "mu": 52.21,
-            "sigma": 3.32
-          }
+          "n": 127,
+          "lower": 177,
+          "lower_ci": [
+            170,
+            187
+          ],
+          "upper": 414,
+          "upper_ci": [
+            377,
+            450
+          ],
+          "ci_proportion": [
+            0.07,
+            0.31
+          ]
+        }
+      },
+      "a_imp": {
+        "le35": {
+          "n": 134,
+          "lower": 10,
+          "lower_ci": [
+            10,
+            10.5
+          ],
+          "upper": 14.5,
+          "upper_ci": [
+            13.5,
+            14.5
+          ],
+          "ci_proportion": [
+            0.12,
+            0.23
+          ]
+        },
+        "36to59": {
+          "n": 136,
+          "lower": 11,
+          "lower_ci": [
+            10.5,
+            11
+          ],
+          "upper": 15,
+          "upper_ci": [
+            14.5,
+            16.5
+          ],
+          "ci_proportion": [
+            0.13,
+            0.5
+          ]
+        },
+        "ge60": {
+          "n": 131,
+          "lower": 11.5,
+          "lower_ci": [
+            11,
+            11.5
+          ],
+          "upper": 15.5,
+          "upper_ci": [
+            15.5,
+            16.5
+          ],
+          "ci_proportion": [
+            0.13,
+            0.25
+          ]
+        }
+      },
+      "b_imp": {
+        "le35": {
+          "n": 392,
+          "lower": 47,
+          "lower_ci": [
+            46,
+            47.5
+          ],
+          "upper": 59.5,
+          "upper_ci": [
+            58.5,
+            60
+          ],
+          "ci_proportion": [
+            0.11,
+            0.13
+          ]
+        },
+        "36to59": {
+          "n": 392,
+          "lower": 47,
+          "lower_ci": [
+            46,
+            47.5
+          ],
+          "upper": 59.5,
+          "upper_ci": [
+            58.5,
+            60
+          ],
+          "ci_proportion": [
+            0.11,
+            0.13
+          ]
+        },
+        "ge60": {
+          "n": 392,
+          "lower": 47,
+          "lower_ci": [
+            46,
+            47.5
+          ],
+          "upper": 59.5,
+          "upper_ci": [
+            58.5,
+            60
+          ],
+          "ci_proportion": [
+            0.11,
+            0.13
+          ]
         }
       }
     },
     "LA 30 Hz": {
-      "gold_foil": {
+      "b_amp": {
         "le35": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 92.6,
-            "sigma": 29.11
-          },
-          "b_imp": {
-            "mu": 25.5,
-            "sigma": 0.89
-          }
+          "n": 121,
+          "lower": 50,
+          "lower_ci": [
+            41,
+            52
+          ],
+          "upper": 166,
+          "upper_ci": [
+            149,
+            187
+          ],
+          "ci_proportion": [
+            0.09,
+            0.33
+          ]
         },
         "36to59": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 80.72,
-            "sigma": 22.96
-          },
-          "b_imp": {
-            "mu": 26.0,
-            "sigma": 1.28
-          }
+          "n": 137,
+          "lower": 45,
+          "lower_ci": [
+            41,
+            49
+          ],
+          "upper": 140,
+          "upper_ci": [
+            118,
+            175
+          ],
+          "ci_proportion": [
+            0.09,
+            0.59
+          ]
         },
         "ge60": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 71.13,
-            "sigma": 20.64
-          },
-          "b_imp": {
-            "mu": 26.45,
-            "sigma": 1.48
-          }
+          "n": 127,
+          "lower": 38,
+          "lower_ci": [
+            36,
+            42
+          ],
+          "upper": 116,
+          "upper_ci": [
+            108,
+            160
+          ],
+          "ci_proportion": [
+            0.08,
+            0.66
+          ]
         }
       },
-      "dtl_fiber": {
+      "b_imp": {
         "le35": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 92.6,
-            "sigma": 29.11
-          },
-          "b_imp": {
-            "mu": 25.5,
-            "sigma": 0.89
-          }
+          "n": 121,
+          "lower": 24,
+          "lower_ci": [
+            24,
+            24.5
+          ],
+          "upper": 28,
+          "upper_ci": [
+            27,
+            28
+          ],
+          "ci_proportion": [
+            0.13,
+            0.25
+          ]
         },
         "36to59": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 80.72,
-            "sigma": 22.96
-          },
-          "b_imp": {
-            "mu": 26.0,
-            "sigma": 1.28
-          }
+          "n": 137,
+          "lower": 24,
+          "lower_ci": [
+            24,
+            24.5
+          ],
+          "upper": 29.5,
+          "upper_ci": [
+            28,
+            30.5
+          ],
+          "ci_proportion": [
+            0.09,
+            0.45
+          ]
         },
         "ge60": {
-          "a_amp": null,
-          "a_imp": null,
-          "b_amp": {
-            "mu": 71.13,
-            "sigma": 20.64
-          },
-          "b_imp": {
-            "mu": 26.45,
-            "sigma": 1.48
-          }
+          "n": 127,
+          "lower": 24.5,
+          "lower_ci": [
+            24,
+            24.5
+          ],
+          "upper": 30.5,
+          "upper_ci": [
+            29,
+            31
+          ],
+          "ci_proportion": [
+            0.08,
+            0.34
+          ]
         }
       }
     },
     "LA 3.0": {
-      "gold_foil": {
+      "a_amp": {
         "le35": {
-          "a_amp": {
-            "mu": 26.39,
-            "sigma": 6.73
-          },
-          "a_imp": {
-            "mu": 14.03,
-            "sigma": 0.53
-          },
-          "b_amp": {
-            "mu": 124.93,
-            "sigma": 36.06
-          },
-          "b_imp": {
-            "mu": 28.77,
-            "sigma": 1.0
-          }
+          "n": 125,
+          "lower": 12,
+          "lower_ci": [
+            11,
+            16
+          ],
+          "upper": 43,
+          "upper_ci": [
+            39,
+            49
+          ],
+          "ci_proportion": [
+            0.17,
+            0.34
+          ]
         },
         "36to59": {
-          "a_amp": {
-            "mu": 23.81,
-            "sigma": 6.35
-          },
-          "a_imp": {
-            "mu": 14.3,
-            "sigma": 0.63
-          },
-          "b_amp": {
-            "mu": 108.9,
-            "sigma": 27.32
-          },
-          "b_imp": {
-            "mu": 29.05,
-            "sigma": 1.1
-          }
+          "n": 135,
+          "lower": 13,
+          "lower_ci": [
+            8,
+            15
+          ],
+          "upper": 40,
+          "upper_ci": [
+            33,
+            55
+          ],
+          "ci_proportion": [
+            0.24,
+            0.83
+          ]
         },
         "ge60": {
-          "a_amp": {
-            "mu": 22.33,
-            "sigma": 5.82
-          },
-          "a_imp": {
-            "mu": 14.4,
-            "sigma": 0.64
-          },
-          "b_amp": {
-            "mu": 96.31,
-            "sigma": 27.73
-          },
-          "b_imp": {
-            "mu": 29.55,
-            "sigma": 1.26
-          }
+          "n": 129,
+          "lower": 12,
+          "lower_ci": [
+            12,
+            14
+          ],
+          "upper": 35,
+          "upper_ci": [
+            31,
+            41
+          ],
+          "ci_proportion": [
+            0.11,
+            0.43
+          ]
         }
       },
-      "dtl_fiber": {
+      "b_amp": {
         "le35": {
-          "a_amp": {
-            "mu": 26.39,
-            "sigma": 6.73
-          },
-          "a_imp": {
-            "mu": 14.03,
-            "sigma": 0.53
-          },
-          "b_amp": {
-            "mu": 124.93,
-            "sigma": 36.06
-          },
-          "b_imp": {
-            "mu": 28.77,
-            "sigma": 1.0
-          }
+          "n": 125,
+          "lower": 73,
+          "lower_ci": [
+            54,
+            77
+          ],
+          "upper": 227,
+          "upper_ci": [
+            199,
+            260
+          ],
+          "ci_proportion": [
+            0.15,
+            0.4
+          ]
         },
         "36to59": {
-          "a_amp": {
-            "mu": 23.81,
-            "sigma": 6.35
-          },
-          "a_imp": {
-            "mu": 14.3,
-            "sigma": 0.63
-          },
-          "b_amp": {
-            "mu": 108.9,
-            "sigma": 27.32
-          },
-          "b_imp": {
-            "mu": 29.05,
-            "sigma": 1.1
-          }
+          "n": 135,
+          "lower": 64,
+          "lower_ci": [
+            52,
+            72
+          ],
+          "upper": 172,
+          "upper_ci": [
+            152,
+            247
+          ],
+          "ci_proportion": [
+            0.19,
+            0.88
+          ]
         },
         "ge60": {
-          "a_amp": {
-            "mu": 22.33,
-            "sigma": 5.82
-          },
-          "a_imp": {
-            "mu": 14.4,
-            "sigma": 0.64
-          },
-          "b_amp": {
-            "mu": 96.31,
-            "sigma": 27.73
-          },
-          "b_imp": {
-            "mu": 29.55,
-            "sigma": 1.26
-          }
+          "n": 129,
+          "lower": 49,
+          "lower_ci": [
+            45,
+            59
+          ],
+          "upper": 153,
+          "upper_ci": [
+            143,
+            192
+          ],
+          "ci_proportion": [
+            0.13,
+            0.46
+          ]
+        }
+      },
+      "a_imp": {
+        "le35": {
+          "n": 125,
+          "lower": 13,
+          "lower_ci": [
+            13,
+            13
+          ],
+          "upper": 15.5,
+          "upper_ci": [
+            15,
+            15.5
+          ],
+          "ci_proportion": [
+            0.0,
+            0.2
+          ]
+        },
+        "36to59": {
+          "n": 135,
+          "lower": 13,
+          "lower_ci": [
+            13,
+            13.5
+          ],
+          "upper": 15.5,
+          "upper_ci": [
+            15.5,
+            16
+          ],
+          "ci_proportion": [
+            0.2,
+            0.2
+          ]
+        },
+        "ge60": {
+          "n": 129,
+          "lower": 13,
+          "lower_ci": [
+            12.5,
+            13.5
+          ],
+          "upper": 15.5,
+          "upper_ci": [
+            15.5,
+            16.5
+          ],
+          "ci_proportion": [
+            0.4,
+            0.4
+          ]
+        }
+      },
+      "b_imp": {
+        "le35": {
+          "n": 125,
+          "lower": 27,
+          "lower_ci": [
+            26.5,
+            27
+          ],
+          "upper": 31.5,
+          "upper_ci": [
+            30.5,
+            32
+          ],
+          "ci_proportion": [
+            0.11,
+            0.33
+          ]
+        },
+        "36to59": {
+          "n": 135,
+          "lower": 27,
+          "lower_ci": [
+            26.5,
+            27.5
+          ],
+          "upper": 31.5,
+          "upper_ci": [
+            30.5,
+            32
+          ],
+          "ci_proportion": [
+            0.22,
+            0.33
+          ]
+        },
+        "ge60": {
+          "n": 129,
+          "lower": 27.5,
+          "lower_ci": [
+            26.5,
+            27.5
+          ],
+          "upper": 32.5,
+          "upper_ci": [
+            32,
+            33
+          ],
+          "ci_proportion": [
+            0.2,
+            0.2
+          ]
         }
       }
     }
   },
   "electrode_transform": {
     "source": "Baker et al. (2025) Table 2. DOI: 10.1007/s10633-025-10009-2",
-    "direction": "STE_equivalent = slope * GFE_measured + intercept",
-    "applies_to": "amplitude parameters only (a_amp, b_amp). Peak times transferred without adjustment.",
+    "direction": "silver_thread_equivalent = slope * gold_foil_measured + intercept",
+    "applies_to": "gold foil amplitude parameters only (a_amp, b_amp). Peak times are compared without adjustment.",
     "transform": {
       "DA 0.01": {
         "b_amp": {
