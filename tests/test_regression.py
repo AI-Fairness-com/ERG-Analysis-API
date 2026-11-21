@@ -19,7 +19,7 @@ the other values are unchanged.
   T-REG-04  B/A   Z = −1.41 ± 0.10
   T-REG-05  traffic light = GREEN
   T-REG-06  FHIR status   = final
-  T-REG-07  FHIR performer contains the pipeline version
+  T-REG-07  FHIR version stamp contains the pipeline version
   T-REG-08  PhNR absent for DA 3.0 protocol
 
 Run from repo root:
@@ -119,21 +119,24 @@ def test_T_REG_06_fhir_status_final(s01_result):
 
 
 # ---------------------------------------------------------------------------
-# T-REG-07  FHIR performer contains the pipeline version
+# T-REG-07  FHIR version stamp contains the pipeline version
 # ---------------------------------------------------------------------------
-def test_T_REG_07_fhir_performer_contains_version(pipeline_module, s01_result):
+def test_T_REG_07_fhir_version_stamp_contains_version(pipeline_module, s01_result):
     """
-    T-REG-07: The FHIR performer display string must contain the pipeline
-    version (CONFIG.PIPELINE_VERSION), so every output can be traced.
+    T-REG-07: The version-stamp extension of the FHIR Observation must
+    carry the pipeline version (CONFIG.PIPELINE_VERSION) as api_version,
+    so every output can be traced (Appendix B §B.1, Chapter 17 §17.3.3).
     """
-    version    = pipeline_module.CONFIG.PIPELINE_VERSION
-    performers = s01_result["fhir"].get("performer", [])
-    displays   = [p.get("display", "") for p in performers]
-    combined   = " ".join(displays)
-    assert version in combined, (
-        f"T-REG-07 FAIL: '{version}' not found in FHIR performer. "
-        f"Performer displays: {displays}"
+    version = pipeline_module.CONFIG.PIPELINE_VERSION
+    stamp = next((e for e in s01_result["fhir"].get("extension", [])
+                  if e["url"].endswith("/version-stamp")), None)
+    assert stamp is not None, "T-REG-07 FAIL: version-stamp extension missing"
+    parts = {p["url"]: p["valueString"] for p in stamp["extension"]}
+    assert parts.get("api_version") == version, (
+        f"T-REG-07 FAIL: api_version {parts.get('api_version')!r}, expected {version!r}"
     )
+    assert set(parts) == {"api_version", "model_weights_hash",
+                          "config_hash", "normative_ref_version"}
 
 
 # ---------------------------------------------------------------------------

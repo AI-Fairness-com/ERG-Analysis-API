@@ -80,9 +80,35 @@ class TestFHIROutput:
     def test_T_FHIR_01_resourceType_is_Observation(self, s01_result):
         assert s01_result["fhir"].get("resourceType") == "Observation"
 
-    def test_T_FHIR_02_LOINC_70943_7_present(self, s01_result):
+    def test_T_FHIR_02_LOINC_79894_2_present(self, s01_result):
         codes = [c.get("code") for c in s01_result["fhir"].get("code",{}).get("coding",[])]
-        assert "70943-7" in codes, f"T-FHIR-02: codes={codes}"
+        assert "79894-2" in codes, f"T-FHIR-02: codes={codes}"
+
+    def test_T_FHIR_03_components_use_table_B1_codes(self, s01_result):
+        """DA 3.0, right eye: a-wave and b-wave values carry the OD LOINC
+        codes of Table B.1; the b/a ratio uses the project code system."""
+        comps = s01_result["fhir"].get("component", [])
+        codes = {c["code"]["coding"][0]["code"] for c in comps}
+        for code in ("79773-8", "79777-9", "79781-1", "79786-0", "ba_ratio"):
+            assert code in codes, f"T-FHIR-03: {code} missing; codes={sorted(codes)}"
+        units = {c["code"]["coding"][0]["code"]: c["valueQuantity"]["code"] for c in comps}
+        assert units["79773-8"] == "uV" and units["79777-9"] == "ms"
+
+    def test_T_FHIR_04_extensions_use_project_base(self, s01_result):
+        urls = [e["url"] for e in s01_result["fhir"].get("extension", [])]
+        base = "https://ai-fairness.com/fhir/erg/StructureDefinition/"
+        for name in ("iscev-protocol", "electrode-type", "version-stamp"):
+            assert base + name in urls, f"T-FHIR-04: {name} missing; urls={urls}"
+
+    def test_T_FHIR_05_bundle_holds_report_and_audit(self, s01_result):
+        bundle = s01_result["fhir_bundle"]
+        assert bundle["resourceType"] == "Bundle" and bundle["type"] == "collection"
+        types = [e["resource"]["resourceType"] for e in bundle["entry"]]
+        for rt in ("Observation", "DiagnosticReport", "AuditEvent"):
+            assert rt in types, f"T-FHIR-05: {rt} missing; types={types}"
+        audit = next(e["resource"] for e in bundle["entry"]
+                     if e["resource"]["resourceType"] == "AuditEvent")
+        assert audit["type"]["code"] == "110100" and audit["outcome"] == "0"
 
 
 class TestDTLDemingRegression:

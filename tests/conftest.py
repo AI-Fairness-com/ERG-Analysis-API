@@ -78,7 +78,8 @@ def s01_result(pipeline_module, s01_csv_path):
         result['features']         — extracted waveform features
         result['z_scores']         — Z-score dict from Layer 2
         result['traffic_light']    — traffic light dict from Layer 1
-        result['fhir']             — FHIR Observation dict
+        result['fhir']             — FHIR Observation dict (Appendix B)
+        result['fhir_bundle']      — FHIR Bundle dict (Appendix B §B.3)
         result['audit']            — audit result dict from run_full_audit
     """
     mod = pipeline_module
@@ -144,13 +145,17 @@ def s01_result(pipeline_module, s01_csv_path):
         audit_results=audit_result,
         electrode_type=ELECTRODE,
         protocol=PROTOCOL,
+        eye="OD",
+        recording_date="2026-06-22",
     )
+    fhir_bundle = fhir_gen.generate_bundle(fhir_obs, full_report)
 
     return {
         "features":      features,
         "z_scores":      full_report["layer_2_clinical_summary"]["z_scores"],
         "traffic_light": full_report["layer_1_traffic_light"],
         "fhir":          fhir_obs,
+        "fhir_bundle":   fhir_bundle,
         "audit":         audit_result,
         "full_report":   full_report,
     }
