@@ -2671,379 +2671,288 @@ print("=" * 60)
 # Implements Appendix B: Complete FHIR Observation Resource for ERG
 # ============================================================================
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 import json
 
 
 class ERGFHIRGenerator:
     """
-    HL7 FHIR R4 compliant JSON generator for ERG reports.
-    Implements Appendix B: Observation Resource Template for ERG Waveform
+    HL7 FHIR R4 output for one ERG recording, following Appendix B.
 
-    FHIR Resources:
-    - Observation (LOINC 70943-7: Electroretinogram)
-    - Component per ERG parameter (a-wave, b-wave, OPs, PhNR, flicker)
-    - Interpretation codes: N (normal), A (borderline), HH (abnormal)
+    generate_observation() builds one Observation for one protocol in one
+    eye: LOINC panel 79894-2, project extensions for the protocol, the
+    electrode, and the four-part version stamp (Chapter 17 §17.3.3), and
+    one component per measured value with the codes of Table B.1.
+    generate_bundle() wraps it in a Bundle of type "collection" with a
+    DiagnosticReport (Layer 1 Traffic Light and Layer 2 summary) and an
+    AuditEvent (Layer 4 record), and a Patient that carries only the age.
+    Z-scores are not sent in FHIR; they stay in Layers 2 and 4.
     """
 
-    # LOINC codes for ERG components (Appendix B)
-    # Custom ERG API parameter codes — no validated LOINC codes exist
-    # for individual ERG waveform components (Appendix B).
-    # System: https://github.com/AI-Fairness-com/ERG-Analysis-API
-    ERG_PARAMETER_CODES = {
-        'a_wave_amplitude':     'erg-api:a-wave-amplitude',
-        'a_wave_implicit_time': 'erg-api:a-wave-implicit-time',
-        'b_wave_amplitude':     'erg-api:b-wave-amplitude',
-        'b_wave_implicit_time': 'erg-api:b-wave-implicit-time',
-        'ba_ratio':             'erg-api:ba-ratio',
-        'op2_amplitude':        'erg-api:op2-amplitude',
-        'op3_amplitude':        'erg-api:op3-amplitude',
-        'op4_amplitude':        'erg-api:op4-amplitude',
-        'op_sum':               'erg-api:op-sum',
-        'phnr_amplitude':       'erg-api:phnr-amplitude',
-        'flicker_amplitude':    'erg-api:flicker-amplitude',
-        'flicker_implicit_time':'erg-api:flicker-implicit-time',
-    }
+    BASE = "https://ai-fairness.com/fhir/erg/"
+    EXT = BASE + "StructureDefinition/"
+    CS = BASE + "CodeSystem/"
+    LOINC = "http://loinc.org"
+    UCUM = "http://unitsofmeasure.org"
+    PANEL = {"system": "http://loinc.org", "code": "79894-2",
+             "display": "Electroretinography (ERG) panel"}
 
-    # Custom code system URL
-    ERG_CODE_SYSTEM = "https://ai-fairness.com/fhir/CodeSystem/erg-api"
-    ERG_CODE_SYSTEM_VERSION = "2.5.0"
-
-    # SNOMED CT codes for interpretation
-    SNOMED_INTERPRETATION = {
-        'GREEN':       {'code': '17621005', 'display': 'Normal'},
-        'AMBER':       {'code': '263654007', 'display': 'Borderline'},
-        'RED':         {'code': '442257004', 'display': 'Abnormal'},
-        'YELLOW':      {'code': '418186005', 'display': 'Inconclusive'},
-        'UNAVAILABLE': {'code': '410515003', 'display': 'Not available'},
-    }
-
-    # ISCEV protocol codes (custom extension)
-    ISCEV_PROTOCOL_CODES = {
-        'DA 0.01': 'ISCEV-DA-001',
-        'DA 3.0': 'ISCEV-DA-300',
-        'DA 10.0': 'ISCEV-DA-1000',
-        'LA 3.0': 'ISCEV-LA-300',
-        'LA 30 Hz': 'ISCEV-LA-30HZ'
-    }
+    # Table B.1: (feature, protocol group) -> (OD code, OS code, unit)
+    _DA = ("DA 3.0", "DA 10.0")
+    _DA_B = ("DA 0.01", "DA 3.0", "DA 10.0")
+    LOINC_COMPONENTS = [
+        ("a_amp_uv",      _DA,          "79773-8", "79774-6", "uV"),
+        ("a_implicit_ms", _DA,          "79777-9", "79778-7", "ms"),
+        ("b_amp_uv",      _DA_B,        "79781-1", "79782-9", "uV"),
+        ("b_implicit_ms", _DA_B,        "79786-0", "79785-2", "ms"),
+        ("a_amp_uv",      ("LA 3.0",),  "79775-3", "79776-1", "uV"),
+        ("a_implicit_ms", ("LA 3.0",),  "79779-5", "79780-3", "ms"),
+        ("b_amp_uv",      ("LA 3.0",),  "79783-7", "79784-5", "uV"),
+        ("b_implicit_ms", ("LA 3.0",),  "79787-8", "79788-6", "ms"),
+        ("b_amp_uv",      ("LA 30 Hz",), "79795-1", "79796-9", "uV"),
+        ("b_implicit_ms", ("LA 30 Hz",), "79797-7", "79798-5", "ms"),
+    ]
+    # Table B.1: values with no LOINC code use the erg-features code system
+    PROJECT_COMPONENTS = [
+        ("phnr_amp_uv", ("LA 3.0",), "uV"),
+        ("ba_ratio",    ("DA 3.0", "DA 10.0", "LA 3.0"), "1"),
+    ]
+    EYE_TEXT = {"OD": "Right eye (OD)", "OS": "Left eye (OS)"}
 
     def __init__(self, config: ERGConfig = None):
         self.config = config or CONFIG
 
+    # ---------------------------------------------------------------- helpers
+    @staticmethod
+    def _value(v):
+        """Return a float, or None for a missing or NaN value."""
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return None
+        return None if np.isnan(v) else v
+
+    @staticmethod
+    def _protocol(protocol: str) -> str:
+        p = (protocol or "").strip()
+        return "LA 30 Hz" if p.upper() == "LA 30 HZ" else p
+
+    @staticmethod
+    def _eye(eye):
+        e = (eye or "").strip().upper()
+        return e if e in ("OD", "OS") else None
+
+    def config_hash(self) -> str:
+        """SHA-256 of the pipeline configuration (Chapter 17 §17.3.3)."""
+        import hashlib
+        cfg = {k: getattr(self.config, k) for k in dir(self.config) if k.isupper()}
+        text = json.dumps(cfg, sort_keys=True, default=str)
+        return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    def _quantity(self, value, unit):
+        q = {"value": value, "system": self.UCUM, "code": unit}
+        if unit != "1":
+            q["unit"] = unit
+        return q
+
+    def _components(self, features: Dict, protocol: str, eye) -> List[Dict]:
+        comps = []
+        for name, protocols, od, os_, unit in self.LOINC_COMPONENTS:
+            if protocol not in protocols:
+                continue
+            v = self._value(features.get(name))
+            if v is None:
+                continue
+            if eye:
+                coding = {"system": self.LOINC, "code": od if eye == "OD" else os_}
+            else:
+                # Table B.1 codes are eye-specific; without the eye the
+                # value is sent under the project code system.
+                coding = {"system": self.CS + "erg-features", "code": name}
+            comps.append({"code": {"coding": [coding], "text": name},
+                          "valueQuantity": self._quantity(v, unit)})
+        for name, protocols, unit in self.PROJECT_COMPONENTS:
+            if protocol not in protocols:
+                continue
+            v = self._value(features.get(name))
+            if v is None:
+                continue
+            comps.append({"code": {"coding": [{"system": self.CS + "erg-features",
+                                               "code": name}], "text": name},
+                          "valueQuantity": self._quantity(v, unit)})
+        return comps
+
+    # ------------------------------------------------------------ Observation
     def generate_observation(self,
-                            report_id: str,
-                            patient_id: str,
-                            traffic_light: Dict,
-                            features: Dict,
-                            z_scores: Dict,
-                            audit_results: Dict,
-                            electrode_type: str,
-                            protocol: str) -> Dict[str, Any]:
+                             report_id: str,
+                             patient_id: str,
+                             traffic_light: Dict,
+                             features: Dict,
+                             z_scores: Dict,
+                             audit_results: Dict,
+                             electrode_type: str,
+                             protocol: str,
+                             eye: str = None,
+                             recording_date: str = None,
+                             center_id: str = None,
+                             device_manufacturer: str = None,
+                             normative_ref_version: str = "baker2025",
+                             model_weights_hash: str = "PENDING") -> Dict[str, Any]:
         """
-        Generate FHIR Observation resource for ERG.
+        Build the Appendix B Observation for one recording.
 
-        Parameters
-        ----------
-        report_id : Unique identifier for this report
-        patient_id : Anonymized patient reference
-        traffic_light : Traffic light dictionary from Cell 6
-        features : Extracted features dictionary
-        z_scores : Z-scores dictionary
-        audit_results : Audit results from Stage 1
-        electrode_type : Electrode type string
-        protocol : ISCEV protocol string
-
-        Returns
-        -------
-        Observation resource as dictionary (FHIR R4 compliant)
+        traffic_light and z_scores are accepted so that existing callers
+        keep working; they are reported in the DiagnosticReport and the
+        Layer 4 record, not in the Observation. model_weights_hash stays
+        "PENDING" until a trained model is deployed.
         """
+        protocol = self._protocol(protocol)
+        eye = self._eye(eye)
 
-        # Base Observation resource
         observation = {
             "resourceType": "Observation",
             "id": report_id,
-            "meta": {
-                "profile": ["http://hl7.org/fhir/StructureDefinition/Observation"],
-                "versionId": "1",
-                "lastUpdated": datetime.now().isoformat()
-            },
+            "extension": [
+                {"url": self.EXT + "iscev-protocol", "valueCode": protocol},
+                {"url": self.EXT + "electrode-type", "valueCode": electrode_type},
+                {"url": self.EXT + "version-stamp", "extension": [
+                    {"url": "api_version",
+                     "valueString": str(self.config.PIPELINE_VERSION)},
+                    {"url": "model_weights_hash", "valueString": model_weights_hash},
+                    {"url": "config_hash", "valueString": self.config_hash()},
+                    {"url": "normative_ref_version",
+                     "valueString": normative_ref_version},
+                ]},
+            ],
             "status": "final",
-            "category": [
-                {
-                    "coding": [
-                        {
-                            "system": "http://terminology.hl7.org/CodeSystem/observation-category",
-                            "code": "exam",
-                            "display": "Exam"
-                        }
-                    ]
-                }
-            ],
-            "code": {
-                "coding": [
-                    {
-                        "system": "http://loinc.org",
-                        "code": "70943-7",
-                        "display": "Electroretinogram (ERG)"
-                    }
-                ],
-                "text": f"Full-field ERG - {protocol}"
-            },
-            "subject": {
-                "reference": f"Patient/{patient_id}"
-            },
-            "effectiveDateTime": datetime.now().isoformat(),
-            "issued": datetime.now().isoformat(),
-            "performer": [
-                {
-                    "reference": "Organization/ERG-Processing-API",
-                    "display": "ERG Processing Pipeline v2.5.0"
-                }
-            ],
-            "valueCodeableConcept": {
-                "coding": [
-                    {
-                        "system": "http://snomed.info/sct",
-                        "code": self.SNOMED_INTERPRETATION[traffic_light['signal']]['code'],
-                        "display": self.SNOMED_INTERPRETATION[traffic_light['signal']]['display']
-                    }
-                ],
-                "text": traffic_light['message']
-            },
-            "interpretation": [
-                {
-                    "coding": [
-                        {
-                            "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
-                            "code": "N" if traffic_light['signal'] == 'GREEN' else ("A" if traffic_light['signal'] == 'AMBER' else "HH"),
-                            "display": traffic_light['signal']
-                        }
-                    ]
-                }
-            ],
-            "method": {
-                "coding": [
-                    {
-                        "system": "https://iscev.org/standards",
-                        "code": self.ISCEV_PROTOCOL_CODES.get(protocol, "ISCEV-UNKNOWN"),
-                        "display": f"ISCEV 2022 {protocol}"
-                    }
-                ]
-            },
-            "device": {
-                "coding": [
-                    {
-                        "system": "https://github.com/ERG-AI/pipeline",
-                        "code": self.config.PIPELINE_VERSION,
-                        "display": self.config.PIPELINE_NAME
-                    }
-                ]
-            },
-            "component": []
+            "category": [{"coding": [{
+                "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                "code": "procedure", "display": "Procedure"}]}],
+            "code": {"coding": [dict(self.PANEL)]},
+            "subject": {"reference": f"Patient/{patient_id}"},
         }
+        if recording_date:
+            observation["effectiveDateTime"] = str(recording_date)[:10]
+        if center_id:
+            observation["performer"] = [{"reference": f"Organization/{center_id}"}]
+        if eye:
+            observation["bodySite"] = {"text": self.EYE_TEXT[eye]}
+        if device_manufacturer:
+            observation["device"] = {"reference": f"Device/{device_manufacturer}"}
 
-        # Add quality component
-        observation['component'].append({
-            "code": {
-                "coding": [
-                    {
-                        "system": "http://loinc.org",
-                        "code": "93879-0",
-                        "display": "Signal quality grade"
-                    }
-                ]
-            },
-            "valueCodeableConcept": {
-                "coding": [
-                    {
-                        "system": "https://github.com/ERG-AI/quality",
-                        "code": audit_results.get('quality', {}).get('grade', 'U'),
-                        "display": audit_results.get('quality', {}).get('description', 'Unknown')
-                    }
-                ]
-            }
-        })
+        components = self._components(features, protocol, eye)
+        if components:
+            observation["component"] = components
 
-        # Add electrode type component
-        observation['component'].append({
-            "code": {
-                "coding": [
-                    {
-                        "system": "https://iscev.org/electrodes",
-                        "code": electrode_type.upper(),
-                        "display": f"{electrode_type.replace('_', ' ').title()} electrode"
-                    }
-                ]
-            },
-            "valueString": electrode_type.replace('_', ' ')
-        })
-
-        # Add components for each feature with Z-score
-        for param_name, z_value in z_scores.items():
-            if abs(z_value) > 0:
-                # Map parameter to LOINC code
-                erg_code = self.ERG_PARAMETER_CODES.get(param_name, None)
-                param_display = param_name.replace('_', ' ').title()
-
-                component = {
-                    "code": {
-                        "text": param_display
-                    },
-                    "valueQuantity": {
-                        "value": z_value,
-                        "unit": "Z-score",
-                        "system": "http://unitsofmeasure.org",
-                        "code": "{z-score}"
-                    },
-                    "interpretation": [
-                        {
-                            "coding": [
-                                {
-                                    "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
-                                    "code": "N" if abs(z_value) <= 2 else ("A" if abs(z_value) <= 3 else "HH"),
-                                    "display": "Normal" if abs(z_value) <= 2 else ("Borderline" if abs(z_value) <= 3 else "Abnormal")
-                                }
-                            ]
-                        }
-                    ]
-                }
-
-                if erg_code:
-                    component["code"]["coding"] = [{
-                        "system": self.ERG_CODE_SYSTEM,
-                        "code": erg_code,
-                        "display": param_display
-                    }]
-                else:
-                    component["code"]["text"] = param_display
-
-                observation['component'].append(component)
-
-        # ── PhNR raw amplitude (LA 3.0 only — no z-score, reference range pending) ──
-        if protocol == 'LA 3.0':
-            phnr_val = features.get('phnr_amp_uv', None)
-            phnr_atypical = features.get('phnr_polarity_atypical', False)
-            if phnr_val is not None and not (isinstance(phnr_val, float) and np.isnan(phnr_val)):
-                note_text = (
-                    "Raw amplitude only. Reference range under development. "
-                    "No Z-score classification applied (v2.5.0)."
-                )
-                if phnr_atypical:
-                    note_text += (
-                        " DATA QUALITY WARNING: positive (above-baseline) value is atypical "
-                        "for a Photopic Negative Response, which is defined as a negative-going "
-                        "deflection in all published normative and pathological data. Likely "
-                        "causes: wrong feature measured in the search window (b-wave tail, "
-                        "i-wave, or OP ringing dominating over a smaller true PhNR trough), "
-                        "electrode polarity inversion, or baseline drift/noise. Verify electrode "
-                        "connection and signal quality before clinical interpretation."
-                    )
-                observation['component'].append({
-                    "code": {
-                        "coding": [{
-                            "system": self.ERG_CODE_SYSTEM,
-                            "code": "erg-api:phnr-amplitude",
-                            "display": "PhNR Amplitude"
-                        }],
-                        "text": "PhNR Amplitude"
-                    },
-                    "valueQuantity": {
-                        "value": float(phnr_val),
-                        "unit": "uV",
-                        "system": "http://unitsofmeasure.org",
-                        "code": "uV"
-                    },
-                    "note": [{
-                        "text": note_text
-                    }]
-                })
-
-        # ── Step 2.5: FHIR note for inverted polarity ────────────────────
-        if features.get('inverted_polarity_detected', False):
-            observation.setdefault('note', []).append({
-                "text": (
-                    "Signal orientation auto-correction applied: dominant positive "
-                    "deflection detected in 0-30 ms post-stimulus window, indicating "
-                    "inverted amplifier polarity. Signal multiplied by -1 prior to "
-                    "feature extraction. Verify electrode orientation before clinical use. "
-                    "ERG Analysis API v2.5.0 Step 2.5."
-                )
-            })
-
+        notes = []
+        snr = (audit_results or {}).get("snr", {}) or {}
+        if str(snr.get("status", "")).upper() == "WARNING":
+            notes.append("Signal quality WARNING: " + str(snr.get("message", "")).strip())
+        if features.get("inverted_polarity_detected", False):
+            notes.append(
+                "Signal orientation corrected: the first 30 ms after the flash "
+                "were dominated by a positive deflection, so the signal was "
+                "inverted before feature extraction. Verify electrode "
+                "orientation before clinical use.")
+        if features.get("phnr_polarity_atypical", False):
+            notes.append(
+                "PhNR value is positive, which is atypical for a photopic "
+                "negative response. Check electrode connection and signal "
+                "quality before interpreting it.")
+        if notes:
+            observation["note"] = [{"text": n} for n in notes]
         return observation
 
-    def generate_bundle(self, observation: Dict, include_patient: bool = False) -> Dict[str, Any]:
+    # ----------------------------------------------------------------- Bundle
+    def generate_bundle(self,
+                        observation: Dict,
+                        full_report: Dict = None,
+                        age_years: int = None,
+                        sex: str = None,
+                        center_id: str = None) -> Dict[str, Any]:
         """
-        Wrap Observation in a FHIR Bundle.
-
-        Parameters
-        ----------
-        observation : Observation resource dictionary
-        include_patient : If True, include Patient resource (requires full patient data)
-
-        Returns
-        -------
-        Bundle resource as dictionary
+        Wrap one Observation in the Appendix B Bundle: Observation,
+        DiagnosticReport, AuditEvent, and a Patient when age or sex is
+        known. The Patient carries the age in whole years, never the date
+        of birth (GDPR Article 5(1)(c)).
         """
-        bundle = {
-            "resourceType": "Bundle",
-            "type": "collection",
-            "id": f"bundle-{observation['id']}",
-            "meta": {
-                "lastUpdated": datetime.now().isoformat()
-            },
-            "entry": [
-                {
-                    "fullUrl": f"urn:uuid:{observation['id']}",
-                    "resource": observation
-                }
-            ]
+        import uuid
+        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        full_report = full_report or {}
+        subject = observation.get("subject", {"reference": "Patient/UNKNOWN"})
+        obs_url = f"urn:uuid:{observation['id']}"
+        entries = [{"fullUrl": obs_url, "resource": observation}]
+
+        if age_years is not None or sex:
+            patient = {"resourceType": "Patient",
+                       "id": subject["reference"].split("/", 1)[-1]}
+            if age_years is not None:
+                patient["extension"] = [{"url": self.EXT + "age-years",
+                                         "valueInteger": int(age_years)}]
+            gender = {"M": "male", "F": "female"}.get(str(sex or "").upper())
+            if gender:
+                patient["gender"] = gender
+            entries.append({"fullUrl": f"urn:uuid:{uuid.uuid4()}",
+                            "resource": patient})
+
+        layer1 = full_report.get("layer_1_traffic_light", {}) or {}
+        layer2 = full_report.get("layer_2_clinical_summary", {}) or {}
+        report = {
+            "resourceType": "DiagnosticReport",
+            "status": "final",
+            "code": {"coding": [dict(self.PANEL)]},
+            "subject": subject,
+            "result": [{"reference": obs_url}],
         }
+        summary = " ".join(str(x) for x in (layer2.get("key_findings") or []))
+        action = layer2.get("recommended_action")
+        conclusion = " ".join(s for s in (summary, action) if s).strip()
+        if conclusion:
+            report["conclusion"] = conclusion
+        signal = layer1.get("signal")
+        if signal in ("GREEN", "AMBER", "RED"):
+            report["conclusionCode"] = [{"coding": [{
+                "system": self.CS + "traffic-light", "code": signal}]}]
+        entries.append({"fullUrl": f"urn:uuid:{uuid.uuid4()}", "resource": report})
 
-        return bundle
+        audit = {
+            "resourceType": "AuditEvent",
+            "extension": [{
+                "url": self.EXT + "layer4-audit",
+                "valueString": json.dumps(full_report.get("layer_4_technical_audit", {}),
+                                          default=str)}],
+            "type": {"system": "http://dicom.nema.org/resources/ontology/DCM",
+                     "code": "110100", "display": "Application Activity"},
+            "recorded": now,
+            "outcome": "0",
+            "agent": [{"who": {"display": "ERG Analysis API"}, "requestor": False}],
+            "source": {"observer": (
+                {"reference": f"Organization/{center_id}"} if center_id
+                else {"display": "ERG Analysis API"})},
+        }
+        entries.append({"fullUrl": f"urn:uuid:{uuid.uuid4()}", "resource": audit})
+
+        return {"resourceType": "Bundle", "id": str(uuid.uuid4()),
+                "type": "collection", "timestamp": now, "entry": entries}
 
     def to_json(self, fhir_resource: Dict, pretty: bool = True) -> str:
-        """
-        Convert FHIR resource to JSON string.
-
-        Parameters
-        ----------
-        fhir_resource : FHIR resource dictionary
-        pretty : If True, format with indentation
-
-        Returns
-        -------
-        JSON string
-        """
-        if pretty:
-            return json.dumps(fhir_resource, indent=2, default=str)
-        return json.dumps(fhir_resource, default=str)
+        """Return the FHIR resource as a JSON string."""
+        return json.dumps(fhir_resource, indent=2 if pretty else None, default=str)
 
     def save_to_file(self, fhir_resource: Dict, filename: str) -> None:
-        """
-        Save FHIR resource to JSON file.
-
-        Parameters
-        ----------
-        fhir_resource : FHIR resource dictionary
-        filename : Output filename (should end with .json)
-        """
-        with open(filename, 'w') as f:
+        """Save the FHIR resource to a JSON file."""
+        with open(filename, "w") as f:
             json.dump(fhir_resource, f, indent=2, default=str)
         print(f"✓ FHIR JSON saved to: {filename}")
 
-
-# ============================================================================
-# Integration with Cell 6 Report
-# ============================================================================
 
 def add_fhir_to_report(full_report: Dict, fhir_observation: Dict) -> Dict:
     """
     Add FHIR Observation to the full report dictionary.
     """
     full_report['fhir_observation'] = fhir_observation
-    full_report['fhir_bundle'] = None  # Will be generated if needed
+    full_report['fhir_bundle'] = None  # set by generate_bundle() when needed
     return full_report
 
 
@@ -3054,26 +2963,8 @@ def add_fhir_to_report(full_report: Dict, fhir_observation: Dict) -> Dict:
 print("\n" + "=" * 60)
 print("CELL 9: FHIR JSON OUTPUT - READY")
 print("=" * 60)
-print("HL7 FHIR R4 Compliant ERG Observation Resource")
-print("LOINC Code : 70943-7 (top-level ERG observation)")
-print("Parameter codes: custom scheme erg-api:* (Appendix B)")
-print("SNOMED CT: Normal (17621005), Borderline (263654007), Abnormal (442257004)")
-print("ISCEV Protocol Extensions: Custom codes for 5 standard protocols")
-print("=" * 60)
-print("\nUsage Example:")
-print("  fhir_gen = ERGFHIRGenerator()")
-print("  observation = fhir_gen.generate_observation(")
-print("      report_id='ERG-20260514-120000',")
-print("      patient_id='P001',")
-print("      traffic_light=tl_dict,")
-print("      features=features_dict,")
-print("      z_scores=z_scores_dict,")
-print("      audit_results=audit_dict,")
-print("      electrode_type='contact_lens',")
-print("      protocol='DA 3.0'")
-print("  )")
-print("  fhir_json = fhir_gen.to_json(observation)")
-print("  fhir_gen.save_to_file(observation, 'fhir_observation.json')")
+print("HL7 FHIR R4 output (Appendix B): LOINC panel 79894-2,")
+print("Table B.1 component codes, Bundle with DiagnosticReport and AuditEvent.")
 print("=" * 60)
 
 # ============================================================================
