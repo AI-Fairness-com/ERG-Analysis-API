@@ -1,7 +1,8 @@
 """
-tests/test_pipeline.py — 14 core + orientation tests.
-T-CSV-01/02, T-FILT-01, T-WAVE-01/02, T-ZSCORE-01/02,
-T-TL-01/02, T-FHIR-01/02, T-DTL-01, T-ORIENT-01/02, T-ELEC-01.
+tests/test_pipeline.py — core pipeline tests.
+T-CSV-01/02, T-FILT-01, T-WAVE-01/02, T-LIM-01 to 05 (reference-limit
+zones, Chapter 10 §10.4 and the Chapter 19 tables), T-FHIR-01 to 05,
+T-GF-01 (gold foil conversion), T-ORIENT-01/02, T-ELEC-01.
 """
 import math, pytest
 
@@ -50,30 +51,152 @@ class TestWaveformExtraction:
         assert a_it is not None and b_it is not None and b_it > a_it
 
 
-class TestZScores:
-    def test_T_ZSCORE_01_mu_input_returns_zero(self, pipeline_module):
-        rgen = pipeline_module.ERGReportGenerator()
-        mu, sigma = rgen.REFERENCE_RANGES["DA 3.0"]["gold_foil"]["le35"]["a_amp"]
-        assert abs((mu-mu)/sigma) <= 0.01
+class TestReferenceLimits:
+    """Equation 10.2 and Table 10.4 of Chapter 10 §10.4, with the
+    Baker et al. (2025) Tables 4 and 5 limits held in the normative file."""
 
-    def test_T_ZSCORE_02_mu_plus_2sigma_returns_plus_two(self, pipeline_module):
+    def test_T_LIM_01_amplitude_zones_at_boundaries(self, pipeline_module):
         rgen = pipeline_module.ERGReportGenerator()
-        mu, sigma = rgen.REFERENCE_RANGES["DA 3.0"]["gold_foil"]["le35"]["b_amp"]
-        assert abs(((mu+2*sigma)-mu)/sigma - 2.0) <= 0.05
+        lim = rgen.get_limits("DA 3.0", "a_amp", "le35")   # 119-238, L_lo 109
+        assert (lim["lower"], lim["upper"], lim["lower_ci"][0]) == (119, 238, 109)
+        zone = lambda x: pipeline_module.classify_against_limits(x, lim, "amplitude")["zone"]
+        assert zone(119) == "GREEN" and zone(238) == "GREEN"
+        assert zone(118.9) == "AMBER" and zone(109) == "AMBER"
+        assert zone(108.9) == "RED"
+        assert zone(238.1) == "ATYPICAL DIRECTION"
 
-
-class TestTrafficLight:
-    def test_T_TL_01_Z_minus_2_5_returns_AMBER(self, pipeline_module):
+    def test_T_LIM_02_implicit_time_zones_at_boundaries(self, pipeline_module):
         rgen = pipeline_module.ERGReportGenerator()
-        tl = rgen.generate_traffic_light(
-            {"a_wave_amplitude":-2.5,"b_wave_amplitude":0.0,"b_wave_implicit_time":0.0,"ba_ratio":0.0})
-        assert tl["signal"] == "AMBER", f"T-TL-01: {tl['signal']}"
+        lim = rgen.get_limits("DA 3.0", "a_imp", "le35")   # 13.5-16, U_hi 17
+        assert (lim["lower"], lim["upper"], lim["upper_ci"][1]) == (13.5, 16, 17)
+        zone = lambda x: pipeline_module.classify_against_limits(x, lim, "implicit_time")["zone"]
+        assert zone(13.5) == "GREEN" and zone(16) == "GREEN"
+        assert zone(16.1) == "AMBER" and zone(17) == "AMBER"
+        assert zone(17.1) == "RED"
+        assert zone(13.4) == "ATYPICAL DIRECTION"
 
-    def test_T_TL_02_Z_plus_3_1_returns_RED(self, pipeline_module):
+    # Every zoned value of the Chapter 19 case tables (Tables 19.1 to 19.9):
+    # (age group, protocol, parameter, value, zone printed in the book)
+    CHAPTER_19 = [
+    ("le35", "DA 0.01", "b_amp", 190, "GREEN"),
+    ("le35", "DA 0.01", "b_amp", 215, "GREEN"),
+    ("le35", "DA 0.01", "b_imp", 84, "GREEN"),
+    ("le35", "DA 0.01", "b_imp", 98, "GREEN"),
+    ("le35", "DA 10.0", "a_amp", 50, "RED"),
+    ("le35", "DA 10.0", "a_amp", 140, "GREEN"),
+    ("le35", "DA 10.0", "a_imp", 13.1, "GREEN"),
+    ("le35", "DA 10.0", "a_imp", 14.8, "RED"),
+    ("le35", "DA 10.0", "b_amp", 60, "RED"),
+    ("le35", "DA 10.0", "b_amp", 110, "RED"),
+    ("le35", "DA 10.0", "b_amp", 240, "GREEN"),
+    ("le35", "DA 10.0", "b_imp", 55, "GREEN"),
+    ("le35", "DA 10.0", "b_imp", 58, "GREEN"),
+    ("le35", "DA 3.0", "a_amp", 32, "RED"),
+    ("le35", "DA 3.0", "a_amp", 95, "RED"),
+    ("le35", "DA 3.0", "a_amp", 150, "GREEN"),
+    ("le35", "DA 3.0", "a_amp", 170, "GREEN"),
+    ("le35", "DA 3.0", "a_imp", 15, "GREEN"),
+    ("le35", "DA 3.0", "a_imp", 15.2, "GREEN"),
+    ("le35", "DA 3.0", "a_imp", 16.4, "AMBER"),
+    ("le35", "DA 3.0", "a_imp", 19.5, "RED"),
+    ("le35", "DA 3.0", "b_amp", 41, "RED"),
+    ("le35", "DA 3.0", "b_amp", 95, "RED"),
+    ("le35", "DA 3.0", "b_amp", 205, "GREEN"),
+    ("le35", "DA 3.0", "b_amp", 280, "GREEN"),
+    ("le35", "DA 3.0", "b_imp", 52, "GREEN"),
+    ("le35", "DA 3.0", "b_imp", 52.1, "GREEN"),
+    ("le35", "DA 3.0", "b_imp", 54, "GREEN"),
+    ("le35", "DA 3.0", "b_imp", 72, "RED"),
+    ("le35", "LA 3.0", "a_amp", 8, "RED"),
+    ("le35", "LA 3.0", "a_amp", 14, "GREEN"),
+    ("le35", "LA 3.0", "a_amp", 20, "GREEN"),
+    ("le35", "LA 3.0", "a_amp", 24, "GREEN"),
+    ("le35", "LA 3.0", "a_imp", 14.1, "GREEN"),
+    ("le35", "LA 3.0", "a_imp", 14.2, "GREEN"),
+    ("le35", "LA 3.0", "a_imp", 14.8, "GREEN"),
+    ("le35", "LA 3.0", "a_imp", 15.5, "GREEN"),
+    ("le35", "LA 3.0", "b_amp", 40, "RED"),
+    ("le35", "LA 3.0", "b_amp", 58, "AMBER"),
+    ("le35", "LA 3.0", "b_amp", 60, "AMBER"),
+    ("le35", "LA 3.0", "b_amp", 70, "AMBER"),
+    ("le35", "LA 3.0", "b_imp", 29, "GREEN"),
+    ("le35", "LA 3.0", "b_imp", 29.6, "GREEN"),
+    ("le35", "LA 3.0", "b_imp", 29.8, "GREEN"),
+    ("le35", "LA 3.0", "b_imp", 33, "RED"),
+    ("36to59", "DA 0.01", "b_amp", 175, "GREEN"),
+    ("36to59", "DA 0.01", "b_imp", 98.6, "GREEN"),
+    ("36to59", "DA 10.0", "a_amp", 180, "GREEN"),
+    ("36to59", "DA 10.0", "a_imp", 15.6, "AMBER"),
+    ("36to59", "DA 10.0", "b_amp", 280, "GREEN"),
+    ("36to59", "DA 10.0", "b_imp", 52, "GREEN"),
+    ("36to59", "DA 3.0", "a_amp", 150, "GREEN"),
+    ("36to59", "DA 3.0", "a_imp", 17.3, "AMBER"),
+    ("36to59", "DA 3.0", "b_amp", 240, "GREEN"),
+    ("36to59", "DA 3.0", "b_imp", 49.8, "GREEN"),
+    ("36to59", "LA 3.0", "a_amp", 22, "GREEN"),
+    ("36to59", "LA 3.0", "a_imp", 14.2, "GREEN"),
+    ("36to59", "LA 3.0", "b_amp", 100, "GREEN"),
+    ("36to59", "LA 3.0", "b_imp", 29.4, "GREEN"),
+    ("ge60", "DA 0.01", "b_amp", 190, "GREEN"),
+    ("ge60", "DA 0.01", "b_imp", 98, "GREEN"),
+    ("ge60", "DA 10.0", "a_amp", 140, "GREEN"),
+    ("ge60", "DA 10.0", "a_imp", 13.1, "GREEN"),
+    ("ge60", "DA 10.0", "b_amp", 240, "GREEN"),
+    ("ge60", "DA 10.0", "b_imp", 55, "GREEN"),
+    ("ge60", "DA 3.0", "a_amp", 95, "GREEN"),
+    ("ge60", "DA 3.0", "a_amp", 105, "GREEN"),
+    ("ge60", "DA 3.0", "a_amp", 112, "GREEN"),
+    ("ge60", "DA 3.0", "a_imp", 16.2, "GREEN"),
+    ("ge60", "DA 3.0", "a_imp", 16.4, "GREEN"),
+    ("ge60", "DA 3.0", "a_imp", 16.6, "GREEN"),
+    ("ge60", "DA 3.0", "b_amp", 195, "GREEN"),
+    ("ge60", "DA 3.0", "b_amp", 205, "GREEN"),
+    ("ge60", "DA 3.0", "b_amp", 215, "GREEN"),
+    ("ge60", "DA 3.0", "b_imp", 51.4, "GREEN"),
+    ("ge60", "DA 3.0", "b_imp", 52.1, "GREEN"),
+    ("ge60", "DA 3.0", "b_imp", 53, "GREEN"),
+    ("ge60", "LA 3.0", "a_amp", 19, "GREEN"),
+    ("ge60", "LA 3.0", "a_amp", 20, "GREEN"),
+    ("ge60", "LA 3.0", "a_amp", 21, "GREEN"),
+    ("ge60", "LA 3.0", "a_imp", 14.2, "GREEN"),
+    ("ge60", "LA 3.0", "a_imp", 14.3, "GREEN"),
+    ("ge60", "LA 3.0", "a_imp", 14.4, "GREEN"),
+    ("ge60", "LA 3.0", "b_amp", 52, "GREEN"),
+    ("ge60", "LA 3.0", "b_amp", 58, "GREEN"),
+    ("ge60", "LA 3.0", "b_amp", 90, "GREEN"),
+    ("ge60", "LA 3.0", "b_imp", 28.1, "GREEN"),
+    ("ge60", "LA 3.0", "b_imp", 29.6, "GREEN"),
+    ("ge60", "LA 3.0", "b_imp", 29.8, "GREEN"),
+    ]
+
+    def test_T_LIM_03_reproduces_chapter_19_zones(self, pipeline_module):
         rgen = pipeline_module.ERGReportGenerator()
-        tl = rgen.generate_traffic_light(
-            {"a_wave_amplitude":0.0,"b_wave_amplitude":0.0,"b_wave_implicit_time":3.1,"ba_ratio":0.0})
-        assert tl["signal"] == "RED", f"T-TL-02: {tl['signal']}"
+        wrong = []
+        for stratum, protocol, param, x, expected in self.CHAPTER_19:
+            kind = "amplitude" if param.endswith("_amp") else "implicit_time"
+            got = pipeline_module.classify_against_limits(
+                x, rgen.get_limits(protocol, param, stratum), kind)["zone"]
+            if got != expected:
+                wrong.append((stratum, protocol, param, x, expected, got))
+        assert not wrong, f"T-LIM-03: zones differ from Chapter 19: {wrong}"
+
+    def test_T_LIM_04_composite_is_most_severe_zone(self, pipeline_module):
+        rgen = pipeline_module.ERGReportGenerator()
+        base = {"a_amp_uv": 150, "a_implicit_ms": 15, "b_amp_uv": 300, "b_implicit_ms": 52}
+        def signal(**changes):
+            rows = rgen.classify_parameters({**base, **changes}, "dtl_fiber", "DA 3.0", "≤35y")
+            return rgen.composite_traffic_light(rows, "dtl_fiber")["signal"]
+        assert signal() == "GREEN"
+        assert signal(a_amp_uv=300) == "ATYPICAL DIRECTION"
+        assert signal(a_amp_uv=300, b_amp_uv=185) == "AMBER"
+        assert signal(a_amp_uv=300, b_amp_uv=185, b_implicit_ms=70) == "RED"
+
+    def test_T_LIM_05_unzoned_parameters_reported_without_zone(self, pipeline_module):
+        rgen = pipeline_module.ERGReportGenerator()
+        rows = rgen.classify_parameters(
+            {"b_amp_uv": 300, "b_implicit_ms": 52, "ba_ratio": 2.1}, "dtl_fiber", "DA 3.0", "≤35y")
+        ba = next(r for r in rows if r["parameter"] == "ba_ratio")
+        assert ba["zone"] == "NOT ZONED" and ba["value"] == 2.1
 
 
 class TestFHIROutput:
@@ -111,19 +234,19 @@ class TestFHIROutput:
         assert audit["type"]["code"] == "110100" and audit["outcome"] == "0"
 
 
-class TestDTLDemingRegression:
-    def test_T_DTL_01_deming_correction_shifts_z_scores(self, pipeline_module):
+class TestGoldFoilConversion:
+    def test_T_GF_01_gold_foil_amplitude_converted_to_silver_thread(self, pipeline_module):
+        """Baker et al. (2025) Table 2: ST = slope * GF + intercept for
+        amplitudes; peak times and DTL fiber values are unchanged."""
         rgen = pipeline_module.ERGReportGenerator()
-        assert rgen.ELECTRODE_TRANSFORM and "DA 3.0" in rgen.ELECTRODE_TRANSFORM
-        gf_mu = 175.70
-        slope = rgen.ELECTRODE_TRANSFORM["DA 3.0"]["a_amp"]["slope"]
-        intercept = rgen.ELECTRODE_TRANSFORM["DA 3.0"]["a_amp"]["intercept"]
-        ste_at_mu = slope*gf_mu + intercept
-        gfe_equiv = rgen._apply_dtl_transform("DA 3.0","a_amp",ste_at_mu)
-        assert abs(gfe_equiv - gf_mu) < 0.01, f"T-DTL-01: GFE_equiv={gfe_equiv:.4f}"
-        _, sigma = rgen.REFERENCE_RANGES["DA 3.0"]["gold_foil"]["le35"]["a_amp"]
-        assert abs((gfe_equiv-gf_mu)/sigma) <= 0.01
-        assert rgen._apply_dtl_transform("DA 3.0","a_imp",14.98) == 14.98
+        model = rgen.ELECTRODE_TRANSFORM["DA 3.0"]["a_amp"]
+        assert (model["slope"], model["intercept"]) == (0.56, 8.24)
+        value, converted = rgen.to_silver_thread("gold_foil", "DA 3.0", "a_amp", 200.0)
+        assert converted and value == round(0.56 * 200.0 + 8.24, 1)
+        assert rgen.to_silver_thread("gold_foil", "DA 3.0", "a_imp", 15.0) == (15.0, False)
+        assert rgen.to_silver_thread("dtl_fiber", "DA 3.0", "a_amp", 200.0) == (200.0, False)
+        flicker, _ = rgen.to_silver_thread("gold_foil", "LA 30 Hz", "b_amp", 100.0)
+        assert flicker == 63.5   # Table 2 legend: 100 uV gold foil -> 63.46 uV
 
 
 class TestSignalOrientation:
@@ -135,12 +258,12 @@ class TestSignalOrientation:
         (a) a-wave amplitude negative after correction
         (b) inverted_polarity_detected = True in features
         (c) Layer 4 warning present and contains 'corrected'
-        (d) traffic light still GREEN
+        (d) traffic light still GREEN (analysed as DTL fiber, like S01)
         (e) FHIR note contains 'inverted' or 'polarity'
         """
         import numpy as np
         mod = pipeline_module
-        PRE_MS=50.0; PROTOCOL="DA 3.0"; ELECTRODE="gold_foil"; AGE="≤35y"
+        PRE_MS=50.0; PROTOCOL="DA 3.0"; ELECTRODE="dtl_fiber"; AGE="≤35y"
 
         time_ms, signal_uv, fs_hz, _ = mod.load_erg_csv(s01_csv_path)
         flash_onset = int(PRE_MS * fs_hz / 1000)
@@ -188,7 +311,6 @@ class TestSignalOrientation:
             report_id=l4["report_id"], patient_id="ORIENT-TEST",
             traffic_light=full_report["layer_1_traffic_light"],
             features=features,
-            z_scores=full_report["layer_2_clinical_summary"]["z_scores"],
             audit_results=audit, electrode_type=ELECTRODE, protocol=PROTOCOL)
         note_text = " ".join(n.get("text","") for n in fhir_obs.get("note",[])).lower()
         assert "inverted" in note_text or "polarity" in note_text, (

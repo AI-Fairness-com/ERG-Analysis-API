@@ -76,7 +76,7 @@ def s01_result(pipeline_module, s01_csv_path):
     Run the full pipeline on S01 once per session and return the result dict.
     Keys used in tests:
         result['features']         — extracted waveform features
-        result['z_scores']         — Z-score dict from Layer 2
+        result['parameter_zones']  — per-parameter values, limits and zones (Layer 2)
         result['traffic_light']    — traffic light dict from Layer 1
         result['fhir']             — FHIR Observation dict (Appendix B)
         result['fhir_bundle']      — FHIR Bundle dict (Appendix B §B.3)
@@ -88,7 +88,9 @@ def s01_result(pipeline_module, s01_csv_path):
     PRE_MS   = 50.0
     FS_HZ    = 2000.0
     PROTOCOL = "DA 3.0"
-    ELECTRODE = "gold_foil"
+    # The S01 fixture was generated on the silver thread amplitude scale,
+    # so it is analysed as a DTL fiber recording (Baker et al., 2025).
+    ELECTRODE = "dtl_fiber"
     AGE_GROUP = "≤35y"
 
     time_ms, signal_uv, fs_hz, metadata = mod.load_erg_csv(s01_csv_path)
@@ -141,7 +143,6 @@ def s01_result(pipeline_module, s01_csv_path):
         patient_id="S01-TEST",
         traffic_light=full_report["layer_1_traffic_light"],
         features=features,
-        z_scores=full_report["layer_2_clinical_summary"]["z_scores"],
         audit_results=audit_result,
         electrode_type=ELECTRODE,
         protocol=PROTOCOL,
@@ -152,7 +153,7 @@ def s01_result(pipeline_module, s01_csv_path):
 
     return {
         "features":      features,
-        "z_scores":      full_report["layer_2_clinical_summary"]["z_scores"],
+        "parameter_zones": full_report["layer_2_clinical_summary"]["parameter_zones"],
         "traffic_light": full_report["layer_1_traffic_light"],
         "fhir":          fhir_obs,
         "fhir_bundle":   fhir_bundle,
