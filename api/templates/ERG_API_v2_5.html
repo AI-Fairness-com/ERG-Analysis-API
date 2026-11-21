@@ -2820,7 +2820,8 @@
     let converted = false;
     rowsEl.innerHTML = zones.length ? zones.map(r => {
       const unit = r.unit || '';
-      let value = r.value == null ? 'Not measured' : fmt(r.value, unit);
+      let value = r.not_recordable ? 'Not recordable'
+        : r.value == null ? 'Not measured' : fmt(r.value, unit);
       if (r.converted_from_gold_foil && r.value_compared != null) {
         value += ' (silver thread equiv. ' + fmt(r.value_compared, unit) + ')';
         converted = true;
