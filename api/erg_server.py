@@ -1,7 +1,7 @@
 """
-erg_server.py — Local Flask server for ERG Analysis API v2.3.2
-Run with:  python erg_server.py
-Then open: http://localhost:5000
+erg_server.py — Local Flask server for the ERG Analysis API
+Run from the api/ folder:  python erg_server.py
+Then open: http://localhost:8080
 """
 
 import os
@@ -113,9 +113,10 @@ except Exception as exc:
     traceback.print_exc()
     sys.exit(1)
 
-ERGAudit            = pipeline.ERGAudit
-ERGFilter           = pipeline.ERGFilter
-ERGFeatureExtractor = pipeline.ERGFeatureExtractor
+run_full_audit       = pipeline.run_full_audit
+run_filter_pipeline  = pipeline.run_filter_pipeline
+extract_ops_signal   = pipeline.extract_ops
+extract_all_features = pipeline.extract_all_features
 ERGReportGenerator  = pipeline.ERGReportGenerator
 ERGFHIRGenerator    = pipeline.ERGFHIRGenerator
 load_erg_csv        = pipeline.load_erg_csv
@@ -198,8 +199,11 @@ def analyse():
     patient_id      = request.form.get("patient_id", "UNKNOWN")
     recording_date  = request.form.get("recording_date", "")  # YYYY-MM-DD from HTML date input
     age_group       = request.form.get("age_group",  "≤35y")   # Baker stratum
-    protocol        = request.form.get("protocol",   "DA 3")
-    electrode_type  = request.form.get("electrode_type", "contact_lens")
+    protocol        = request.form.get("protocol",   "DA 3.0")
+    electrode_type  = request.form.get("electrode_type", "").strip()
+    if not electrode_type:
+        return safe_jsonify({"message": "HALT: electrode type is missing. "
+                             "Select the electrode used for this recording."}, 400)
     pre_stimulus_ms = float(request.form.get("pre_stimulus_ms", 50.0))
     flash_dur_ms    = float(request.form.get("flash_duration_ms", 1.0))
     apply_notch     = request.form.get("apply_notch",   "false").lower() == "true"
@@ -242,17 +246,16 @@ def analyse():
             else:
                 noise_rms_uv = 1.0
 
-            auditor      = ERGAudit()
-            audit_result = auditor.run_full_audit(
+            audit_result = run_full_audit(
                 signal_uv, fs_hz,
                 electrode_type=electrode_type,
                 prestimulus_samples=prestimulus_samples,
                 age_group=audit_age_group,  # ERGConfig vocab
+                flash_duration_ms=flash_dur_ms,
             )
 
-            filter_obj  = ERGFilter()
             hw_cutoff   = audit_result["bandwidth"].get("hardware_cutoff_hz")
-            filtered_signal, filter_log = filter_obj.run_filter_pipeline(
+            filtered_signal, filter_log = run_filter_pipeline(
                 signal_uv, fs_hz,
                 apply_notch=apply_notch,
                 notch_hz=50.0,
@@ -262,10 +265,9 @@ def analyse():
 
             op_signal = None
             if extract_ops and audit_result["oscillatory_potentials"]["available"]:
-                op_signal = filter_obj.extract_ops(filtered_signal, fs_hz)
+                op_signal = extract_ops_signal(filtered_signal, fs_hz)
 
-            extractor = ERGFeatureExtractor()
-            features  = extractor.extract_all_features(
+            features  = extract_all_features(
                 signal=filtered_signal,
                 fs_hz=fs_hz,
                 protocol=protocol,
