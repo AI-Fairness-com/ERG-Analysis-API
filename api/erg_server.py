@@ -121,6 +121,18 @@ ERGReportGenerator  = pipeline.ERGReportGenerator
 ERGFHIRGenerator    = pipeline.ERGFHIRGenerator
 load_erg_csv        = pipeline.load_erg_csv
 
+_PROTOCOLS = {"DA0.01": "DA 0.01", "DA3": "DA 3.0", "DA3.0": "DA 3.0",
+              "DA10": "DA 10.0", "DA10.0": "DA 10.0", "LA3": "LA 3.0",
+              "LA3.0": "LA 3.0", "LA30HZ": "LA 30 Hz", "LA30": "LA 30 Hz"}
+
+
+def _normalise_protocol(value):
+    """Return the ISCEV protocol name used by the pipeline ('DA 3.0', ...).
+    Accepts older forms such as 'DA 3', 'DA_3.0' or 'LA 30Hz'."""
+    key = str(value or "").upper().replace(" ", "").replace("_", "")
+    return _PROTOCOLS.get(key, str(value or "").strip())
+
+
 def _eye_from_csv(path):
     """Return OD or OS from the CSV's eye column (Appendix A), or None."""
     try:
@@ -213,7 +225,7 @@ def analyse():
     patient_id      = request.form.get("patient_id", "UNKNOWN")
     recording_date  = request.form.get("recording_date", "")  # YYYY-MM-DD from HTML date input
     age_group       = request.form.get("age_group",  "≤35y")   # Baker stratum
-    protocol        = request.form.get("protocol",   "DA 3.0")
+    protocol        = _normalise_protocol(request.form.get("protocol", "DA 3.0"))
     electrode_type  = request.form.get("electrode_type", "").strip()
     if not electrode_type:
         return safe_jsonify({"message": "HALT: electrode type is missing. "
@@ -313,7 +325,6 @@ def analyse():
                 patient_id=patient_id,
                 traffic_light=full_report["layer_1_traffic_light"],
                 features=features,
-                z_scores=full_report["layer_2_clinical_summary"]["z_scores"],
                 audit_results=audit_result,
                 electrode_type=electrode_type,
                 protocol=protocol,
@@ -325,7 +336,7 @@ def analyse():
             full_report["fhir_bundle"] = fhir_bundle
 
             tl       = full_report["layer_1_traffic_light"]
-            z_scores = full_report["layer_2_clinical_summary"]["z_scores"]
+            zones    = full_report["layer_2_clinical_summary"]["parameter_zones"]
 
             # Downsample waveform for wire transfer — cap at 1400 points
             # (preserves full 2000 Hz x 700 ms; decimates longer recordings)
@@ -344,7 +355,10 @@ def analyse():
             result["data"] = sanitise({
                 "traffic_light":    tl,
                 "features":         features,
-                "z_scores":         z_scores,
+                "parameter_zones":  zones,
+                "key_findings":     full_report["layer_2_clinical_summary"]["key_findings"],
+                "recommended_action": full_report["layer_2_clinical_summary"]["recommended_action"],
+                "age_stratum":      full_report["layer_4_technical_audit"]["age_stratum"],
                 "audit_results":    audit_result,
                 "fhir_observation": fhir_observation,
                 "fhir_bundle":      fhir_bundle,

@@ -8,7 +8,7 @@ Original file is located at
 """
 
 """
-erg_report_generator.py — v2.4.0 Professional Clinical Report Generator
+erg_report_generator.py — v2.5.0 Professional Clinical Report Generator
 ERG Analysis API — AI Fairness CIO (Charity Commission No. 1218464)
 
 Generates a fixed-layout, print-quality PDF clinical report using ReportLab,
@@ -46,6 +46,7 @@ RED_SIG     = HexColor("#B3261E")   # RED traffic light
 AMBER_SIG   = HexColor("#9A6700")   # AMBER traffic light
 GREEN_SIG   = HexColor("#1E7B34")   # GREEN traffic light
 GREY_SIG    = HexColor("#6B7280")   # UNAVAILABLE / grey
+BLUE_SIG    = HexColor("#1D4E89")   # ATYPICAL DIRECTION
 PANEL_BG    = HexColor("#F7F8F8")
 WAVE_TEAL   = HexColor("#0E7C86")
 WAVE_AMBER  = HexColor("#C18A0B")
@@ -60,7 +61,7 @@ ORG_EMAIL   = "info@ai-fairness.com"
 ORG_WEB     = "www.ai-fairness.com"
 ORG_TEL     = "+44 (0)7356 287090"
 PRODUCT     = "ERG Analysis API"
-PRODUCT_VER = "v2.4.0"
+PRODUCT_VER = "v2.5.0"
 
 # ── Logo embedded as base64 (portable — no filesystem path dependency) ───────
 import base64 as _b64
@@ -79,10 +80,12 @@ MARGIN = 18 * mm
 
 SIGNAL_COLORS = {
     "RED": RED_SIG, "AMBER": AMBER_SIG, "GREEN": GREEN_SIG, "UNAVAILABLE": GREY_SIG,
+    "ATYPICAL DIRECTION": BLUE_SIG,
 }
 SIGNAL_LABELS = {
     "RED": "Significant Abnormality", "AMBER": "Borderline Abnormality",
-    "GREEN": "Within Normal Limits", "UNAVAILABLE": "Reference Range Unavailable",
+    "GREEN": "Within Reference Limits", "UNAVAILABLE": "Reference Limits Unavailable",
+    "ATYPICAL DIRECTION": "Outside Limits, Opposite to Disease — Check Recording",
 }
 
 styles = getSampleStyleSheet()
@@ -113,18 +116,6 @@ def _fmt(val, unit="", decimals=1, dash="\u2014"):
         return f"{val:.{decimals}f}{unit}"
     except (TypeError, ValueError):
         return str(val)
-
-
-def _fmt_z(z):
-    if z is None:
-        return "N/A"
-    try:
-        if z != z:
-            return "N/A"
-        sign = "+" if z >= 0 else ""
-        return f"Z = {sign}{z:.2f}"
-    except (TypeError, ValueError):
-        return "N/A"
 
 
 # ── Header / footer canvas ─────────────────────────────────────────────────
@@ -489,37 +480,28 @@ def build_patient_block(meta):
 def build_traffic_light_panel(traffic_light):
     signal = traffic_light.get("signal", "UNAVAILABLE")
     message = traffic_light.get("message", "")
-    confidence = traffic_light.get("confidence")
-    if isinstance(confidence, (int, float)) and confidence <= 1.0:
-        confidence = confidence * 100
     color = SIGNAL_COLORS.get(signal, GREY_SIG)
 
     badge = traffic_light_badge(signal, size=9 * mm)
     heading = Paragraph(f'<font color="{color.hexval()}">{signal}</font>', S_FINDING_HD)
     sublabel = Paragraph(SIGNAL_LABELS.get(signal, ""), _style("sub", fontSize=8.5,
                           textColor=SLATE, fontName="Helvetica-Bold"))
-    msg = Paragraph(message or "—", S_FINDING_BD)
+    msg = Paragraph((message or "—").replace("\u00b5", "u"), S_FINDING_BD)
 
-    conf_txt = f"{confidence:.0f}%" if isinstance(confidence, (int, float)) else "N/A"
-    conf_block = Table([
-        [Paragraph(conf_txt, _style("confnum", fontSize=16, fontName="Helvetica-Bold",
-                                     textColor=INK, alignment=TA_CENTER, leading=18))],
-        [Paragraph("CONFIDENCE", _style("conflbl", fontSize=6.2, textColor=SLATE,
-                                         alignment=TA_CENTER, fontName="Helvetica-Bold", leading=8))],
-    ], colWidths=[28 * mm])
-    conf_block.setStyle(TableStyle([
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("TOPPADDING", (0, 0), (-1, 0), 0), ("BOTTOMPADDING", (0, 0), (-1, 0), 1),
-        ("TOPPADDING", (0, 1), (-1, 1), 0), ("BOTTOMPADDING", (0, 1), (-1, 1), 0),
-    ]))
-
+    counts = traffic_light.get("counts") or {}
+    count_txt = " \u00b7 ".join(f"{counts[z]} {z}" for z in
+                                 ("RED", "AMBER", "ATYPICAL DIRECTION", "GREEN")
+                                 if counts.get(z))
     left_col = Table([[badge, Spacer(1, 1)], ], colWidths=[10 * mm])
     left_col.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
 
     text_col = [heading, sublabel, Spacer(1, 3), msg]
+    if count_txt:
+        text_col += [Spacer(1, 3), Paragraph("Zoned parameters: " + count_txt,
+                     _style("counts", fontSize=7.8, textColor=SLATE))]
 
-    inner = Table([[left_col, text_col, conf_block]],
-                   colWidths=[12 * mm, 122 * mm, 28 * mm])
+    inner = Table([[left_col, text_col]],
+                   colWidths=[12 * mm, 150 * mm])
     inner.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (0, 0), 0),
@@ -539,76 +521,65 @@ def build_traffic_light_panel(traffic_light):
     return wrapper
 
 
-def build_metrics_table(features, z_scores, zscore_available=True):
-    """Layer 2 — clinical parameter metrics grid (4 columns x N rows)."""
-    phnr_atypical = bool(features.get("phnr_polarity_atypical", False)) if features else False
+def _label(text):
+    """Capitalize a parameter label, keeping 'b/a ratio' as written."""
+    return text if text.startswith("b/a") else text[:1].upper() + text[1:]
 
-    def z_cell(key):
-        z = z_scores.get(key) if z_scores else None
-        if not zscore_available:
-            return Paragraph("No norms", _style("nonorm", fontSize=8, textColor=GREY_SIG,
-                                                  fontName="Helvetica-Oblique"))
-        if z is None:
-            return Paragraph("N/A", _style("na", fontSize=8, textColor=SLATE))
-        color = (RED_SIG if abs(z) > 3.0 else AMBER_SIG if abs(z) > 2.0 else GREEN_SIG)
-        return Paragraph(_fmt_z(z), _style("zval", fontSize=8.6, fontName="Helvetica-Bold",
-                                            textColor=color))
+
+def build_metrics_table(features, parameter_zones, zones_available=True):
+    """Layer 2 — each parameter with its value, reference limits, and zone."""
+    phnr_atypical = bool(features.get("phnr_polarity_atypical", False)) if features else False
 
     rows = [[
         Paragraph("PARAMETER", S_LABEL_ON_DARK), Paragraph("VALUE", S_LABEL_ON_DARK),
-        Paragraph("Z-SCORE", S_LABEL_ON_DARK), Paragraph("STATUS", S_LABEL_ON_DARK)
+        Paragraph("REFERENCE LIMITS", S_LABEL_ON_DARK), Paragraph("ZONE", S_LABEL_ON_DARK)
     ]]
 
-    param_defs = [
-        ("a_wave_amplitude_uv", "A-Wave Amplitude", "uV", "a_wave_amplitude"),
-        ("b_wave_amplitude_uv", "B-Wave Amplitude", "uV", "b_wave_amplitude"),
-        ("b_wave_implicit_time_ms", "B-Wave Implicit Time", "ms", "b_wave_implicit_time"),
-        ("ba_ratio", "B/A Ratio", "", "ba_ratio"),
-        ("phnr_amp_uv", "PhNR Amplitude", "uV", None),
-    ]
-
-    for fkey, label, unit, zkey in param_defs:
-        val = features.get(fkey) if features else None
+    for r in parameter_zones or []:
+        # The built-in PDF fonts have no micro sign, so units print as uV.
+        unit = (r.get("unit") or "").replace("\u00b5", "u")
+        sep = " " if unit else ""
+        val = r.get("value")
         if val is None:
-            continue
-        decimals = 2 if fkey == "ba_ratio" else 1
-        val_txt = _fmt(val, unit, decimals=decimals)
-        val_color = INK
-        if fkey == "phnr_amp_uv" and val is not None:
-            # phnr_amp_uv is signed at source (v2.4.1): negative = typical
-            # below-baseline deflection, positive = atypical above-baseline.
+            val_txt = "Not measured"
+        elif r.get("parameter") == "phnr_amp_uv":
             sign = "+" if val > 0 else ("\u2212" if val < 0 else "")
-            val_txt = f"{sign}{abs(val):.1f}{unit}"
-            if phnr_atypical:
-                val_color = RED_SIG
-        z_para = z_cell(zkey) if zkey else Paragraph(
-            "Ref. pending", _style("pend", fontSize=7.6, textColor=SLATE,
-                                    fontName="Helvetica-Oblique"))
-        status_txt, status_color = "—", SLATE
-        if zkey and z_scores and z_scores.get(zkey) is not None and zscore_available:
-            zz = z_scores[zkey]
-            if abs(zz) > 3.0:
-                status_txt, status_color = "RED", RED_SIG
-            elif abs(zz) > 2.0:
-                status_txt, status_color = "AMBER", AMBER_SIG
-            else:
-                status_txt, status_color = "GREEN", GREEN_SIG
-        elif fkey == "phnr_amp_uv" and phnr_atypical:
-            status_txt, status_color = "CHECK QUALITY", RED_SIG
-        elif fkey == "phnr_amp_uv":
-            status_txt, status_color = "Pending", SLATE
-        elif not zscore_available:
-            status_txt, status_color = "UNAVAILABLE", GREY_SIG
+            val_txt = f"{sign}{abs(val):.1f}{sep}{unit}"
+        else:
+            val_txt = f"{val:g}{sep}{unit}"
+        if r.get("converted_from_gold_foil") and r.get("value_compared") is not None:
+            val_txt += f" (silver thread equivalent {r['value_compared']:g}{sep}{unit})"
+
+        if r.get("lower_limit") is not None:
+            lim_txt = f"{r['lower_limit']:g} to {r['upper_limit']:g}{sep}{unit}"
+        else:
+            lim_txt = "None published"
+
+        zone = r.get("zone") or "—"
+        zone_color = SIGNAL_COLORS.get(zone, SLATE)
+        if zone == "NOT ZONED":
+            zone_txt = "Not zoned"
+            if r.get("parameter") == "phnr_amp_uv" and phnr_atypical:
+                zone_txt, zone_color = "CHECK QUALITY", RED_SIG
+        elif zone == "UNAVAILABLE":
+            zone_txt, zone_color = "UNAVAILABLE", GREY_SIG
+        elif zone == "NOT MEASURED":
+            zone_txt, zone_color = "—", SLATE
+        else:
+            zone_txt = zone
 
         rows.append([
-            Paragraph(label, S_VALUE),
-            Paragraph(val_txt, ParagraphStyle("valB_dyn", parent=S_VALUE_BOLD, textColor=val_color)),
-            z_para,
-            Paragraph(status_txt, _style("st", fontSize=8.2, fontName="Helvetica-Bold",
-                                          textColor=status_color)),
+            Paragraph(_label(r.get("label", "")), S_VALUE),
+            Paragraph(val_txt, S_VALUE_BOLD),
+            Paragraph(lim_txt, S_VALUE),
+            Paragraph(zone_txt, _style("st", fontSize=8.2, fontName="Helvetica-Bold",
+                                       textColor=zone_color)),
         ])
 
-    t = Table(rows, colWidths=[58 * mm, 38 * mm, 38 * mm, 40 * mm])
+    if len(rows) == 1:
+        rows.append([Paragraph("No parameters measured", S_VALUE), "", "", ""])
+
+    t = Table(rows, colWidths=[52 * mm, 50 * mm, 40 * mm, 32 * mm])
     style = [
         ("BACKGROUND", (0, 0), (-1, 0), GREEN),
         ("TEXTCOLOR", (0, 0), (-1, 0), white),
@@ -616,13 +587,10 @@ def build_metrics_table(features, z_scores, zscore_available=True):
         ("FONTSIZE", (0, 0), (-1, 0), 7.2),
         ("TOPPADDING", (0, 0), (-1, 0), 4), ("BOTTOMPADDING", (0, 0), (-1, 0), 4),
         ("TOPPADDING", (0, 1), (-1, -1), 4), ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
-        ("LEFTPADDING", (0, 0), (-1, -1), 7),
         ("LINEBELOW", (0, 0), (-1, -2), 0.4, RULE),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]
-    for i in range(1, len(rows)):
-        if i % 2 == 0:
-            style.append(("BACKGROUND", (0, i), (-1, i), HexColor("#FBFBFB")))
     t.setStyle(TableStyle(style))
     return t
 
@@ -683,7 +651,7 @@ PAEDIATRIC_DISCLAIMER_TEXT = (
     "<b>PAEDIATRIC AGE GROUP — Normative Reference Caution.</b> The normative reference "
     "data (Baker et al., 2025, N=407) was derived from adult subjects aged 18–80+ years. "
     "No paediatric reference ranges are available in the current normative dataset. "
-    "Z-scores and traffic light classifications have been computed against the nearest adult "
+    "Traffic Light zones have been computed against the nearest adult "
     "stratum (≤35 years) as a provisional fallback. <b>These results must not be used as "
     "the sole basis for clinical decision-making in paediatric patients.</b> Specialist "
     "paediatric electrophysiology review is strongly recommended."
@@ -757,14 +725,14 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
     layer4 = full_report.get("layer_4_technical_audit", {})
 
     # The live API response (erg_server.py /api/v1/analyse) is flat:
-    #   { traffic_light, features, z_scores, audit_results: {quality, snr, iscev_compliance}, ... }
+    #   { traffic_light, features, parameter_zones, audit_results: {quality, snr, iscev_compliance}, ... }
     # full_report may be passed either as that flat dict, or as the nested
     # ERGReportGenerator output (layer_1_..., layer_2_..., etc). Support both.
     features = full_report.get("features", {})
-    z_scores = full_report.get("z_scores",
-                   full_report.get("layer_2_clinical_summary", {}).get("z_scores", {}))
+    parameter_zones = full_report.get("parameter_zones",
+                   full_report.get("layer_2_clinical_summary", {}).get("parameter_zones", []))
     audit_results = full_report.get("audit_results", {})
-    zscore_available = layer4.get("zscore_available", True)
+    zones_available = layer4.get("zones_available", True)
 
     quality_raw = audit_results.get("quality", full_report.get("quality", {}))
     snr_raw     = audit_results.get("snr", {})
@@ -837,7 +805,7 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
     story.append(build_traffic_light_panel(layer1))
 
     story.extend(section_heading("Layer 2 — Clinical Parameter Summary"))
-    story.append(build_metrics_table(features, z_scores, zscore_available))
+    story.append(build_metrics_table(features, parameter_zones, zones_available))
     if meta_full.get("age_stratum", "") in PAEDIATRIC_AGE_GROUPS:
         story.append(Spacer(1, 3))
         story.append(build_paediatric_disclaimer_block())
@@ -855,7 +823,7 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
         a_wave=waveform_data.get("a_wave"),
         b_wave=waveform_data.get("b_wave"),
         phnr_wave=waveform_data.get("phnr_wave"),
-        ba_amplitude_uv=features.get("b_wave_amplitude_uv"),
+        ba_amplitude_uv=features.get("b_amp_uv"),
         height_mm=42,
     )
     story.append(wf_drawing)
@@ -924,23 +892,32 @@ if __name__ == "__main__":
         # This mirrors the EXACT shape returned by erg_server.py /api/v1/analyse
         "traffic_light": {
             "signal": "RED",
-            "message": ("Significant abnormality: ba ratio reduction — consistent with inner "
-                        "retinal dysfunction or disproportionate a-wave loss (Z=3.4). Urgent "
-                        "review required."),
-            "confidence": 0.90,   # live API sends a 0–1 fraction, see ERG_API_v2_4.html *100
+            "message": ("B-wave amplitude 163.4 µV is below the reference limits "
+                        "(191 to 404 µV): RED. Prompt clinical review. Initiate "
+                        "diagnostic follow-up appropriate to the clinical findings."),
+            "counts": {"GREEN": 3, "ATYPICAL DIRECTION": 0, "AMBER": 0, "RED": 1},
         },
         "features": {
-            "a_wave_amplitude_uv": -134.7, "b_wave_amplitude_uv": 163.4,
-            "b_wave_implicit_time_ms": 56.5, "ba_ratio": 1.21,
+            "a_amp_uv": 134.7, "a_implicit_ms": 15.5,
+            "b_amp_uv": 163.4, "b_implicit_ms": 56.5, "ba_ratio": 1.21,
             "phnr_amp_uv": None,
         },
-        "z_scores": {
-            "a_wave_amplitude": -1.33, "b_wave_amplitude": -2.22,
-            "b_wave_implicit_time": 1.60, "ba_ratio": -3.39,
-        },
+        # DA 3.0, DTL fiber, <=35y limits of Baker et al. (2025), Tables 4 and 5
+        "parameter_zones": [
+            {"parameter": "a_amp", "label": "a-wave amplitude", "unit": "µV", "value": 134.7,
+             "lower_limit": 119, "upper_limit": 238, "zone": "GREEN"},
+            {"parameter": "a_imp", "label": "a-wave implicit time", "unit": "ms", "value": 15.5,
+             "lower_limit": 13.5, "upper_limit": 16, "zone": "GREEN"},
+            {"parameter": "b_amp", "label": "b-wave amplitude", "unit": "µV", "value": 163.4,
+             "lower_limit": 191, "upper_limit": 404, "zone": "RED"},
+            {"parameter": "b_imp", "label": "b-wave implicit time", "unit": "ms", "value": 56.5,
+             "lower_limit": 45.5, "upper_limit": 58.5, "zone": "GREEN"},
+            {"parameter": "ba_ratio", "label": "b/a ratio", "unit": "", "value": 1.21,
+             "zone": "NOT ZONED"},
+        ],
         "audit_results": {
             "quality": {"grade": "B", "description": "Good — minor issues present, OP features likely usable"},
-            "snr": {"db": 9.1, "status": "PASS", "electrode_type": "gold_foil"},
+            "snr": {"db": 9.1, "status": "PASS", "electrode_type": "dtl_fiber"},
             "iscev_compliance": {
                 "overall_compliant": True,
                 "sampling_rate_ok": True, "sampling_rate_value": 2000,
@@ -954,7 +931,7 @@ if __name__ == "__main__":
         },
         "processing_ms": 36,
         "layer_4_technical_audit": {
-            "zscore_available": True,
+            "zones_available": True,
         },
     }
 
@@ -968,8 +945,8 @@ if __name__ == "__main__":
     demo_meta = {
         "patient_id": "DEMO-DR-001",
         "recording_date": "20 June 2026",
-        "protocol": "DA 3",
-        "electrode": "Gold Foil",
+        "protocol": "DA 3.0",
+        "electrode": "DTL fiber",
         "age_stratum": "\u226435y",
     }
 

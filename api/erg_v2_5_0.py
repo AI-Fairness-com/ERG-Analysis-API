@@ -1340,16 +1340,19 @@ print("          (chapters/ch09/feature_extraction_and_selection_pipeline.py)")
 print("=" * 60)
 
 # ============================================================================
-# CELL 6: STAGE 4 - COMPLIANCE REPORT WITH Z-SCORE TRAFFIC LIGHT
-# Version 2.5.0 | Baker et al. (2025) N=407 validated normative data
-# Electrode support: Gold Foil and DTL (Z-score + traffic light)
-#                   Contact Lens and Skin (signal processing only)
+# CELL 6: STAGE 4 - CLINICAL REPORT WITH REFERENCE-LIMIT TRAFFIC LIGHT
+# Baker et al. (2025) percentile reference limits with 90% confidence
+# intervals, Equation 10.2 of Chapter 10 §10.4.
+# Electrode support: DTL fiber (silver thread) directly; gold foil after
+#                    conversion to silver thread equivalents (Baker Table 2)
+#                    Contact lens and skin: measured values only
 # FHIR output: standalone Cell 9
 # ============================================================================
 
 from datetime import datetime
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Optional
 import json
+import math
 import pathlib
 import numpy as np
 
@@ -1357,65 +1360,134 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # ELECTRODE CLASSIFICATION
 # ---------------------------------------------------------------------------
-# Electrodes with validated Baker 2025 normative data → Z-score + traffic light
-ZSCORE_SUPPORTED_ELECTRODES = {'gold_foil', 'dtl_fiber'}
+# Electrodes with Baker et al. (2025) reference limits → Traffic Light zones
+ZONE_SUPPORTED_ELECTRODES = {'gold_foil', 'dtl_fiber'}
 
-# Electrodes without validated normative data → signal processing only
-ZSCORE_UNSUPPORTED_ELECTRODES = {'contact_lens', 'skin'}
+# Electrodes without reference limits here → measured values only
+ZONE_UNSUPPORTED_ELECTRODES = {'contact_lens', 'skin'}
 
-# Flag text displayed in the Layer 2 report for unsupported electrodes
+# Text shown in the Layer 2 report for unsupported electrodes
 NORMATIVE_UNAVAILABLE_TEXT = (
-    "Normative Z-score classification is available only for Gold Foil and DTL "
-    "(silver thread) electrodes, referenced against Baker et al. (2025) "
-    "age-stratified normative data (N=407). For Contact Lens and Skin electrodes, "
-    "no validated age-stratified reference dataset currently exists within this "
-    "framework. Raw feature values for all ERG parameters are reported above. "
-    "Clinical interpretation requires laboratory-specific reference ranges in "
-    "accordance with ISCEV 2022 standards (Robson et al., 2022) and "
-    "Davis & Hamilton (2021)."
+    "Traffic Light zones are available for silver thread (DTL fiber) "
+    "electrodes, and for gold foil electrodes after conversion to silver "
+    "thread equivalents, using the age-specific reference limits of "
+    "Baker et al. (2025). No reference limits are held here for contact "
+    "lens or skin electrodes. The measured values are reported, and "
+    "interpretation needs laboratory-specific reference limits "
+    "(ISCEV 2022; Davis and Hamilton, 2021)."
 )
+
+# Zoned parameters: (feature key, normative key, label, kind, unit).
+# The LA 30 Hz flicker response uses the b-wave keys for its peak.
+ZONED_PARAMETERS = [
+    ('a_amp_uv',      'a_amp', 'a-wave amplitude',     'amplitude',     'µV'),
+    ('a_implicit_ms', 'a_imp', 'a-wave implicit time', 'implicit_time', 'ms'),
+    ('b_amp_uv',      'b_amp', 'b-wave amplitude',     'amplitude',     'µV'),
+    ('b_implicit_ms', 'b_imp', 'b-wave implicit time', 'implicit_time', 'ms'),
+]
+FLICKER_LABELS = {'b_amp': 'flicker amplitude', 'b_imp': 'flicker implicit time'}
+
+# Parameters reported as measured values only (no published limits)
+UNZONED_PARAMETERS = [
+    ('ba_ratio',    'b/a ratio',      ''),
+    ('phnr_amp_uv', 'PhNR amplitude', 'µV'),
+]
+
+# Zone severity for the composite Traffic Light (Table 10.4)
+ZONE_RANK = {'GREEN': 0, 'ATYPICAL DIRECTION': 1, 'AMBER': 2, 'RED': 3}
+ZONE_COLOR = {'GREEN': '🟢', 'AMBER': '🟡', 'RED': '🔴',
+              'ATYPICAL DIRECTION': '🔵', 'UNAVAILABLE': '⬜'}
+
+# Recommended actions, Table 10.4
+ZONE_ACTION = {
+    'GREEN': ('No immediate action. Routine clinical follow-up at the '
+              'scheduled interval.'),
+    'AMBER': ('Flag for clinical review. Consider a repeat ERG to confirm '
+              'reproducibility.'),
+    'RED': ('Prompt clinical review. Initiate diagnostic follow-up '
+            'appropriate to the clinical findings.'),
+    'ATYPICAL DIRECTION': ('Check the recording conditions and repeat the '
+                           'ERG. Review the full waveform and clinical '
+                           'history before any diagnostic follow-up.'),
+}
+
+
+def _finite(value) -> Optional[float]:
+    """Return value as a float, or None if it is missing or not finite."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
+def describe_value(row: Dict) -> str:
+    """'131.6 µV', or for gold foil '131.6 µV (silver thread equivalent 81.9 µV)'."""
+    unit = f" {row['unit']}" if row.get('unit') else ''
+    text = f"{row['value']:g}{unit}"
+    if row.get('converted_from_gold_foil'):
+        text += f" (silver thread equivalent {row['value_compared']:g}{unit})"
+    return text
+
+
+def classify_against_limits(x: float, lim: Dict, kind: str) -> Dict[str, str]:
+    """
+    Assign a Traffic Light zone to one value (Equation 10.2).
+
+    Amplitude:      GREEN if L <= x <= U; AMBER if L_lo <= x < L;
+                    RED if x < L_lo; ATYPICAL DIRECTION if x > U
+    Implicit time:  GREEN if L <= x <= U; AMBER if U < x <= U_hi;
+                    RED if x > U_hi; ATYPICAL DIRECTION if x < L
+
+    lim holds 'lower', 'lower_ci', 'upper', 'upper_ci' as in the
+    normative file; L_lo = lower_ci[0] and U_hi = upper_ci[1].
+    """
+    lower, upper = lim['lower'], lim['upper']
+    lower_lo, upper_hi = lim['lower_ci'][0], lim['upper_ci'][1]
+    if lower <= x <= upper:
+        return {'zone': 'GREEN', 'direction': 'within'}
+    direction = 'below' if x < lower else 'above'
+    if kind == 'amplitude':
+        if direction == 'above':
+            return {'zone': 'ATYPICAL DIRECTION', 'direction': direction}
+        zone = 'AMBER' if x >= lower_lo else 'RED'
+    else:
+        if direction == 'below':
+            return {'zone': 'ATYPICAL DIRECTION', 'direction': direction}
+        zone = 'AMBER' if x <= upper_hi else 'RED'
+    return {'zone': zone, 'direction': direction}
 
 
 class ERGReportGenerator:
     """
-    Generates ISCEV 2022-compliant ERG compliance report with Z-score traffic
-    light classification.
+    Four-layer ERG report with the reference-limit Traffic Light of
+    Chapter 10 §10.4.
 
-    Reference data source
-    ---------------------
-    Baker RA, Leo SM, Clowes WIN, et al. ISCEV standard full-field ERG reference
-    limits from 407 healthy subjects, derived from transference and validation of
-    reference data between electrode types and centres. Doc Ophthalmol.
-    2025;150(2):47-64. https://doi.org/10.1007/s10633-025-10009-2
+    Reference data
+    --------------
+    Baker RA, Leo SM, Clowes WIN, et al. ISCEV standard full-field ERG
+    reference limits from 407 healthy subjects, derived from transference
+    and validation of reference data between electrode types and centres.
+    Doc Ophthalmol. 2025;150(2):47-64. doi:10.1007/s10633-025-10009-2
+    Tables 4 and 5: nonparametric 2.5th and 97.5th percentile limits with
+    their 90% confidence intervals, silver thread electrodes, three age
+    groups (<=35y, 36-59y, >=60y). Table 2: gold foil to silver thread
+    model for amplitudes.
 
-    Electrode: Silver thread (fornix) + gold foil transformed to STE scale
-    (Deming regression, Baker 2025 Table 2).
-
-    Age strata (Baker 2025 three-stratum framework)
-    ------------------------------------------------
-    le35   : age ≤ 35 years
-    36to59 : age 36–59 years
-    ge60   : age ≥ 60 years
-
-    Traffic light thresholds (Z-score, absolute value)
-    ---------------------------------------------------
-    Green  : |Z| ≤ 2.0  — within normal limits
-    Amber  : 2.0 < |Z| ≤ 3.0  — borderline; specialist review recommended
-    Red    : |Z| > 3.0  — significant abnormality; urgent review required
-
-    b/a ratio normal range: 1.8–3.5 (Chapter 9, manuscript).
+    Zones (Equation 10.2, Table 10.4)
+    ---------------------------------
+    GREEN               within the reference limits
+    AMBER               beyond a limit on the disease side, within the
+                        outer bound of its 90% confidence interval
+    RED                 beyond that outer bound
+    ATYPICAL DIRECTION  amplitude above U, or implicit time below L
+    The composite Traffic Light is the most severe zone: RED, then AMBER,
+    then ATYPICAL DIRECTION, then GREEN. The b/a ratio and the PhNR have
+    no published limits and are reported as measured values only.
     """
 
     def __init__(self, config: ERGConfig = None):
         self.config = config or CONFIG
-
-        # ----------------------------------------------------------------
-        # BAKER 2025 REFERENCE RANGES — loaded from external JSON file
-        # Tier 2 Step 2.1: externalised from hardcoded dict to
-        # data/normative_data_baker2025.json (schema_version 1.0).
-        # Fallback: if file is not found, raises FileNotFoundError with
-        # a clear message so the error is never silent.
-        # ----------------------------------------------------------------
         import os as _os
 
         def _find_norm_json():
@@ -1447,338 +1519,183 @@ class ERGReportGenerator:
         _norm_path = _find_norm_json()
         with open(_norm_path, "r", encoding="utf-8") as _f:
             _norm = json.load(_f)
-        assert _norm.get("schema_version") == "1.0", (
-            f"Unexpected normative JSON schema version: {_norm.get('schema_version')}. "
-            f"Expected '1.0'. Replace data/normative_data_baker2025.json with the "
-            f"correct v1.0 file or update the pipeline for the new schema."
-        )
-
-        # Convert JSON {mu, sigma} dicts back to (mu, sigma) tuples that
-        # the rest of the pipeline expects, preserving None for inapplicable
-        # parameters (DA 0.01 a-wave, LA 30Hz a-wave).
-        def _to_tuple(v):
-            if v is None:
-                return None
-            return (v["mu"], v["sigma"])
-
-        self.REFERENCE_RANGES = {
-            proto: {
-                elec: {
-                    stratum: {
-                        param: _to_tuple(val)
-                        for param, val in params.items()
-                    }
-                    for stratum, params in strata.items()
-                }
-                for elec, strata in electrodes.items()
-            }
-            for proto, electrodes in _norm["protocols"].items()
-        }
-
-        # ----------------------------------------------------------------
-        # b/a RATIO REFERENCE (Chapter 9, manuscript)
-        # Normal range: 1.8–3.5
-        # Modelled as mean=2.65, sd=0.425 so that ±2SD ≈ [1.8, 3.5]
-        # Applied to DA 3.0 protocol only; same for both supported electrodes
-        # Loaded from normative_data_baker2025.json ba_ratio block (T3-B F6)
-        # ----------------------------------------------------------------
-        self.BA_RATIO_MEAN = _norm["ba_ratio"]["mean"]
-        self.BA_RATIO_SD   = _norm["ba_ratio"]["sigma"]
-
-        # ----------------------------------------------------------------
-        # DTL DEMING REGRESSION TRANSFORMS — Tier 2 Step 2.4
-        # Source: Baker et al. (2025) Table 2. DOI 10.1007/s10633-025-10009-2
-        # Loaded from data/normative_data_baker2025.json at startup.
-        # Applied to AMPLITUDE parameters only when electrode == dtl_fiber.
-        # Peak times are NOT transformed (slope ~1, intercept ~0, bias ≤1.6ms).
-        # Direction: STE_equivalent = slope * GFE_measured + intercept
-        # Z = (STE_equivalent - mu_gf) / sigma_gf
-        # ----------------------------------------------------------------
-        self.ELECTRODE_TRANSFORM = _norm.get("electrode_transform", {}).get(
-            "transform", {}
-        )
+        if _norm.get("schema_version") != "2.0":
+            raise ValueError(
+                f"Unexpected normative file schema version "
+                f"{_norm.get('schema_version')!r}; expected '2.0' "
+                f"(reference limits with 90% confidence intervals)."
+            )
+        self.LIMITS = _norm["limits"]
+        self.ELECTRODE_TRANSFORM = _norm["electrode_transform"]["transform"]
+        self.NORMATIVE_VERSION = f"{_norm['version']} (schema {_norm['schema_version']})"
+        self.NORMATIVE_DOI = _norm.get("doi")
 
     # ----------------------------------------------------------------
-    # INTERNAL HELPERS
+    # HELPERS
     # ----------------------------------------------------------------
 
     @staticmethod
     def _normalise_electrode(electrode_type) -> str:
         """Return electrode type as a clean lower-case string."""
         if isinstance(electrode_type, dict):
-            electrode_type = electrode_type.get('value', 'gold_foil')
+            electrode_type = electrode_type.get('value', '')
         return str(electrode_type).strip().lower()
-
-    def _apply_dtl_transform(self,
-                             protocol: str,
-                             param: str,
-                             gf_measured: float) -> float:
-        """
-        Convert a DTL Fiber (silver thread) measured amplitude to its
-        Gold Foil equivalent using Baker et al. (2025) Table 2 Deming
-        regression coefficients loaded from normative_data_baker2025.json.
-
-        Formula: STE_equivalent = slope * GFE_measured + intercept
-        (direction: STE = f(GFE), so inversion gives GFE_equivalent from STE)
-
-        Wait — the paper transforms GF -> STE to include GF data in the STE
-        reference range.  For clinical Z-scoring we have a STE/DTL measurement
-        and want to compare against GF norms.  We therefore INVERT the model:
-            GFE_equivalent = (STE_measured - intercept) / slope
-        This is mathematically equivalent and consistent with the paper's intent.
-
-        Applies to amplitude parameters (a_amp, b_amp) only.
-        Returns the original value unchanged if no transform is defined.
-
-        Audit flag: sets self._dtl_transform_applied = True for Layer 4 logging.
-        """
-        proto_transforms = self.ELECTRODE_TRANSFORM.get(protocol, {})
-        param_transform  = proto_transforms.get(param)
-
-        if param_transform is None:
-            return gf_measured  # no transform available (e.g. a_amp for DA 0.01)
-
-        slope     = param_transform["slope"]
-        intercept = param_transform["intercept"]
-
-        if slope == 0:
-            return gf_measured  # guard against division by zero (should never occur)
-
-        # Invert: GFE_equivalent = (STE_measured - intercept) / slope
-        gfe_equivalent = (gf_measured - intercept) / slope
-        return gfe_equivalent
 
     @staticmethod
     def _age_stratum(age_years) -> str:
-        """Map age input to Baker 2025 three-stratum key.
-        Accepts either a dropdown string ('≤35y', '36-59y', '≥60y')
-        or a numeric age value.
-        """
+        """Map a dropdown string ('≤35y', '36-59y', '≥60y') or an age in
+        years to the Baker et al. (2025) stratum key."""
         if isinstance(age_years, str):
             s = age_years.strip()
-            if s in ('≤35y', 'le35'):
+            if s in ('≤35y', '<=35y', 'le35'):
                 return 'le35'
             if s in ('36-59y', '36to59'):
                 return '36to59'
-            if s in ('≥60y', 'ge60'):
+            if s in ('≥60y', '>=60y', 'ge60'):
                 return 'ge60'
         try:
             age = float(age_years)
         except (TypeError, ValueError):
-            return 'le35'          # safe default
+            return 'le35'
         if age <= 35:
             return 'le35'
-        elif age <= 59:
+        if age <= 59:
             return '36to59'
-        else:
-            return 'ge60'
+        return 'ge60'
 
-    def _get_ref(self, electrode: str, protocol: str, age_stratum: str) -> Dict:
+    def get_limits(self, protocol: str, parameter: str, stratum: str) -> Optional[Dict]:
+        """Return the limits for one protocol, parameter and age group, or None."""
+        return (self.LIMITS.get(protocol, {}).get(parameter, {}) or {}).get(stratum)
+
+    def to_silver_thread(self, electrode: str, protocol: str,
+                         parameter: str, value: float):
         """
-        Return the reference (mean, sd) dict for a given electrode / protocol /
-        age stratum.  Returns an empty dict when the electrode type is not
-        supported for Z-score computation.
+        Convert a gold foil amplitude to its silver thread equivalent
+        (Baker et al., 2025, Table 2): ST = slope * GF + intercept.
+        Peak times and DTL fiber values are returned unchanged.
+        Returns (value, converted).
         """
-        proto_ranges = self.REFERENCE_RANGES.get(protocol, {})
-        electrode_ranges = proto_ranges.get(electrode, {})
-        return electrode_ranges.get(age_stratum, {})
+        if electrode != 'gold_foil' or not parameter.endswith('_amp'):
+            return value, False
+        model = (self.ELECTRODE_TRANSFORM.get(protocol, {}) or {}).get(parameter)
+        if not model:
+            return value, False
+        return round(model['slope'] * value + model['intercept'], 1), True
 
     # ----------------------------------------------------------------
-    # Z-SCORE COMPUTATION
+    # ZONES
     # ----------------------------------------------------------------
 
-    @staticmethod
-    def calculate_z_score(value: float, mean: float, sd: float) -> float:
-        """Return Z-score rounded to 2 d.p., or 0.0 on invalid input."""
-        if value is None or np.isnan(value):
-            return 0.0
-        if sd is None or sd == 0.0:
-            return 0.0
-        return round((value - mean) / sd, 2)
-
-    def compute_z_scores(self,
-                         features: Dict,
-                         electrode_type: str,
-                         protocol: str,
-                         age_years) -> Dict[str, float]:
+    def classify_parameters(self, features: Dict, electrode_type: str,
+                            protocol: str, age_years) -> List[Dict[str, Any]]:
         """
-        Compute Z-scores for all extractable features.
-
-        Returns an empty dict when the electrode type is not in
-        ZSCORE_SUPPORTED_ELECTRODES (i.e. contact_lens or skin).
+        Return one entry per reported parameter: the measured value, the
+        value compared (after gold foil conversion), the limits, and the
+        zone. Parameters without published limits get zone 'NOT ZONED';
+        unsupported electrodes get zone 'UNAVAILABLE'.
         """
         electrode = self._normalise_electrode(electrode_type)
-
-        # Gate: only Gold Foil and DTL are supported
-        if electrode not in ZSCORE_SUPPORTED_ELECTRODES:
-            return {}
-
         stratum = self._age_stratum(age_years)
-        ref = self._get_ref(electrode, protocol, stratum)
+        supported = electrode in ZONE_SUPPORTED_ELECTRODES
+        flicker = protocol == 'LA 30 Hz'
+        rows = []
 
-        if not ref:
-            return {}
+        for fkey, nkey, label, kind, unit in ZONED_PARAMETERS:
+            value = _finite(features.get(fkey))
+            lim = self.get_limits(protocol, nkey, stratum)
+            if lim is None:
+                continue                      # not defined for this protocol
+            row = {
+                'parameter': nkey,
+                'feature': fkey,
+                'label': FLICKER_LABELS.get(nkey, label) if flicker else label,
+                'kind': kind,
+                'unit': unit,
+                'value': value,
+                'value_compared': None,
+                'converted_from_gold_foil': False,
+                'lower_limit': lim['lower'],
+                'upper_limit': lim['upper'],
+                'lower_ci_low': lim['lower_ci'][0],
+                'upper_ci_high': lim['upper_ci'][1],
+                'age_stratum': stratum,
+                'zone': None,
+                'direction': None,
+            }
+            if not supported:
+                row['zone'] = 'UNAVAILABLE'
+            elif value is None:
+                row['zone'] = 'NOT MEASURED'
+            else:
+                compared, converted = self.to_silver_thread(electrode, protocol, nkey, value)
+                row['value_compared'] = compared
+                row['converted_from_gold_foil'] = converted
+                row.update(classify_against_limits(compared, lim, kind))
+            rows.append(row)
 
-        z_scores = {}
-
-        # ── DTL Deming regression flag ──────────────────────────────
-        # Will be set True if any amplitude parameter is transformed.
-        dtl_correction_applied = False
-
-        # ── a-wave amplitude (absolute value) ──────────────────────
-        if (ref.get('a_amp') is not None
-                and 'a_amp_uv' in features
-                and features['a_amp_uv'] is not None):
-            mean, sd = ref['a_amp']
-            raw_val  = abs(features['a_amp_uv'])
-            if electrode == 'dtl_fiber':
-                raw_val = abs(self._apply_dtl_transform(protocol, 'a_amp', raw_val))
-                dtl_correction_applied = True
-                # T3-B F4: LA 3.0 a_amp Deming r²=0.68 is borderline (<0.70)
-                # Flag for Layer 4 audit trail and regulatory transparency
-                if protocol == 'LA 3.0':
-                    z_scores['_la3_a_amp_dtl_r2_borderline'] = True
-            if sd > 0:
-                z_scores['a_wave_amplitude'] = self.calculate_z_score(raw_val, mean, sd)
-
-        # ── a-wave implicit time ────────────────────────────────────
-        if (ref.get('a_imp') is not None
-                and 'a_implicit_ms' in features
-                and features['a_implicit_ms'] is not None):
-            mean, sd = ref['a_imp']
-            if sd > 0:
-                z_scores['a_wave_implicit_time'] = self.calculate_z_score(
-                    features['a_implicit_ms'], mean, sd)
-
-        # ── b-wave amplitude ────────────────────────────────────────
-        if (ref.get('b_amp') is not None
-                and 'b_amp_uv' in features
-                and features['b_amp_uv'] is not None):
-            mean, sd = ref['b_amp']
-            raw_val  = features['b_amp_uv']
-            if electrode == 'dtl_fiber':
-                raw_val = self._apply_dtl_transform(protocol, 'b_amp', raw_val)
-                dtl_correction_applied = True
-            if sd > 0:
-                z_scores['b_wave_amplitude'] = self.calculate_z_score(raw_val, mean, sd)
-
-        # ── b-wave implicit time ────────────────────────────────────
-        if (ref.get('b_imp') is not None
-                and 'b_implicit_ms' in features
-                and features['b_implicit_ms'] is not None):
-            mean, sd = ref['b_imp']
-            if sd > 0:
-                z_scores['b_wave_implicit_time'] = self.calculate_z_score(
-                    features['b_implicit_ms'], mean, sd)
-
-        # ── b/a ratio (DA 3.0 only; normal range 1.8–3.5) ────────────
-        if (protocol == 'DA 3.0'
-                and 'ba_ratio' in features
-                and features['ba_ratio'] is not None):
-            z_scores['ba_ratio'] = self.calculate_z_score(
-                features['ba_ratio'], self.BA_RATIO_MEAN, self.BA_RATIO_SD)
-
-        # ── Audit flag for Layer 4 ──────────────────────────────────
-        if dtl_correction_applied:
-            z_scores['_dtl_deming_correction_applied'] = True
-
-        return z_scores
-
-    # ----------------------------------------------------------------
-    # TRAFFIC LIGHT
-    # ----------------------------------------------------------------
+        for fkey, label, unit in UNZONED_PARAMETERS:
+            value = _finite(features.get(fkey))
+            if value is None:
+                continue
+            rows.append({'parameter': fkey, 'feature': fkey, 'label': label,
+                         'kind': 'ratio' if fkey == 'ba_ratio' else 'amplitude',
+                         'unit': unit, 'value': value, 'zone': 'NOT ZONED',
+                         'direction': None})
+        return rows
 
     @staticmethod
-    def generate_traffic_light(z_scores: Dict[str, float]) -> Dict[str, Any]:
-        """
-        Map Z-scores to traffic light signal.
-
-        Green  : max |Z| ≤ 2.0
-        Amber  : 2.0 < max |Z| ≤ 3.0
-        Red    : max |Z| > 3.0
-        """
-        if not z_scores:
+    def composite_traffic_light(rows: List[Dict], electrode: str) -> Dict[str, Any]:
+        """Composite Traffic Light: the most severe zone among the zoned values."""
+        zoned = [r for r in rows if r['zone'] in ZONE_RANK]
+        if electrode not in ZONE_SUPPORTED_ELECTRODES or not zoned:
             return {
                 'signal': 'UNAVAILABLE',
-                'color': '⬜',
-                'message': NORMATIVE_UNAVAILABLE_TEXT,
-                'confidence': None,
-                'max_z_score': None,
+                'color': ZONE_COLOR['UNAVAILABLE'],
+                'message': (NORMATIVE_UNAVAILABLE_TEXT
+                            if electrode not in ZONE_SUPPORTED_ELECTRODES
+                            else 'No parameter with published reference limits '
+                                 'was measured in this recording.'),
                 'worst_parameter': None,
-                'worst_z_score': None,
+                'counts': {},
+                'atypical_parameters': [],
             }
-
-        max_abs_z = 0.0
-        worst_param = None
-        worst_value = 0.0
-
-        for param, z in z_scores.items():
-            if z is not None and abs(z) > max_abs_z:
-                max_abs_z = abs(z)
-                worst_param = param
-                worst_value = z
-
-        def _direction(param: str, z: float) -> str:
-            if param and 'implicit' in param:
-                return 'delay' if z > 0 else 'early onset'
-            if param and 'amplitude' in param:
-                return 'reduction' if z < 0 else 'supranormal increase'
-            if param and 'ba_ratio' in param:
-                return (
-                    'reduction — consistent with inner retinal dysfunction '
-                    'or disproportionate a-wave loss'
-                    if z < 0 else
-                    'elevation — consistent with outer retinal dysfunction '
-                    'or disproportionate a-wave reduction'
-                )
-            return 'abnormality'
-
-        param_label = worst_param.replace('_', ' ') if worst_param else ''
-
-        if max_abs_z <= 2.0:
-            return {
-                'signal': 'GREEN',
-                'color': '🟢',
-                'message': (
-                    'All ERG parameters within normal limits. '
-                    'No immediate action required.'
-                ),
-                'confidence': 0.95,
-                'max_z_score': max_abs_z,
-                'worst_parameter': worst_param,
-                'worst_z_score': worst_value,
-            }
-        elif max_abs_z <= 3.0:
-            direction = _direction(worst_param, worst_value)
-            return {
-                'signal': 'AMBER',
-                'color': '🟡',
-                'message': (
-                    f'Borderline abnormality: {param_label} {direction} '
-                    f'(Z={max_abs_z:.1f}). Specialist review recommended.'
-                ),
-                'confidence': 0.85,
-                'max_z_score': max_abs_z,
-                'worst_parameter': worst_param,
-                'worst_z_score': worst_value,
-            }
+        worst = max(zoned, key=lambda r: ZONE_RANK[r['zone']])
+        signal = worst['zone']
+        counts = {z: sum(r['zone'] == z for r in zoned) for z in ZONE_RANK}
+        atypical = [r['label'] for r in zoned if r['zone'] == 'ATYPICAL DIRECTION']
+        if signal == 'GREEN':
+            message = ('All ERG parameters with published limits are within '
+                       'the reference limits for this age group. '
+                       + ZONE_ACTION['GREEN'])
         else:
-            direction = _direction(worst_param, worst_value)
-            return {
-                'signal': 'RED',
-                'color': '🔴',
-                'message': (
-                    f'Significant abnormality: {param_label} {direction} '
-                    f'(Z={max_abs_z:.1f}). Urgent review required.'
-                ),
-                'confidence': 0.90,
-                'max_z_score': max_abs_z,
-                'worst_parameter': worst_param,
-                'worst_z_score': worst_value,
-            }
+            message = (f"{worst['label'].capitalize()} {describe_value(worst)} "
+                       f"is {worst['direction']} the reference limits "
+                       f"({worst['lower_limit']:g} to {worst['upper_limit']:g} "
+                       f"{worst['unit']}): {signal}. " + ZONE_ACTION[signal])
+        return {
+            'signal': signal,
+            'color': ZONE_COLOR[signal],
+            'message': message,
+            'worst_parameter': worst['parameter'] if signal != 'GREEN' else None,
+            'counts': counts,
+            'atypical_parameters': atypical,
+        }
+
+    @staticmethod
+    def key_findings(rows: List[Dict]) -> List[str]:
+        """One sentence per value outside its reference limits."""
+        findings = []
+        for r in rows:
+            if r['zone'] in ('AMBER', 'RED', 'ATYPICAL DIRECTION'):
+                findings.append(
+                    f"{r['label'].capitalize()} {describe_value(r)} is "
+                    f"{r['direction']} the reference limits "
+                    f"({r['lower_limit']:g} to {r['upper_limit']:g} {r['unit']}): {r['zone']}"
+                )
+        return findings
 
     # ----------------------------------------------------------------
-    # FULL FOUR-LAYER REPORT
+    # REPORT
     # ----------------------------------------------------------------
 
     def generate_full_report(self,
@@ -1792,7 +1709,7 @@ class ERGReportGenerator:
                              filter_log: List[str],
                              processing_time_ms: float) -> Dict[str, Any]:
         """
-        Generate the four-layer ERG compliance report.
+        Generate the four-layer ERG report.
 
         Layer 1 — Traffic Light
         Layer 2 — Clinical Summary
@@ -1800,75 +1717,30 @@ class ERGReportGenerator:
         Layer 4 — Technical Audit
         """
         electrode = self._normalise_electrode(electrode_type)
-        stratum   = self._age_stratum(age_years)
+        stratum = self._age_stratum(age_years)
+        supported = electrode in ZONE_SUPPORTED_ELECTRODES
 
-        # ── Z-scores and traffic light ──────────────────────────────
-        z_scores      = self.compute_z_scores(features, electrode, protocol, age_years)
-        traffic_light = self.generate_traffic_light(z_scores)
+        rows = self.classify_parameters(features, electrode, protocol, age_years)
+        traffic_light = self.composite_traffic_light(rows, electrode)
+        findings = self.key_findings(rows)
+        converted = any(r.get('converted_from_gold_foil') for r in rows)
 
-        # ── T3-C B4: LA 30 Hz absolute lower-bound floor ────────────
-        # Gaussian ±2SD lower bound for LA 30 Hz b_amp ge60 = 29.8 µV;
-        # any value < 20.0 µV is clinically significant regardless of Z-score
-        # and must not be silently GREEN.
-        if (protocol == 'LA 30 Hz'
-                and traffic_light.get('signal') == 'GREEN'
-                and features.get('b_amp_uv') is not None
-                and not isinstance(features.get('b_amp_uv'), float)
-                    is False  # guard NaN
-                and features.get('b_amp_uv') < 20.0):
-            import math as _math
-            if not _math.isnan(features['b_amp_uv']):
-                traffic_light = {
-                    'signal'          : 'AMBER',
-                    'color'           : '🟡',
-                    'message'         : (
-                        f'LA 30 Hz flicker b-wave amplitude '
-                        f'{features["b_amp_uv"]:.1f} µV is below the '
-                        f'absolute safety floor of 20.0 µV (T3-C B4). '
-                        f'Clinically significant flicker amplitude reduction; '
-                        f'specialist review recommended.'
-                    ),
-                    'confidence'      : 0.85,
-                    'max_z_score'     : traffic_light.get('max_z_score'),
-                    'worst_parameter' : 'b_wave_amplitude',
-                    'worst_z_score'   : traffic_light.get('worst_z_score'),
-                    '_floor_override' : True,
-                    '_floor_rule'     : 'LA30Hz_b_amp_floor_20uV',
-                }
-
-        # ── Key findings (only for supported electrodes) ────────────
-        key_findings = []
-        for param, z in z_scores.items():
-            if abs(z) > 1.5:
-                param_name = param.replace('_', ' ').title()
-                if z > 0:
-                    key_findings.append(
-                        f"{param_name} increased/delayed (Z={z:+.1f})"
-                    )
-                else:
-                    key_findings.append(
-                        f"{param_name} reduced (Z={z:+.1f})"
-                    )
-
-        # ── Report ID ───────────────────────────────────────────────
         report_id = f"ERG-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        phnr = features.get('phnr_amp_uv', None) if protocol == 'LA 3.0' else None
+        phnr_atypical = (features.get('phnr_polarity_atypical', False)
+                         if protocol == 'LA 3.0' else False)
 
-        # ── Normative reference metadata (Layer 3 / Layer 4) ────────
         normative_meta = {
-            'electrode_type'   : electrode,
-            'age_stratum'      : stratum,
-            'protocol'         : protocol,
-            'zscore_available' : electrode in ZSCORE_SUPPORTED_ELECTRODES,
-            'reference_source' : (
+            'electrode_type': electrode,
+            'age_stratum': stratum,
+            'protocol': protocol,
+            'zones_available': supported,
+            'reference_source': (
                 'Baker et al. (2025). Doc Ophthalmol 150(2):47-64. '
-                'DOI: 10.1007/s10633-025-10009-2. '
-                'N=407, silver thread (fornix) + gold foil → STE scale.'
-            ) if electrode in ZSCORE_SUPPORTED_ELECTRODES else 'NOT AVAILABLE',
-            'reference_ranges_used': (
-                self._get_ref(electrode, protocol, stratum)
-                if electrode in ZSCORE_SUPPORTED_ELECTRODES
-                else {}
-            ),
+                'DOI: 10.1007/s10633-025-10009-2. Tables 4 and 5, silver '
+                'thread (fornix); gold foil amplitudes converted with Table 2.'
+            ) if supported else 'NOT AVAILABLE',
+            'normative_version': self.NORMATIVE_VERSION,
         }
 
         return {
@@ -1877,75 +1749,61 @@ class ERGReportGenerator:
 
             # ── Layer 2: Clinical Summary ───────────────────────────
             'layer_2_clinical_summary': {
-                'traffic_signal'   : traffic_light['signal'],
-                'quality_grade'    : (
-                    audit_results.get('quality', {}).get('grade', 'unknown')
-                ),
-                'key_findings'     : key_findings,
-                'z_scores'         : z_scores,
-                'phnr_amp_uv'      : (
-                    features.get('phnr_amp_uv', None)
-                    if protocol == 'LA 3.0' else None
-                ),
-                'phnr_polarity_atypical': (
-                    features.get('phnr_polarity_atypical', False)
-                    if protocol == 'LA 3.0' else False
-                ),
+                'traffic_signal': traffic_light['signal'],
+                'quality_grade': audit_results.get('quality', {}).get('grade', 'unknown'),
+                'key_findings': findings,
+                'parameter_zones': rows,
+                'phnr_amp_uv': phnr,
+                'phnr_polarity_atypical': phnr_atypical,
                 'recommended_action': (
-                    "Select Gold Foil or DTL electrode for Z-score classification. "
-                    "Raw ERG parameters are available above for manual clinical interpretation."
-                ) if traffic_light['signal'] == 'UNAVAILABLE' else traffic_light['message'],
-                'normative_note'   : (
-                    None
-                    if electrode in ZSCORE_SUPPORTED_ELECTRODES
-                    else NORMATIVE_UNAVAILABLE_TEXT
+                    'Select a DTL fiber or gold foil electrode for Traffic Light '
+                    'zones. The measured values are available for manual '
+                    'clinical interpretation.'
+                    if not supported else
+                    ZONE_ACTION.get(traffic_light['signal'], traffic_light['message'])
                 ),
+                'normative_note': None if supported else NORMATIVE_UNAVAILABLE_TEXT,
                 'disclaimer': (
-                    "This report is generated by an artificial intelligence pipeline and is "
-                    "intended solely as a decision-support tool for qualified eye care "
-                    "professionals. It does not constitute a medical diagnosis and must not "
-                    "be used as the sole basis for clinical decision-making. All findings "
-                    "must be reviewed and confirmed by a licensed clinician with access to "
-                    "the patient's full clinical history, symptoms, and examination findings "
-                    "in accordance with ISCEV 2022 standards."
+                    "This result is generated by an automated signal analysis "
+                    "algorithm and is intended to support, not replace, clinical "
+                    "judgment. It does not constitute a medical diagnosis. All "
+                    "results should be interpreted in the context of the "
+                    "patient's full clinical history, examination findings, and "
+                    "relevant investigations by a qualified healthcare "
+                    "professional. A Green ERG signal does not exclude "
+                    "significant ocular or systemic pathology. If you have any "
+                    "concern about this patient's visual function, please refer "
+                    "to an appropriate specialist."
                 ),
             },
 
             # ── Layer 3: Specialist (pending) ───────────────────────
             'layer_3_specialist': {
-                'status': (
-                    'PENDING — Full implementation requires '
-                    'Chapter 8 (STFT) and Chapter 14 (SHAP)'
-                ),
-                'stft_spectrogram'    : None,
-                'annotated_waveform'  : None,
-                'shap_waterfall'      : None,
+                'status': ('PENDING — Full implementation requires '
+                           'Chapter 8 (STFT) and Chapter 14 (SHAP)'),
+                'stft_spectrogram': None,
+                'annotated_waveform': None,
+                'shap_waterfall': None,
                 'normative_comparison': normative_meta,
             },
 
             # ── Layer 4: Technical Audit ────────────────────────────
             'layer_4_technical_audit': {
-                'report_id'          : report_id,
-                'timestamp'          : datetime.now().isoformat(),
-                'pipeline_version'   : self.config.PIPELINE_VERSION,
-                'electrode_type'     : electrode,
-                'age_stratum'        : stratum,
-                'protocol'           : protocol,
-                'z_scores'           : z_scores,
-                'phnr_amp_uv'        : (
-                    features.get('phnr_amp_uv', None)
-                    if protocol == 'LA 3.0' else None
-                ),
-                'phnr_polarity_atypical': (
-                    features.get('phnr_polarity_atypical', False)
-                    if protocol == 'LA 3.0' else False
-                ),
-                'zscore_available'   : electrode in ZSCORE_SUPPORTED_ELECTRODES,
-                'filter_log'         : filter_log,
-                'processing_time_ms' : processing_time_ms,
-                # ── Step 2.5: Signal orientation audit flag ──────────
-                'inverted_polarity_detected': features.get(
-                    'inverted_polarity_detected', False),
+                'report_id': report_id,
+                'timestamp': datetime.now().isoformat(),
+                'pipeline_version': self.config.PIPELINE_VERSION,
+                'electrode_type': electrode,
+                'age_stratum': stratum,
+                'protocol': protocol,
+                'parameter_zones': rows,
+                'zones_available': supported,
+                'gold_foil_conversion_applied': converted,
+                'normative_version': self.NORMATIVE_VERSION,
+                'phnr_amp_uv': phnr,
+                'phnr_polarity_atypical': phnr_atypical,
+                'filter_log': filter_log,
+                'processing_time_ms': processing_time_ms,
+                'inverted_polarity_detected': features.get('inverted_polarity_detected', False),
                 'inverted_polarity_warning': (
                     'Inverted polarity detected and corrected automatically. '
                     'Verify recording electrode orientation before clinical use.'
@@ -1957,14 +1815,12 @@ class ERGReportGenerator:
 
 # ============================================================================
 print("\n" + "=" * 60)
-print("CELL 6  |  STAGE 4: COMPLIANCE REPORT  |  v2.5.0")
+print("CELL 6  |  STAGE 4: CLINICAL REPORT")
 print("=" * 60)
-print("Normative reference : Baker et al. (2025)  N=407")
-print("Age strata          : ≤35y | 36–59y | ≥60y (Baker 2025)")
-print("Z-score support     : Gold Foil | DTL (silver thread)")
-print("Traffic light       : Green |Z|≤2.0 | Amber 2.0<|Z|≤3.0 | Red |Z|>3.0")
-print("No Z-score          : Contact Lens | Skin → NORMATIVE_UNAVAILABLE flag")
-print("FHIR output         : Cell 9 (standalone)")
+print("Reference limits : Baker et al. (2025) Tables 4 and 5, N=407")
+print("Age groups       : ≤35y | 36–59y | ≥60y")
+print("Zones            : GREEN | AMBER | RED | ATYPICAL DIRECTION (Eq. 10.2)")
+print("Electrodes       : DTL fiber direct; gold foil converted (Table 2)")
 print("=" * 60)
 
 # ============================================================================
@@ -2455,8 +2311,7 @@ class ERGSHAPExplainer:
 
         return [(self._feature_names[i], shap_values[i]) for i in indices if abs_shap[i] > 0]
 
-    def translate_shap_to_text(self, shap_values: np.ndarray,
-                                z_scores: Dict[str, float] = None) -> List[str]:
+    def translate_shap_to_text(self, shap_values: np.ndarray) -> List[str]:
         """
         Convert SHAP values to clinician-readable sentences (Level 3).
 
@@ -2509,7 +2364,6 @@ class ERGSHAPExplainer:
         return sentences
 
     def generate_shap_report(self, feature_vector: np.ndarray,
-                            z_scores: Dict[str, float] = None,
                             top_k: int = 5) -> Dict[str, Any]:
         """
         Generate complete SHAP report for a single recording.
@@ -2534,7 +2388,7 @@ class ERGSHAPExplainer:
 
         shap_values = self.compute_feature_shap(feature_vector)
         top_features = self.get_top_features(shap_values, top_k)
-        sentences = self.translate_shap_to_text(shap_values, z_scores)
+        sentences = self.translate_shap_to_text(shap_values)
 
         # Prepare waterfall data for visualization
         waterfall_data = []
@@ -2657,7 +2511,7 @@ print("=" * 60)
 print("\nUsage Example:")
 print("  explainer = ERGSHAPExplainer()")
 print("  explainer.set_random_forest_model(rf_model, feature_names)")
-print("  shap_report = explainer.generate_shap_report(feature_vector, z_scores)")
+print("  shap_report = explainer.generate_shap_report(feature_vector)")
 print("  full_report = integrate_shap_into_report(full_report, shap_report)")
 print("=" * 60)
 print("\n⚠️ Note: Full SHAP functionality requires:")
@@ -2687,7 +2541,8 @@ class ERGFHIRGenerator:
     generate_bundle() wraps it in a Bundle of type "collection" with a
     DiagnosticReport (Layer 1 Traffic Light and Layer 2 summary) and an
     AuditEvent (Layer 4 record), and a Patient that carries only the age.
-    Z-scores are not sent in FHIR; they stay in Layers 2 and 4.
+    Per-parameter zones stay in Layers 2 and 4; the composite zone is
+    sent as the DiagnosticReport conclusionCode.
     """
 
     BASE = "https://ai-fairness.com/fhir/erg/"
@@ -2789,7 +2644,6 @@ class ERGFHIRGenerator:
                              patient_id: str,
                              traffic_light: Dict,
                              features: Dict,
-                             z_scores: Dict,
                              audit_results: Dict,
                              electrode_type: str,
                              protocol: str,
@@ -2802,10 +2656,10 @@ class ERGFHIRGenerator:
         """
         Build the Appendix B Observation for one recording.
 
-        traffic_light and z_scores are accepted so that existing callers
-        keep working; they are reported in the DiagnosticReport and the
-        Layer 4 record, not in the Observation. model_weights_hash stays
-        "PENDING" until a trained model is deployed.
+        traffic_light is accepted for existing callers; the Traffic Light
+        is reported in the DiagnosticReport (generate_bundle), not in the
+        Observation. model_weights_hash stays "PENDING" until a trained
+        model is deployed.
         """
         protocol = self._protocol(protocol)
         eye = self._eye(eye)
@@ -3267,7 +3121,6 @@ def run_pipeline(b):
                         patient_id=patient_id_widget.value.strip() if patient_id_widget.value.strip() else "UNKNOWN",
                         traffic_light=full_report['layer_1_traffic_light'],
                         features=features,
-                        z_scores=full_report['layer_2_clinical_summary']['z_scores'],
                         audit_results=audit_result,
                         electrode_type=electrode_value,
                         protocol=protocol_widget.value
@@ -3282,8 +3135,6 @@ def run_pipeline(b):
                     tl = full_report['layer_1_traffic_light']
                     print(f"\n{tl['color']} TRAFFIC LIGHT: {tl['signal']}")
                     print(f"   {tl['message']}")
-                    if tl['confidence'] is not None:
-                        print(f"   Confidence: {tl['confidence']:.0%}")
                     print(f"\n📊 QUALITY GRADE: {audit_result['quality']['grade']}")
                     print(f"   {audit_result['quality']['description']}")
                     print(f"\n📋 RECOMMENDED ACTION: {full_report['layer_2_clinical_summary']['recommended_action']}")
