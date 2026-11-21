@@ -32,8 +32,7 @@ class TestFiltering:
         mod = pipeline_module
         fs = 2000.0; t = np.arange(0, 1.0, 1.0/fs)
         sig = np.sin(2*math.pi*30.0*t)*100
-        filt_obj = mod.ERGFilter()
-        filtered, _ = filt_obj.run_filter_pipeline(sig.copy(), fs, apply_notch=False,
+        filtered, _ = mod.run_filter_pipeline(sig.copy(), fs, apply_notch=False,
                                                     notch_hz=50.0, hardware_cutoff_hz=None,
                                                     user_confirmed_notch=False)
         ratio = float((filtered**2).mean()**0.5) / float((sig**2).mean()**0.5)
@@ -41,25 +40,25 @@ class TestFiltering:
 
 
 class TestWaveformExtraction:
-    def test_T_WAVE_01_a_wave_trough_is_negative(self, s01_result):
-        a = s01_result["features"].get("a_wave_amplitude_uv")
-        assert a is not None and not math.isnan(a) and a < 0, f"T-WAVE-01: a={a}"
+    def test_T_WAVE_01_a_wave_amplitude_detected(self, s01_result):
+        a = s01_result["features"].get("a_amp_uv")
+        assert a is not None and not math.isnan(a) and a > 0, f"T-WAVE-01: a={a}"
 
     def test_T_WAVE_02_b_wave_peak_follows_a_wave_trough(self, s01_result):
         f = s01_result["features"]
-        a_it = f.get("a_wave_implicit_time_ms"); b_it = f.get("b_wave_implicit_time_ms")
+        a_it = f.get("a_implicit_ms"); b_it = f.get("b_implicit_ms")
         assert a_it is not None and b_it is not None and b_it > a_it
 
 
 class TestZScores:
     def test_T_ZSCORE_01_mu_input_returns_zero(self, pipeline_module):
         rgen = pipeline_module.ERGReportGenerator()
-        mu, sigma = rgen.REFERENCE_RANGES["DA 3"]["gold_foil"]["le35"]["a_amp"]
+        mu, sigma = rgen.REFERENCE_RANGES["DA 3.0"]["gold_foil"]["le35"]["a_amp"]
         assert abs((mu-mu)/sigma) <= 0.01
 
     def test_T_ZSCORE_02_mu_plus_2sigma_returns_plus_two(self, pipeline_module):
         rgen = pipeline_module.ERGReportGenerator()
-        mu, sigma = rgen.REFERENCE_RANGES["DA 3"]["gold_foil"]["le35"]["b_amp"]
+        mu, sigma = rgen.REFERENCE_RANGES["DA 3.0"]["gold_foil"]["le35"]["b_amp"]
         assert abs(((mu+2*sigma)-mu)/sigma - 2.0) <= 0.05
 
 
@@ -89,16 +88,16 @@ class TestFHIROutput:
 class TestDTLDemingRegression:
     def test_T_DTL_01_deming_correction_shifts_z_scores(self, pipeline_module):
         rgen = pipeline_module.ERGReportGenerator()
-        assert rgen.ELECTRODE_TRANSFORM and "DA 3" in rgen.ELECTRODE_TRANSFORM
+        assert rgen.ELECTRODE_TRANSFORM and "DA 3.0" in rgen.ELECTRODE_TRANSFORM
         gf_mu = 175.70
-        slope = rgen.ELECTRODE_TRANSFORM["DA 3"]["a_amp"]["slope"]
-        intercept = rgen.ELECTRODE_TRANSFORM["DA 3"]["a_amp"]["intercept"]
+        slope = rgen.ELECTRODE_TRANSFORM["DA 3.0"]["a_amp"]["slope"]
+        intercept = rgen.ELECTRODE_TRANSFORM["DA 3.0"]["a_amp"]["intercept"]
         ste_at_mu = slope*gf_mu + intercept
-        gfe_equiv = rgen._apply_dtl_transform("DA 3","a_amp",ste_at_mu)
+        gfe_equiv = rgen._apply_dtl_transform("DA 3.0","a_amp",ste_at_mu)
         assert abs(gfe_equiv - gf_mu) < 0.01, f"T-DTL-01: GFE_equiv={gfe_equiv:.4f}"
-        _, sigma = rgen.REFERENCE_RANGES["DA 3"]["gold_foil"]["le35"]["a_amp"]
+        _, sigma = rgen.REFERENCE_RANGES["DA 3.0"]["gold_foil"]["le35"]["a_amp"]
         assert abs((gfe_equiv-gf_mu)/sigma) <= 0.01
-        assert rgen._apply_dtl_transform("DA 3","a_imp",14.98) == 14.98
+        assert rgen._apply_dtl_transform("DA 3.0","a_imp",14.98) == 14.98
 
 
 class TestSignalOrientation:
@@ -115,30 +114,27 @@ class TestSignalOrientation:
         """
         import numpy as np
         mod = pipeline_module
-        PRE_MS=50.0; PROTOCOL="DA 3"; ELECTRODE="gold_foil"; AGE="≤35y"
+        PRE_MS=50.0; PROTOCOL="DA 3.0"; ELECTRODE="gold_foil"; AGE="≤35y"
 
         time_ms, signal_uv, fs_hz, _ = mod.load_erg_csv(s01_csv_path)
         flash_onset = int(PRE_MS * fs_hz / 1000)
         inv_sig = signal_uv * -1.0
         noise_rms = float(np.sqrt(np.mean(inv_sig[:flash_onset]**2)))
 
-        auditor = mod.ERGAudit()
-        audit   = auditor.run_full_audit(inv_sig, fs_hz, electrode_type=ELECTRODE,
+        audit   = mod.run_full_audit(inv_sig, fs_hz, electrode_type=ELECTRODE,
                                          prestimulus_samples=flash_onset, age_group=AGE)
-        filt_obj = mod.ERGFilter()
-        filtered, filter_log = filt_obj.run_filter_pipeline(
+        filtered, filter_log = mod.run_filter_pipeline(
             inv_sig, fs_hz, apply_notch=False, notch_hz=50.0,
             hardware_cutoff_hz=None, user_confirmed_notch=False)
-        extractor = mod.ERGFeatureExtractor()
-        features  = extractor.extract_all_features(
+        features  = mod.extract_all_features(
             signal=filtered, fs_hz=fs_hz, protocol=PROTOCOL,
             flash_onset_sample=flash_onset, flash_duration_ms=0.0,
             op_signal=None, noise_rms_uv=noise_rms)
 
         # (a)
-        a_amp = features.get("a_wave_amplitude_uv")
-        assert a_amp is not None and not math.isnan(a_amp) and a_amp < 0, (
-            f"T-ORIENT-01(a): a-wave must be negative after correction, got {a_amp}")
+        a_amp = features.get("a_amp_uv")
+        assert a_amp is not None and not math.isnan(a_amp) and a_amp > 0, (
+            f"T-ORIENT-01(a): a-wave must be detected after correction (amplitude reported as a positive baseline-to-trough value), got {a_amp}")
 
         # (b)
         assert features.get("inverted_polarity_detected") is True, (
@@ -187,22 +183,19 @@ class TestElectrodeGating:
         time_ms, signal_uv, fs_hz, _ = mod.load_erg_csv(s01_csv_path)
         flash_onset = int(PRE_MS*fs_hz/1000)
         noise_rms = float(np.sqrt(np.mean(signal_uv[:flash_onset]**2)))
-        auditor = mod.ERGAudit()
-        audit   = auditor.run_full_audit(signal_uv, fs_hz, electrode_type="contact_lens",
+        audit   = mod.run_full_audit(signal_uv, fs_hz, electrode_type="contact_lens",
                                          prestimulus_samples=flash_onset, age_group="≤35y")
-        filt_obj = mod.ERGFilter()
-        filtered, filter_log = filt_obj.run_filter_pipeline(
+        filtered, filter_log = mod.run_filter_pipeline(
             signal_uv, fs_hz, apply_notch=False, notch_hz=50.0,
             hardware_cutoff_hz=None, user_confirmed_notch=False)
-        extractor = mod.ERGFeatureExtractor()
-        features  = extractor.extract_all_features(
-            signal=filtered, fs_hz=fs_hz, protocol="DA 3",
+        features  = mod.extract_all_features(
+            signal=filtered, fs_hz=fs_hz, protocol="DA 3.0",
             flash_onset_sample=flash_onset, flash_duration_ms=0.0,
             op_signal=None, noise_rms_uv=noise_rms)
         report_gen  = mod.ERGReportGenerator()
         full_report = report_gen.generate_full_report(
             features=features, audit_results=audit, electrode_type="contact_lens",
-            protocol="DA 3", age_years="≤35y", filtered_signal=filtered,
+            protocol="DA 3.0", age_years="≤35y", filtered_signal=filtered,
             time_ms=time_ms, filter_log=filter_log, processing_time_ms=0.0)
         signal = full_report["layer_1_traffic_light"]["signal"]
         assert signal == "UNAVAILABLE", f"T-ELEC-01: {signal!r}"

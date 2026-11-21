@@ -35,7 +35,7 @@ for _mod in _STUB_MODULES:
 
 
 # ---------------------------------------------------------------------------
-# 2. Make the repo root importable so `import erg_v2_4_0` works
+# 2. Make the repo root importable
 # ---------------------------------------------------------------------------
 _REPO_ROOT = pathlib.Path(__file__).parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -79,14 +79,14 @@ def s01_result(pipeline_module, s01_csv_path):
         result['z_scores']         — Z-score dict from Layer 2
         result['traffic_light']    — traffic light dict from Layer 1
         result['fhir']             — FHIR Observation dict
-        result['audit']            — audit result dict from ERGAudit
+        result['audit']            — audit result dict from run_full_audit
     """
     mod = pipeline_module
     import numpy as np
 
     PRE_MS   = 50.0
     FS_HZ    = 2000.0
-    PROTOCOL = "DA 3"
+    PROTOCOL = "DA 3.0"
     ELECTRODE = "gold_foil"
     AGE_GROUP = "≤35y"
 
@@ -97,24 +97,21 @@ def s01_result(pipeline_module, s01_csv_path):
     pre_stim             = signal_uv[:prestimulus_samples]
     noise_rms            = float(np.sqrt(np.mean(pre_stim ** 2)))
 
-    auditor      = mod.ERGAudit()
-    audit_result = auditor.run_full_audit(
+    audit_result = mod.run_full_audit(
         signal_uv, fs_hz,
         electrode_type=ELECTRODE,
         prestimulus_samples=prestimulus_samples,
         age_group=AGE_GROUP,
     )
 
-    filt_obj                     = mod.ERGFilter()
-    filtered_signal, filter_log  = filt_obj.run_filter_pipeline(
+    filtered_signal, filter_log  = mod.run_filter_pipeline(
         signal_uv, fs_hz,
         apply_notch=False, notch_hz=50.0,
         hardware_cutoff_hz=None,
         user_confirmed_notch=False,
     )
 
-    extractor = mod.ERGFeatureExtractor()
-    features  = extractor.extract_all_features(
+    features  = mod.extract_all_features(
         signal=filtered_signal,
         fs_hz=fs_hz,
         protocol=PROTOCOL,
