@@ -3014,9 +3014,8 @@
 
   document.getElementById('downloadClinicalPdf').addEventListener('click', async function() {
     if (!window._lastResult) { showError('No result available. Please run an analysis first.'); return; }
-    const fhir = window._lastResult.fhir_observation;
-    const reportId = fhir && fhir.id;
-    if (!reportId) { showError('Report ID not available in this result.'); return; }
+    const fhir = window._lastResult.fhir_bundle || window._lastResult.fhir_observation;
+    if (!fhir) { showError('FHIR output not available in this result.'); return; }
 
     const btn = this;
     const originalHtml = btn.innerHTML;
