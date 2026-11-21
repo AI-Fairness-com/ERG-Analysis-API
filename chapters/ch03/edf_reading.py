@@ -1,10 +1,14 @@
+# Chapter 3, §3.4.3: read the sample EDF file with MNE-Python
+# Run from the repository folder:  python chapters/ch03/edf_reading.py
+# This is the code of §3.4.3, reading the copy of patient_001.edf in
+# data/samples/ instead of downloading it.
+
 # Reading an EDF file with MNE-Python
-# Verify the unit field in raw.info['chs'][0]['unit'] before scaling — some devices export in mV (multiply by 1e3) or µV (no scaling needed).
-
+# MNE returns EDF data in volts, using the unit stored in the file header.
+# If amplitudes look 1,000 times too large or too small, check that header.
 import mne
-
 # Load the EDF file (verbose=False suppresses the MNE console output)
-raw = mne.io.read_raw_edf('patient_001.edf', preload=True, verbose=False)
+raw = mne.io.read_raw_edf('data/samples/patient_001.edf', preload=True, verbose=False)
 
 # Extract the ERG channel by name
 erg_data = raw.get_data(picks='ERG')[0]
