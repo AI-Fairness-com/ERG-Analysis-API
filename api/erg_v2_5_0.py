@@ -1253,6 +1253,19 @@ def extract_all_features(signal: np.ndarray, fs_hz: float,
 
     features = {'protocol': protocol}
 
+    # Polarity check (Chapter 9, data-quality flag; not one of the 28
+    # features). On dark-adapted protocols a correctly oriented signal is
+    # dominated by the negative a-wave in the first 30 ms after the flash.
+    # A positive sum there means the electrodes were reversed, so the
+    # signal is inverted and the flag is reported in Layer 4 and FHIR.
+    inverted_polarity_detected = False
+    if protocol.strip().upper() in ('DA 0.01', 'DA 3.0', 'DA 10.0'):
+        n30 = min(int(30.0 * fs_hz / 1000), len(signal) - flash_onset_sample)
+        if n30 > 0 and float(np.sum(signal[flash_onset_sample:flash_onset_sample + n30])) > 0:
+            signal = signal * -1.0
+            inverted_polarity_detected = True
+    features['inverted_polarity_detected'] = inverted_polarity_detected
+
     # §9.1: a-wave, b-wave, b/a ratio
     a = extract_a_wave(signal, time_ms, protocol,
                        hardware_lowpass_hz=hardware_lowpass_hz,
