@@ -35,7 +35,7 @@
   "ba_ratio": {
     "mean": 2.65,
     "sigma": 0.425,
-    "protocol": "DA 3",
+    "protocol": "DA 3.0",
     "note": "Normal range 1.8-3.5; modelled as mean=2.65 SD=0.425 so +-2SD approx [1.8,3.5]. DA 3 only."
   },
   "protocols": {
@@ -117,7 +117,7 @@
         }
       }
     },
-    "DA 3": {
+    "DA 3.0": {
       "gold_foil": {
         "le35": {
           "a_amp": {
@@ -231,7 +231,7 @@
         }
       }
     },
-    "DA 10": {
+    "DA 10.0": {
       "gold_foil": {
         "le35": {
           "a_amp": {
@@ -423,7 +423,7 @@
         }
       }
     },
-    "LA 3": {
+    "LA 3.0": {
       "gold_foil": {
         "le35": {
           "a_amp": {
@@ -555,7 +555,7 @@
         "a_imp": null,
         "b_imp": null
       },
-      "DA 3": {
+      "DA 3.0": {
         "a_amp": {
           "slope": 0.56,
           "intercept": 8.24,
@@ -573,7 +573,7 @@
         "a_imp": null,
         "b_imp": null
       },
-      "DA 10": {
+      "DA 10.0": {
         "a_amp": {
           "slope": 0.55,
           "intercept": 9.93,
@@ -603,7 +603,7 @@
         "a_imp": null,
         "b_imp": null
       },
-      "LA 3": {
+      "LA 3.0": {
         "a_amp": {
           "slope": 0.55,
           "intercept": 1.15,
