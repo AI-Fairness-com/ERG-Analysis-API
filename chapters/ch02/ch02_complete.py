@@ -1,162 +1,147 @@
-# -*- Chapter 2 -*-
-"""REALISTIC ERG SIMULATION - With Project-Derived Quality Thresholds (Not an ISCEV Standard)"""
-# This code requires a Jupyter notebook environment (Google Colab or local Jupyter). It will not produce interactive output if run as a plain .py script.
+# Chapter 2: how electrode type and noise change the SNR and the quality flag
+"""
+An interactive look at signal quality.
+
+The code builds a simulated dark-adapted 3.0 (DA 3.0) ERG, scales it for
+each electrode type, adds noise, and measures the SNR as defined in
+Section 2.2.1. It then applies this project's SNR thresholds (Table 2.3).
+The waveform is illustrative, not a patient recording.
+Run it in Google Colab or Jupyter: the slider and menu need a notebook.
+"""
 
 import numpy as np
+from scipy.signal import butter, sosfiltfilt
 import matplotlib.pyplot as plt
-from IPython.display import display, clear_output
 import ipywidgets as widgets
+from IPython.display import display, clear_output
 
-np.random.seed(42)
-
-TRUE_BIOLOGICAL_SIGNAL_AMP = 893
-
-# Format: (Name, Efficiency, PASS_threshold, WARNING_low_boundary, WARNING_high_boundary)
-ELECTRODE_EFFICIENCY = {
-    1: ("Contact lens", 1.00, 8.0, 4.0, 7.9),
-    2: ("Gold foil",     0.56, 6.0, 3.0, 5.9),
-    3: ("DTL fiber",     0.34, 4.0, 2.5, 3.9),
-    4: ("Skin electrode", 0.12, 3.0, 1.5, 2.9),
+# --------------------------------------------------------------
+# Electrode types: relative amplitude and SNR thresholds
+# --------------------------------------------------------------
+# Relative amplitude: mean dark-adapted b-wave as a share of the contact
+# lens electrode, from one comparison in the same eyes
+# (Esakowitz, Kriss and Shawkat, 1993; Chapter 1, Fig. 1.4).
+# Thresholds: this project's own choice (Table 2.3).
+# Format: (name, relative amplitude, Pass from, Warning from)
+ELECTRODES = {
+    1: ("Contact lens",   1.00, 8.0, 4.0),
+    2: ("Gold foil",      0.56, 6.0, 3.0),
+    3: ("DTL fiber",      0.46, 4.0, 2.5),
+    4: ("Skin electrode", 0.12, 3.0, 2.0),
 }
 
-# Generate true retinal signal
+# --------------------------------------------------------------
+# Simulated DA 3.0 response for a contact lens electrode
+# --------------------------------------------------------------
+# 100 ms of baseline before the flash (Section 2.2.1), then 400 ms after it,
+# sampled at 2000 samples per second.
 fs = 2000
 pre_ms = 100
-total_ms = 500
-t = np.linspace(0, total_ms, int(fs * total_ms / 1000))
-stim_onset = pre_ms
+t = np.arange(-pre_ms, 400, 1000 / fs)   # time in ms; the flash is at 0
 
-true_retinal_signal = np.zeros_like(t)
-true_retinal_signal += -120 * np.exp(-((t - (stim_onset + 20))**2) / (2 * 8**2))
-true_retinal_signal += 280 * np.exp(-((t - (stim_onset + 60))**2) / (2 * 18**2))
 
-for t_op, a_op in zip([40, 48, 56, 64, 72], [12, 15, 18, 12, 8]):
-    true_retinal_signal += a_op * np.exp(-((t - (stim_onset + t_op)) / 3)**2)
+def bump(x, center_ms, width_ms):
+    """A smooth bell-shaped curve centered on center_ms."""
+    return np.exp(-0.5 * ((x - center_ms) / width_ms) ** 2)
 
-noise_cache = {}
 
-def get_recording(noise_uV, electrode_id):
-    name, efficiency, pass_th, warn_low, warn_high = ELECTRODE_EFFICIENCY[electrode_id]
-    attenuated_signal = true_retinal_signal * efficiency
-    
-    cache_key = round(noise_uV, 1)
-    if cache_key not in noise_cache:
-        local_seed = int(noise_uV * 100) % 10000
-        np.random.seed(local_seed)
-        noise = np.random.normal(0, noise_uV, len(t))
-        noise_cache[cache_key] = noise
-        np.random.seed(42)
-    
-    recorded_signal = attenuated_signal + noise_cache[cache_key]
-    return recorded_signal, attenuated_signal, efficiency, name, pass_th, warn_low, warn_high
+# a-wave trough near 20 ms, b-wave peak near 60 ms, small OPs on the rise.
+# The sizes give a b-wave amplitude (a-wave trough to b-wave peak) close to
+# the 471 µV mean recorded with a contact lens electrode by
+# Esakowitz, Kriss and Shawkat (1993).
+true_response = (-150.0 * bump(t, 20.0, 8.0)
+                 + 320.0 * bump(t, 60.0, 18.0))
+for t_op, a_op in zip([40, 48, 56, 64], [12, 15, 15, 10]):
+    ripple = np.cos(2 * np.pi * (t - t_op) / 7.0)   # about 140 Hz
+    true_response += a_op * bump(t, t_op, 2.0) * ripple
 
-output_plot = widgets.Output()
-output_info = widgets.Output()
 
+# Signal and noise must be measured over the same frequency range
+# (Section 2.2.2). The a- and b-waves contain frequencies up to about
+# 32 Hz (Chapter 1, Section 1.3.1), so a 50 Hz low-pass filter keeps them.
+LOWPASS = butter(4, 50.0, btype="low", fs=fs, output="sos")
+
+
+def measure_snr(recording):
+    """SNR = (b-wave peak - a-wave trough) / peak-to-peak baseline noise."""
+    recording = sosfiltfilt(LOWPASS, recording)
+    baseline = recording[t < 0]
+    noise_pp = baseline.max() - baseline.min()
+    after = (t >= 0) & (t <= 150)
+    a_trough = recording[after & (t <= 40)].min()
+    b_peak = recording[after & (t > 20)].max()
+    return (b_peak - a_trough), noise_pp
+
+
+def quality_flag(snr, pass_from, warn_from):
+    if snr >= pass_from:
+        return "PASS"
+    if snr >= warn_from:
+        return "WARNING"
+    return "FAIL"
+
+
+def simulate(noise_uv, electrode_id, seed=1):
+    name, rel_amp, pass_from, warn_from = ELECTRODES[electrode_id]
+    rng = np.random.default_rng(seed)
+    clean = true_response * rel_amp
+    recording = clean + rng.normal(0.0, noise_uv, t.size)
+    amplitude, noise_pp = measure_snr(recording)
+    snr = amplitude / noise_pp
+    return name, clean, recording, amplitude, noise_pp, snr, \
+        quality_flag(snr, pass_from, warn_from), pass_from, warn_from
+
+
+# --------------------------------------------------------------
+# Interactive controls: noise slider and electrode menu
+# --------------------------------------------------------------
 noise_slider = widgets.FloatSlider(
-    value=30, min=0, max=250, step=5,
-    description='Environmental noise (µV):',
-    style={'description_width': 'initial'},
-    layout=widgets.Layout(width='500px')
-)
+    value=40, min=1, max=300, step=1,
+    description="Added noise (µV RMS):",
+    style={"description_width": "initial"},
+    layout=widgets.Layout(width="450px"))
+electrode_menu = widgets.Dropdown(
+    options=[(ELECTRODES[k][0], k) for k in ELECTRODES], value=1,
+    description="Electrode:", style={"description_width": "initial"})
+output = widgets.Output()
 
-electrode_dropdown = widgets.Dropdown(
-    options=[
-        ('Contact lens (100% efficiency, PASS SNR ≥ 8.0, WARN 4.0-7.9)', 1),
-        ('Gold foil (56% efficiency, PASS SNR ≥ 6.0, WARN 3.0-5.9)', 2),
-        ('DTL fiber (34% efficiency, PASS SNR ≥ 4.0, WARN 2.5-3.9)', 3),
-        ('Skin electrode (12% efficiency, PASS SNR ≥ 3.0, WARN 1.5-2.9)', 4)
-    ],
-    value=1,
-    description='Electrode:',
-    style={'description_width': 'initial'},
-    layout=widgets.Layout(width='600px')
-)
+COLORS = {"PASS": "lightgreen", "WARNING": "gold", "FAIL": "salmon"}
 
-def update_plot(noise_uV, electrode_id):
-    with output_plot:
+
+def update(change=None):
+    (name, clean, recording, amplitude, noise_pp, snr, flag,
+     pass_from, warn_from) = simulate(noise_slider.value, electrode_menu.value)
+    with output:
         clear_output(wait=True)
-        
-        recorded_signal, attenuated_signal, efficiency, name, pass_th, warn_low, warn_high = get_recording(noise_uV, electrode_id)
-        
-        baseline = recorded_signal[:int(100 * fs / 1000)]
-        noise_rms = np.sqrt(np.mean(baseline**2))
-        
-        recorded_amp = TRUE_BIOLOGICAL_SIGNAL_AMP * efficiency
-        snr = recorded_amp / noise_rms
-        
-        if snr >= pass_th:
-            quality = "PASS ✓"
-            color = "lightgreen"
-        elif snr >= warn_low:
-            quality = "WARNING ⚠"
-            color = "gold"
-        else:
-            quality = "FAIL ✗"
-            color = "salmon"
-        
-        with output_info:
-            clear_output(wait=True)
-            print("="*60)
-            print(f"ELECTRODE: {name}")
-            print(f"  • Signal capture efficiency: {efficiency*100:.0f}%")
-            print(f"  • Threshold(this project,§2.3): PASS ≥ {pass_th}, WARNING {warn_low}-{warn_high}, FAIL < {warn_low}")
+        print(f"Electrode:          {name}")
+        print(f"Measured amplitude: {amplitude:.0f} µV "
+              "(a-wave trough to b-wave peak)")
+        print(f"Noise before flash: {noise_pp:.1f} µV peak to peak")
+        print(f"SNR:                {snr:.1f}")
+        print(f"Thresholds:         Pass ≥ {pass_from}, "
+              f"Warning {warn_from} to "
+              f"{pass_from - 0.1:.1f}, Fail < {warn_from}  (Table 2.3)")
+        print(f"Quality flag:       {flag}")
 
-            print(f"\nTrue retinal signal: {TRUE_BIOLOGICAL_SIGNAL_AMP} µV")
-            print(f"Recorded amplitude: {recorded_amp:.0f} µV ({efficiency*100:.0f}% of true)")
-            print(f"Environmental noise: {noise_uV} µV RMS (measured: {noise_rms:.1f})")
-            print(f"\nSNR = {recorded_amp:.0f} / {noise_rms:.1f} = {snr:.1f}")
-            print(f"\n→ RESULT: {quality}")
-            print("="*60)
-        
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
-        
-        ax1.plot(t, true_retinal_signal, 'g-', linewidth=1.5, alpha=0.5, label='True retinal signal')
-        ax1.plot(t, recorded_signal, 'b-', linewidth=1.5, label=f'Recorded ({name})')
-        ax1.axvline(stim_onset, color='red', linestyle='--', alpha=0.5, label='Flash')
-        ax1.axhline(0, color='gray', linestyle=':', linewidth=0.5, alpha=0.5)
-        ax1.set_ylabel('Amplitude (µV)')
-        ax1.set_title(f'True Retinal Signal vs Recorded Signal')
-        ax1.legend(loc='upper right')
-        ax1.grid(True, alpha=0.2)
-        ax1.text(0.02, 0.95, f'SNR={snr:.1f}\n{quality}', transform=ax1.transAxes,
-                fontsize=11, fontweight='bold', 
-                bbox=dict(boxstyle='round', facecolor=color, alpha=0.8))
-        
-        ax2.plot(t, true_retinal_signal, 'g-', linewidth=1, alpha=0.5, label='True retinal')
-        ax2.plot(t, attenuated_signal, 'orange', linewidth=2, label=f'After attenuation ({name})')
-        ax2.fill_between(t, 0, attenuated_signal, alpha=0.3, color='orange')
-        ax2.axvline(stim_onset, color='red', linestyle='--', alpha=0.5)
-        ax2.set_xlabel('Time (ms)')
-        ax2.set_ylabel('Amplitude (µV)')
-        ax2.set_title(f'Signal Attenuation: {efficiency*100:.0f}% of true signal remains')
-        ax2.legend(loc='upper right')
-        ax2.grid(True, alpha=0.2)
-        
+        fig, ax = plt.subplots(figsize=(10, 4.5))
+        ax.axvspan(t[0], 0, color="gray", alpha=0.15,
+                   label="Baseline used for noise (100 ms)")
+        ax.plot(t, recording, color="steelblue", lw=1.0,
+                label=f"Recorded ({name})")
+        ax.plot(t, clean, color="darkorange", lw=2.0,
+                label="Response without noise")
+        ax.axvline(0, color="red", ls="--", lw=1.0, label="Flash")
+        ax.set_xlabel("Time after flash (ms)")
+        ax.set_ylabel("Amplitude (µV)")
+        ax.set_title(f"SNR = {snr:.1f}: {flag}",
+                     backgroundcolor=COLORS[flag])
+        ax.legend(loc="upper right", fontsize=9)
+        ax.grid(True, alpha=0.2)
         plt.tight_layout()
         plt.show()
 
-widgets.interactive_output(update_plot, {'noise_uV': noise_slider, 'electrode_id': electrode_dropdown})
 
-print("\n" + "="*70)
-print("REALISTIC ERG SIMULATION - WITH PROJECT-DERIVED THRESHOLDS")
-print("="*70)
-print("\nKEY CONCEPT: Different electrodes capture different amounts of the true signal")
-print("Contact lens: 100% | Gold: 56% | DTL: 34% | Skin: 12%")
-print("\nProject-derived thresholds (§2.3) reflect these efficiency differences:")
-print("  • Higher efficiency → Higher SNR required for PASS")
-print("  • Lower efficiency → Lower SNR accepted for PASS")
-print("\n" + "-"*70)
-
-ui = widgets.VBox([
-    widgets.HTML("<b>⚠️ Environmental Noise Level (same for all electrodes):</b>"),
-    noise_slider,
-    widgets.HTML("<b>🔬 Electrode Type:</b>"),
-    electrode_dropdown,
-    widgets.HTML("<hr>"),
-    output_info,
-    output_plot
-])
-
-display(ui)
-update_plot(30, 1)
+noise_slider.observe(update, names="value")
+electrode_menu.observe(update, names="value")
+display(widgets.VBox([noise_slider, electrode_menu, output]))
+update()
