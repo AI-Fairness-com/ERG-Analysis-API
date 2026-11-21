@@ -2829,7 +2829,10 @@ print("=" * 60)
 import os
 import ipywidgets as widgets
 from IPython.display import display, clear_output
-from google.colab import files
+try:
+    from google.colab import files
+except ImportError:             # outside Colab: no upload dialog
+    files = None
 import time
 
 print("=" * 60)
