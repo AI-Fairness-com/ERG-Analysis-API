@@ -1419,6 +1419,9 @@ class ERGReportGenerator:
             candidates.append(
                 pathlib.Path(_os.getcwd()) / "normative_data_baker2025.json"
             )
+            # Repository layout: data/samples/, run from the root or from api/
+            for _root in (pathlib.Path(_os.getcwd()), pathlib.Path(_os.getcwd()).parent):
+                candidates.append(_root / "data" / "samples" / "normative_data_baker2025.json")
             for p in candidates:
                 if p.exists():
                     return p
