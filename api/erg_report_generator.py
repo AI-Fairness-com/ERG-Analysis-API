@@ -540,7 +540,9 @@ def build_metrics_table(features, parameter_zones, zones_available=True):
         unit = (r.get("unit") or "").replace("\u00b5", "u")
         sep = " " if unit else ""
         val = r.get("value")
-        if val is None:
+        if r.get("not_recordable"):
+            val_txt = "Not recordable"
+        elif val is None:
             val_txt = "Not measured"
         elif r.get("parameter") == "phnr_amp_uv":
             sign = "+" if val > 0 else ("\u2212" if val < 0 else "")
