@@ -1,7 +1,5 @@
 # Changelog
 
-![Validation](https://img.shields.io/badge/validation-41%2F41%20PASS-brightgreen)
-
 All notable changes to the ERG Analysis API pipeline are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -19,6 +17,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Real-time streaming filter mode (sosfilt causal pathway — still a `NotImplementedError` stub as of the 2026-09-07 rebuild; no target version committed)
 - REST API deployment for remote access
 - Mobile/tablet interface for point-of-care use
+
+---
+## 2026-11-22 — Alignment with the final book (PIPELINE_VERSION unchanged: 2.5.0)
+
+### Changed
+
+- Traffic Light rebuilt on the Baker et al. (2025) reference limits and their 90% confidence intervals (Chapter 10 §10.4, Equation 10.2): GREEN, AMBER, RED and ATYPICAL DIRECTION per parameter; the most severe zone sets the composite. Z-scores removed throughout.
+- Normative file `data/samples/normative_data_baker2025.json` replaced (schema 2.0: Baker Tables 4 and 5, with the Table 2 gold foil to silver thread conversion).
+- Gold foil amplitudes are converted to silver thread equivalents before zoning; contact lens and skin recordings receive no zone (UNAVAILABLE).
+- A wave coded as not recordable (Chapter 11 sentinel −9999 or 9999) is zoned RED and shown as "Not recordable" in every report.
+- FHIR output rebuilt to Appendix B: Bundle with Observation (LOINC panel 79894-2), DiagnosticReport and AuditEvent, with the version-stamp extension.
+- Skin electrode SNR thresholds corrected to Chapter 2: Warning from 2.0 to 2.9, Fail below 2.0.
+- A missing electrode type is read from the CSV's `electrode_type` column if the form leaves it blank; if both are blank, the API halts with the `ELECTRODE_UNKNOWN` error report of Chapter 19 §19.9.2.
+- Polarity check restored for dark-adapted protocols.
+- The pipeline imports outside Colab (the `google.colab` import is guarded).
+- Python 3.12 (`api/runtime.txt`); server requirements in `api/requirements.txt`, full book list in `requirements.txt`.
+
+### Book code
+
+- `chapters/ch01` to `chapters/ch19` re-synced with the code boxes of the final manuscript, each script run end to end. Scripts whose boxes use undefined data carry a clearly labelled simulated-data block or demonstration.
+- `chapters/Appendices/appendices.py` added.
+- `examples/`: nine case notebooks, `case01` to `case09`, one per Chapter 19 case study, with `case_helpers.py`. Each reproduces its Chapter 19 zones and printed limits with the pipeline code.
+
+### Removed
+
+- Redundant and superseded files (old templates and pages, the v2.4.2 CSV generator in `data/samples/`, old PDFs, the `validation/` folder).
+- `DISCLAIMER.md` and `README.md` rewritten from the book.
+
+### Tests
+
+- 27 automated tests, including the reproduction of the Chapter 19 zones, the gold foil conversion and the FHIR Bundle.
 
 ---
 ## 2026-10-18 — Upload form updated to v2.5.0 (PIPELINE_VERSION unchanged: 2.5.0)
