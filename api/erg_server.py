@@ -133,6 +133,20 @@ def _normalise_protocol(value):
     return _PROTOCOLS.get(key, str(value or "").strip())
 
 
+def _field_from_csv(path, field):
+    """Return the first non-blank value of a CSV column, or None."""
+    try:
+        import pandas as pd
+        col = pd.read_csv(path, nrows=5)
+        col.columns = [c.strip().lower() for c in col.columns]
+        if field in col.columns:
+            value = str(col[field].dropna().iloc[0]).strip()
+            return value or None
+    except Exception:
+        pass
+    return None
+
+
 def _eye_from_csv(path):
     """Return OD or OS from the CSV's eye column (Appendix A), or None."""
     try:
