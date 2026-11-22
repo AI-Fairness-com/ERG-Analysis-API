@@ -227,9 +227,6 @@ def analyse():
     age_group       = request.form.get("age_group",  "≤35y")   # Baker stratum
     protocol        = _normalise_protocol(request.form.get("protocol", "DA 3.0"))
     electrode_type  = request.form.get("electrode_type", "").strip()
-    if not electrode_type:
-        return safe_jsonify({"message": "HALT: electrode type is missing. "
-                             "Select the electrode used for this recording."}, 400)
     pre_stimulus_ms = float(request.form.get("pre_stimulus_ms", 50.0))
     flash_dur_ms    = float(request.form.get("flash_duration_ms", 1.0))
     apply_notch     = request.form.get("apply_notch",   "false").lower() == "true"
