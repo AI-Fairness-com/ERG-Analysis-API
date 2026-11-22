@@ -8,7 +8,7 @@ Original file is located at
 """
 
 """
-erg_report_generator.py — v2.5.0 Professional Clinical Report Generator
+erg_report_generator.py — v2.5.1 Professional Clinical Report Generator
 ERG Analysis API — AI Fairness CIO (Charity Commission No. 1218464)
 
 Generates a fixed-layout, print-quality PDF clinical report using ReportLab,
@@ -61,7 +61,7 @@ ORG_EMAIL   = "info@ai-fairness.com"
 ORG_WEB     = "www.ai-fairness.com"
 ORG_TEL     = "+44 (0)7356 287090"
 PRODUCT     = "ERG Analysis API"
-PRODUCT_VER = "v2.5.0"
+PRODUCT_VER = "v2.5.1"
 
 # ── Logo embedded as base64 (portable — no filesystem path dependency) ───────
 import base64 as _b64
