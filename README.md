@@ -1,201 +1,99 @@
 # ERG Analysis API
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Pipeline Version](https://img.shields.io/badge/pipeline-v2.5.0-lightgreen.svg)](https://github.com/AI-Fairness-com/ERG-Analysis-API/blob/main/docs/CHANGELOG.md)
-![Validation](https://img.shields.io/badge/validation-41%2F41%20PASS%20(v2.4.0)-yellow)
-![pytest](https://img.shields.io/badge/pytest-23%2F23%20PASS-brightgreen)
-![Tier](https://img.shields.io/badge/tier-4%20prep%20complete-brightgreen)
-![Version](https://img.shields.io/badge/version-v2.5.0-blue)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](api/runtime.txt)
 
+Companion code for the book **Hands-On Electroretinography in the Age of AI: A Practical Guide from Clinical Fundamentals to Intelligent Decision Support** by Hamid Tavakoli (Apress, forthcoming).
 
-**Full-field ERG signal processing, machine learning classification, and clinical decision support API.**
+The repository holds the code of every chapter, a pipeline that processes ISCEV 2022 full-field ERG recordings, and a small web application that turns a recording into a four-layer clinical report with a Traffic Light result.
 
-## Project Status
+> **Not a medical diagnosis.** The API supports clinical judgment and does not replace it. The disease classifier is a pre-registered target and has not been trained or validated on patient data. Read [DISCLAIMER.md](DISCLAIMER.md) before use.
 
-| Tier | Name | Status |
+## What is in the repository
+
+| Folder or file | Contents | Book |
 |:---|:---|:---|
-| **Tier 1** | Synthetic Validation | ⚠️ 41/41 PASS on v2.4.0 — pending re-validation on the current 28-feature set |
-| **Tier 2** | Code Hardening | ✅ Complete — pytest 23/23 PASS |
-| **Tier 3** | Clinical & Regulatory | ✅ Complete — T3-A through T3-E signed off |
-| **Tier 4** | External Validation | 🔄 Phase A complete — clinical site TBD |
-| **Tier 5** | Clinical Deployment | ⏳ Pending Tier 4 |
+| `chapters/` | The code of each chapter, `ch01/` to `ch19/`, plus `Appendices/` | Chapters 1 to 19 |
+| `api/` | Flask web application, pipeline (`erg_v2_5_0.py`), PDF report generator | Chapter 19 |
+| `data/samples/` | Simulated DA 3.0 recording, EDF example, Baker et al. (2025) reference limits | Chapter 3, §3.6 |
+| `examples/` | Nine clinical case notebooks, `case01` to `case09`, one for each case study of Chapter 19 | Chapter 19 |
+| `tests/` | Automated tests of the pipeline, the Traffic Light zones and the FHIR output | |
+| `docs/` | Methodology, thresholds, FHIR integration, validation plan, change log | |
+| `requirements.txt` | Python libraries, with the versions the project was tested with | Appendix F |
 
-**Current version:** v2.5.0 (2026-09-07 rebuild — free functions, 28-feature design)  
-**Normative reference:** Baker et al. (2025) N=407. DOI: [10.1007/s10633-025-10009-2](https://doi.org/10.1007/s10633-025-10009-2)  
-**OSF pre-registration:** [10.17605/OSF.IO/6WA42](https://doi.org/10.17605/OSF.IO/6WA42)  
-**Regulatory package:** [`docs/regulatory/`](docs/regulatory/) (T2–T4 documents)  
-**Charity registration:** AI Fairness CIO — Charity Commission No. 1218464
+## Getting started
 
-This repository accompanies the textbook "**Hands-On Electroretinography in the Age of AI**
-_*A Practical Guide from Clinical Fundamentals to Intelligent Decision Support*" (Apress/Springer-Nature, forthcoming (Tavakoli 2027)).
+**Google Colab** needs no installation and is the simplest start (Chapter 3 §3.3.1). Each chapter script and case notebook runs there after cloning the repository.
 
-## Version Information
+**On your own computer** (Appendix F), install Python 3 and Git, then:
 
-**Current Version: 2.5.0** | Last Updated: 7 September 2026
+```bash
+git clone https://github.com/AI-Fairness-com/ERG-Analysis-API.git
+cd ERG-Analysis-API
+python3 -m venv erg_env
+source erg_env/bin/activate        # Windows: erg_env\Scripts\activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-- **2026-09-07 rebuild** (PIPELINE_VERSION unchanged at 2.5.0): `ERGFeatureExtractor`/`ERGFilter`/`ERGAudit` converted from classes to free functions, matching the canonical structure in `chapters/ch05/filtering/complete_filter_pipeline.py` and `chapters/ch09/feature_extraction_and_selection_pipeline.py`. An earlier version of this entry, live for part of the day, incorrectly said the feature set was reduced to 11 features — that was a self-caught error (an incomplete read of the ch09 canonical file), corrected same-day. The pipeline implements the full V2.5.0/V2.5.1 28-feature design (below); this rebuild's actual effect on the feature set is nil, it's a structural change (classes → free functions) plus two real bug fixes. Protocol strings standardized to `'DA 3.0'`/`'DA 10.0'`/`'LA 3.0'` (previously `'DA 3'`/`'DA 10'`/`'LA 3'`). Real bugs fixed: the flash-midpoint-correction trigger was comparing against the 5.0ms ISCEV compliance ceiling instead of the correct ~1.0ms trigger threshold; `analyze_oscillatory_potentials` used `np.trapz`, unsupported on the pinned `numpy==1.26.0` if naively switched to `np.trapezoid` — fixed with a version-safe fallback. Execution-verified: 25/25/25/27/26 features per protocol, matching the book's stated counts exactly. Synthetic validation (41/41) still pending re-run against this feature set — see Tier 1 status above. See `docs/CHANGELOG.md` for full detail.
+The tested Python version is named in `api/runtime.txt` (Python 3.12). The decision-tree figure of Chapter 12 also needs the Graphviz program (`brew install graphviz` on macOS; it is already on Colab).
 
-- **V2.5.1**: Chapter 9 full-pixel-level review completed — 3 further features added (b-wave ascending-limb inflection time and gradient, a-wave descending-limb inflection time; Wood, Margrain & Binns 2014 found these equally significant to the already-implemented b-wave descending-limb pair), bringing the pipeline to 28 distinct features (up to 27 on a single recording, since the PhNR and harmonic-ratio bonuses never co-occur on the same protocol). One logic bug fixed: the §9.3 nonlinear/DWT/derivative feature block was nested inside the LA-3-only PhNR conditional, meaning those 13 features were silently skipped on every protocol except LA 3; now runs unconditionally on all five protocols. Several citation corrections from full-text verification: Nair & Joseph's (2014a) cohort description corrected (three groups, not four — cone-rod dystrophy and retinitis pigmentosa are the same group under two names in that study, not separate groups); Gauvin et al.'s (2014) non-redundancy claim narrowed to the two descriptor pairs actually tested, not all six; a spectral-structure claim misattributed to Behbahani, Ahmadieh & Rajan (2021) corrected to its actual source (Gauvin et al. 2014 alone); the harmonic-ratio citation (previously Pescosolido et al. 2015, found on full-text review to describe vascular flicker-light reactivity, not the flicker-ERG waveform) replaced with Fukuo et al. (2016), which directly measures flicker-ERG amplitude and implicit time against diabetic retinopathy severity. OP1 exclusion rationale corrected: ISCEV 2022 does not define an OP1–OP4 numbering scheme at all (it describes "typically three main positive peaks, often followed by a fourth"), so the numbering this pipeline uses is a wider-literature convention, not an ISCEV compliance rule. Pipeline pushed to chapters/ch09/ch09_complete.py. Synthetic validation (41/41) still pending re-run against this feature set — see Tier 1 status above.
-  
-- **V2.5.0**: Feature set redesigned around a literature-reviewed, citation-backed 28-feature pipeline (was 36) — 18 features added (PhNR/b-wave ratio, Hurst Exponent, Approximate Entropy, six DWT band-energy descriptors, five b/a-wave derivative features, peak frequency, spectral entropy, harmonic ratio, OP2 implicit time), OP1 removed (its trough overlaps the b-wave's ascending limb, making it unreliable to isolate), STFT region-statistics and PSD-per-band features removed (redundant or unevidenced). Pipeline file renamed erg_v2_5_0.py. See docs/CHANGELOG.md for full details.
+**Run the API locally** (Mode B, Chapter 19 §19.10.2):
 
-- **V2.4.0**: PhNR amplitude extraction added for LA 3 protocol (raw µV, negative sign convention); PhNR displayed in result panel, Layer 2 clinical summary, Layer 4 technical audit, FHIR bundle, and .txt report; PhNR Z-score and traffic light classification deferred pending validated normative dataset; pipeline file renamed to `erg_v2_4_0.py`; HTML renamed to `ERG_API_v2_4.html`. Comprehensive 41-case synthetic validation completed 23 June 2026 — **41/41 PASS COMPLETE**; all generator defects G1–G7 and A1/S03 resolved in `ERG_CSV_Generator_v2_4_2.py`; zero API pipeline bugs identified. Released 18 June 2026; validation completed 23 June 2026.
-  
-- **V2.3.2**: 18 defects resolved (3 blocking, 2 critical, 6 significant, 5 minor, 2 additional blocking); Baker et al. (2025) N=407 normative data integrated with all 48 µ/σ values verified; electrode gating architecture (Gold Foil and DTL supported; Contact Lens and Skin UNAVAILABLE with positive flag); LA 30 Hz b-wave extraction bug fixed; synthetic validation 13/13 passed; external validation cleared. Released 16 June 2026.
-  
-- **V2.3.1**: Initial ISCEV 2022 compliant release; OculusGraphy 2020 technical validation (149 files; 100% success). Released May 2026.
+```bash
+cd api
+python erg_server.py
+```
 
-See `docs/CHANGELOG.md` for complete version history.
+Open http://localhost:8080 for the upload form; http://localhost:8080/api/v1/health reports whether the server is running. Set the `PORT` environment variable to use another port.
 
-## Overview
+**Run the tests:**
 
-This project provides a complete, reproducible pipeline for:
-- **ISCEV-compliant ERG filtering** (Butterworth bandpass, notch Q=50, median)
-- **Time-frequency analysis** (STFT spectrograms, wavelet transforms)
-- **Feature extraction** (time-domain a-wave/b-wave, b/a ratio, PhNR + PhNR/b-wave ratio, oscillatory potentials, nonlinear complexity measures, DWT band-energy descriptors, derivative-inflection features, frequency-domain descriptors — 28 features total, 25-27 per recording depending on protocol; see `docs/CHANGELOG.md`, 2026-09-07 entry)
-- **Machine learning classification** (Random Forest baseline + Vision Transformer)
-- **SHAP explainability** (feature-level, spectrogram-level, plain-language)
-- **No-code clinical API** (four-layer report: Traffic Light + Clinical Summary + Specialist + Audit)
+```bash
+python -m pytest tests
+```
 
-## Repository Structure
+**Hosted version** (Mode A): https://erg-analysis-api-1.onrender.com
 
-| Directory | Contents |
-|:---|:---|
-| `/chapters` | Complete Python code for all 19 textbook chapters |
-| `/api` | Flask/FastAPI application for no-code clinical decision support |
-| `/data` | De-identified sample ERG recordings + normative reference data |
-| `/notebooks` | Interactive Jupyter notebooks including `ERG_V2_4_0.ipynb` |
-| `/tests` | Unit tests for filters, features, and API endpoints |
-| `/docs` | Documentation including CHANGELOG.md and validation reports |
-| `/synthetic_validation` | Synthetic dataset generator and validation manifest (v2.3.2 inherited); v2.4.0 comprehensive 41-case datasets and corrected generator |
-| `/validation` | v2.4.0 validation reports — `T1_Synthetic_Validation_Report_v2_4_0_COMPLETE.docx` (23 Jun 2026, **41/41 PASS — current**); `T1_Synthetic_Validation_Report_v2_4_0_FINAL_superseded.docx` (23 Jun 2026, 30/41 conditional, superseded); `VALIDATION_REPORT_v2_4_0_comprehensive.docx` (22 Jun 2026, superseded) |
-| `/synthetic_validation` | Synthetic dataset generators and validation manifests; v2.3.2 inherited (13/13); v2.4.0 comprehensive 41-case dataset — Run 1 (11/41), Run 2 (30/41), Runs 3–5 final (41/41); `ERG_CSV_Generator_v2_4_2.py` (all defects G1–G7 resolved) |
+## Input
 
-## Quick Start
+The API processes one file format, the Standardized ERG CSV of Appendix A: one recording (one protocol, one eye, one session) per file. The electrode type is required and has no default; a file without it halts with an `ELECTRODE_UNKNOWN` error report (Chapter 19 §19.9.2).
 
-### Local Installation (Conda)
+## The Traffic Light
 
-    git clone https://github.com/AI-Fairness-com/erg-analysis-api.git
-    cd erg-analysis-api
-    conda env create -f environment.yml
-    conda activate erg-analysis
-    python api/app.py
+Each ERG parameter is compared with the age-specific reference limits of Baker et al. (2025) for silver thread (DTL fiber) electrodes, and with the 90% confidence intervals of those limits (Chapter 10 §10.4, Equation 10.2):
 
-### Docker Deployment
+| Zone | Amplitude | Implicit time |
+|:---|:---|:---|
+| GREEN | within the limits | within the limits |
+| AMBER | below the lower limit, within its confidence interval | above the upper limit, within its confidence interval |
+| RED | below the confidence interval of the lower limit, or not recordable | above the confidence interval of the upper limit, or not recordable |
+| ATYPICAL DIRECTION | above the upper limit | below the lower limit |
 
-    docker build -t erg-api .
-    docker run -p 8080:8080 erg-api
+The most severe zone sets the composite result. Gold foil amplitudes are converted to silver thread equivalents first (Baker et al., 2025, Table 2). Contact lens and skin recordings receive no zone, because no reference limits are held for them. The b/a ratio, the oscillatory potentials and the PhNR are reported as measured values without a zone.
 
-## Validation Status
+Age strata: 35 years or younger, 36 to 59 years, 60 years or older. Protocols: DA 0.01, DA 3.0, DA 10.0, LA 3.0 and LA 30 Hz.
 
-| Tier | Type | Dataset | Result | Status |
-|:---|:---|:---|:---|:---|
-| **Tier 1** | Synthetic — Internal v2.4.0 | 41 cases × 5 protocols × 3 age strata × Gold Foil + DTL | 41/41 PASS | ✅ COMPLETE |
-| **Tier 1** | Synthetic — Internal v2.3.2 (inherited) | 12 scenarios × 5 protocols × 4 electrode types | 13/13 runs PASS | ✅ PASS |
-| **Tier 2** | Code Hardening — pytest suite | 23 automated tests (14 pipeline + 9 regression) | 23/23 PASS | ✅ COMPLETE |
-| **Tier 2** | ISCEV re-validation | 30 CSVs at 350 ms post-stimulus | 30/30 PASS | ✅ COMPLETE |
-| **Tier 2** | Normative integration | Baker et al. 2025 (N=407) — 96 µ/σ values | All values verified | ✅ COMPLETE |
-| **Tier 3** | Clinical & Regulatory | ISCEV audit, traceability, bias, intended use, regulatory readiness | T3-A–T3-E signed off | ✅ COMPLETE |
-| **Tier 4** | External Clinical Validation | Prospective real-patient ERG (N≥200, independent site) | Phase A prep complete | 🔄 IN PROGRESS |
-| **Tier 5** | Clinical Deployment | Post Tier 4 completion | — | ⏳ PENDING |
+## Output
 
-## Validation
-
-ERG Analysis API v2.4.0 has achieved **41/41 PASS** on comprehensive 
-internal synthetic validation (23 June 2026).
-
-- 41 synthetic test cases covering all five ISCEV 2022 protocols, three 
-  Baker et al. (2025) age strata, Gold Foil and DTL Fiber electrodes, 
-  disease patterns, boundary cases, and signal quality scenarios
-- All generator defects G1–G7 and A1/S03 resolved in 
-  `ERG_CSV_Generator_v2_4_2.py`
-- Zero API pipeline bugs identified
-- Full report: `validation/T1_Synthetic_Validation_Report_v2_4_0_COMPLETE.docx`
-- Code hardening report: `docs/regulatory/T2_Code_Hardening_Report_v1_0.docx`
-- Regulatory package: `docs/regulatory/` (T3-A through T3-E)
-- Pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
-
-See `validation/T1_Synthetic_Validation_Report_v2_4_0_COMPLETE.docx` for the full 41-case audit table, root cause analysis for all generator defects, and Tier 1 sign-off checklist. OSF pre-registration: https://doi.org/10.17605/OSF.IO/6WA42
-
-## Electrode Support
-
-| Electrode | Z-Score | Traffic Light | Normative Source |
-|:---|:---|:---|:---|
-| Gold Foil | ✅ | GREEN / AMBER / RED | Baker et al. (2025) N=407 |
-| DTL (silver thread) | ✅ | GREEN / AMBER / RED | Baker et al. (2025) N=407 |
-| Contact Lens | ❌ | ⬜ UNAVAILABLE | No validated age-stratified dataset |
-| Skin | ❌ | ⬜ UNAVAILABLE | No validated age-stratified dataset |
-
-Signal processing (filtering, feature extraction, AI classification, FHIR output) runs identically for all four electrode types. Z-score classification and traffic light are restricted to Gold Foil and DTL electrodes only.
-
-## Reference Ranges
-
-Pipeline V2.4.0 uses **age-stratified normative reference ranges** from:
-
-> Baker RA, Leo SM, Clowes WIN, et al. ISCEV standard full-field ERG reference limits from 407 healthy subjects, derived from transference and validation of reference data between electrode types and centres. *Documenta Ophthalmologica.* 2025;150(2):47–64. doi:10.1007/s10633-025-10009-2
-
-- **Age strata:** ≤35y | 36–59y | ≥60y (Baker 2025 three-stratum framework)
-- **Electrodes:** Silver thread (fornix) + Gold Foil (Deming regression transference, Baker Table 2)
-- **Protocols:** DA 0.01, DA 3.0, DA 10.0, LA 3.0, LA 30 Hz (all five ISCEV 2022 standard protocols)
-- **Parameters:** a-wave amplitude, a-wave implicit time, b-wave amplitude, b-wave implicit time (96 validated µ/σ values across 5 protocols × 3 strata × 2 electrodes)
-- **b/a ratio:** mean 2.65, SD 0.425 (normal range 1.8–3.5, DA 3.0 only; Chapter 9)
-
-## Traffic Light Interpretation
-
-| Signal | Z-Score Range | Clinical Action | Confidence |
-|:---|:---|:---|:---|
-| 🟢 **GREEN** | \|Z\| ≤ 2.0 | Within normal limits. No immediate action required. | 95% |
-| 🟡 **AMBER** | 2.0 < \|Z\| ≤ 3.0 | Borderline abnormality. Specialist review recommended. | 85% |
-| 🔴 **RED** | \|Z\| > 3.0 | Significant abnormality. Urgent review required. | 90% |
-| ⬜ **UNAVAILABLE** | Electrode not supported | Manual interpretation required. | N/A |
-
-## FHIR Output
-
-Each pipeline run generates an HL7 FHIR R4 Observation resource:
-- Top-level ERG code: **LOINC 70943-7**
-- Parameter codes: custom `erg-api:` scheme (`https://ai-fairness.com/fhir/CodeSystem/erg-api`, version: 2.4.0)
-- SNOMED CT interpretation codes: Normal (17621005), Borderline (263654007), Abnormal (442257004), Not available (410515003)
+- **Layer 1:** Traffic Light, with the mandatory disclaimer (Chapter 1 §1.7.4)
+- **Layer 2:** clinical summary with the zone of every parameter
+- **Layer 3:** specialist report
+- **Layer 4:** technical audit with the version stamp
+- **PDF report** and an **HL7 FHIR R4 Bundle** (LOINC panel 79894-2, Appendix B)
 
 ## Citation
 
-If you use this pipeline in your research, please cite:
+Please cite the book and the reference limits:
 
-    @misc{tavakoli2026erg,
-      author = {Tavakoli, Hamid},
-      title = {ERG Analysis API: ISCEV 2022-Compliant Full-Field ERG Processing Pipeline},
-      year = {2026},
-      publisher = {GitHub},
-      version = {2.5.0},
-      url = {https://github.com/AI-Fairness-com/erg-analysis-api}
-    }
+> Tavakoli, H. *Hands-On Electroretinography in the Age of AI: A Practical Guide from Clinical Fundamentals to Intelligent Decision Support.* Apress (forthcoming).
 
-For the normative reference ranges, cite:
+> Baker RA, Leo SM, Clowes WIN, et al. ISCEV standard full-field ERG reference limits from 407 healthy subjects, derived from transference and validation of reference data between electrode types and centres. *Documenta Ophthalmologica.* 2025;150(2):47–64. https://doi.org/10.1007/s10633-025-10009-2
 
-    @article{baker2025iscev,
-      author = {Baker, R.A. and Leo, S.M. and Clowes, W.I.N. et al.},
-      title = {ISCEV standard full-field ERG reference limits from 407 healthy subjects},
-      journal = {Documenta Ophthalmologica},
-      volume = {150},
-      number = {2},
-      pages = {47--64},
-      year = {2025},
-      doi = {10.1007/s10633-025-10009-2}
-    }
+Pre-registration of the validation study: https://doi.org/10.17605/OSF.IO/6WA42
 
-## License
+## License and contact
 
-Apache 2.0 — see [LICENSE](LICENSE) file for details.
+Apache License 2.0, see [LICENSE](LICENSE). Maintained by AI Fairness CIO (UK registered charity no. 1218464).
 
-## Contact
-
-For questions, issues, or collaboration inquiries:
-
-- **Email:** info@ai-fairness.com
-- **GitHub Issues:** [Open an issue](https://github.com/AI-Fairness-com/erg-analysis-api/issues)
-
-For clinical validation partnerships or dataset access inquiries, please email directly.
-
----
-
-*Hands-On Electroretinography in the Age of AI — Pipeline V2.4.0 — Tiers 1–3 complete; Tier 4 Phase A complete — Updated 25 June 2026*
+Questions and collaboration: hello@ai-fairness.com, or [open an issue](https://github.com/AI-Fairness-com/ERG-Analysis-API/issues).
