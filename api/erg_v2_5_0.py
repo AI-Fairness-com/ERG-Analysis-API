@@ -108,7 +108,7 @@ class ERGConfig:
     # ========================================================================
     # PIPELINE METADATA
     # ========================================================================
-    PIPELINE_VERSION: str = "2.5.0"
+    PIPELINE_VERSION: str = "2.5.1"
     VERSION_DATE: str = "2026-06-18"
     PIPELINE_NAME: str = "ISCEV 2022-Compliant ERG Processing Pipeline"
 
