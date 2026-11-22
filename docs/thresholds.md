@@ -66,130 +66,99 @@ DA 10 b-wave timing has one set of limits for all ages. For the DA 10 a-wave amp
 
 ## Signal Quality Thresholds
 
-Source: Chapter 2 §2.3; Blueprint Section 4.5, Step 1
+Source: Chapter 2 §2.3 and §2.5 (Table 2.3, Figure 2.2)
 
-### Electrode-Specific SNR Thresholds (Linear SNR)
+### Electrode-specific SNR thresholds (linear SNR)
 
-| Electrode Type | PASS (SNR ≥) | WARNING (SNR) | FAIL (SNR <) |
-|----------------|--------------|----------------|---------------|
-| Contact lens | 8.0 | 4.0 – 7.9 | 4.0 |
-| Gold foil | 6.0 | 3.0 – 5.9 | 3.0 |
-| DTL fiber | 4.0 | 2.5 – 3.9 | 2.5 |
-| Skin | 3.0 | 1.5 – 2.9 | 1.5 |
+| Electrode type | PASS (SNR ≥) | WARNING | FAIL (SNR <) |
+|----------------|--------------|---------|--------------|
+| Contact lens | 8 | 4 to 7.9 | 4 |
+| Gold foil | 6 | 3 to 5.9 | 3 |
+| DTL fiber | 4 | 2.5 to 3.9 | 2.5 |
+| Skin | 3 | 2.0 to 2.9 | 2.0 |
 
-### SNR Formula
+The SNR is the signal amplitude divided by the noise amplitude of the pre-stimulus baseline; in decibels, SNR (dB) = 20 × log10(signal / noise). The thresholds are stored in `ERGConfig.ELECTRODE_SNR_THRESHOLDS` in `api/erg_v2_5_0.py`. A recording with no electrode type halts before any signal processing (Chapter 19 §19.9.2).
 
-\[SNR = \frac{A_{signal}}{A_{noise}}\]
+### Sweep rejection rate
 
-\[SNR_{dB} = 20 \times \log_{10}\left(\frac{A_{signal}}{A_{noise}}\right)\]
+| Share of single sweeps rejected | Flag |
+|---------------------------------|------|
+| Up to 20% | PASS |
+| Above 20%, up to 40% | WARNING |
+| Above 40% | FAIL |
 
-Where:
-- \(A_{signal}\) = peak-to-trough amplitude of the ERG response (b-wave peak minus a-wave trough)
-- \(A_{noise}\) = RMS of the pre-stimulus baseline (typically 0–100 ms)
-
-### Sweep Rejection Rate Thresholds
-
-Source: Chapter 2 §2.5
-
-| Rejection Rate | Quality Flag | Action |
-|----------------|--------------|--------|
-| ≤ 20% | PASS | Continue processing |
-| 20% – 40% | WARNING | Process with caveat; review recommended |
-| > 40% | FAIL | Halt processing; return recording to operator |
+A WARNING recording is processed with a quality caveat on every report layer, and the SHAP attribution is not shown. A FAIL recording receives no Traffic Light and produces a quality failure report instead.
 
 ---
 
-## Longitudinal Change Detection Thresholds
+## Serial Change Detection
 
-Source: Chapter 15 §15.4–15.5
+Source: Chapter 15 (Tables 15.2 and 15.3)
 
-### Coefficient of Repeatability (CoR) by Parameter (DTL Fiber, DA 3.0)
+For two recordings, the minimum detectable change at 95% confidence equals the coefficient of repeatability (CoR), so the CoR is the single change threshold. Amplitude changes are compared on the log10 scale.
 
-| Parameter | CoR | Clinical Interpretation |
-|-----------|-----|------------------------|
-| DA 3.0 b-wave amplitude | 17.6 μV | Change > 17.6 μV is statistically significant |
-| DA 3.0 b-wave implicit time | 2.4 ms | Change > 2.4 ms is statistically significant |
-| LA 3.0 PhNR amplitude | 5.7 μV | Change > 5.7 μV is statistically significant |
-| DA 3.0 OP2 amplitude | 2.8 μV | Change > 2.8 μV is statistically significant |
-| LA 30 Hz flicker amplitude | 7.7 μV | Change > 7.7 μV is statistically significant |
+| Change zone | Criterion | Flag | Recommended action |
+|-------------|-----------|------|--------------------|
+| Green: no significant change | \|Δ\| < CoR | NO_CHANGE | Routine follow-up at the scheduled interval |
+| Red: significant progression | \|Δ\| ≥ CoR (amplitude fall or longer implicit time) | SIGNIFICANT_PROGRESSION | Specialist review |
+| Blue: significant improvement | \|Δ\| ≥ CoR (amplitude rise or shorter implicit time) | SIGNIFICANT_IMPROVEMENT | Document and review in clinical context |
 
-*Note: CoR values are electrode-specific. These values are for DTL fiber electrodes. Contact lens and gold foil electrodes will have larger CoR values reflecting higher absolute amplitudes.*
+### Published CoR values (Knickelbein et al., 2021)
 
-### Change Flagging Zones
+| Parameter | Electrode and group | CoR | Change beyond measurement noise |
+|-----------|---------------------|-----|---------------------------------|
+| DA 3.0 b-wave amplitude | Burian-Allen contact lens; birdshot chorioretinopathy | 0.216 log µV | Fall of more than 39% or rise of more than 64% |
+| LA 30 Hz implicit time | Burian-Allen contact lens; birdshot chorioretinopathy | 3.4 ms | Change of more than 3.4 ms |
 
-| Change Zone | Criterion | Flag | Recommended Action |
-|-------------|-----------|------|---------------------|
-| GREEN (No significant change) | \|Δ\| < MDC95 | NO_CHANGE | Routine follow-up |
-| AMBER (Borderline) | MDC95 ≤ \|Δ\| < CoR | BORDERLINE_CHANGE | Repeat recording in 3–6 months |
-| RED (Significant progression) | \|Δ\| ≥ CoR (reduction) | SIGNIFICANT_PROGRESSION | Urgent specialist review (within 4 weeks) |
-| BLUE (Significant improvement) | \|Δ\| ≥ CoR (increase) | SIGNIFICANT_IMPROVEMENT | Document and review in clinical context |
-
-### Disease-Specific Milestone Thresholds
-
-Source: Chapter 15 §15.5.3
-
-| Disease | Milestone | Threshold |
-|---------|-----------|-----------|
-| Retinitis Pigmentosa | 50% amplitude reduction | Current amplitude < 50% of baseline (regardless of CoR) |
-| Hydroxychloroquine toxicity | Green-to-Amber crossing | Any parameter moving from GREEN to AMBER against its reference limits |
-| Diabetic Retinopathy (surveillance) | OP2 delay confirmation | OP2 implicit time increase confirmed on two consecutive visits |
+CoR values depend on the electrode, the protocol and the patient group. Each laboratory enters its own values; the code is in `chapters/ch15/chapter_15.py`.
 
 ---
 
-## Device-Relative Normalization Methods
+## Device-Relative Normalization
 
-Source: Chapter 10 §10.3; Blueprint §4.5 Step 5
+Source: Chapter 10 §10.3
 
-| Method | Description | When to Use |
-|--------|-------------|-------------|
-| **Method 1** | Internal calibration signal normalization | Device provides reference calibration flash |
-| **Method 2** | Laboratory normative scaling | Laboratory has its own normative reference data |
-| **Method 3** | ISCEV relative criteria only | Fallback when Methods 1 and 2 unavailable (carries mandatory caveat) |
-
----
-
-## Flash Duration Correction for Implicit Times
-
-Source: Blueprint §4.5, Step 4; ISCEV 2022 (Page 10, Col 1, Para 2)
-
-For flashes of duration ≥5 ms (e.g., LED stimulators), implicit times are measured from the **flash MIDPOINT**, not from flash onset.
-
-**Correction formula:**
-
-\[ImplicitTime_{corrected} = ImplicitTime_{measured} - \frac{FlashDuration}{2}\]
-
-This correction is applied automatically when `flash_duration_ms` is provided in the input CSV. The correction is documented in the Layer 4 audit log.
+| Method | Formula or basis | When used |
+|--------|------------------|-----------|
+| Method 1: internal calibration signal | A_measured / A_calibration | A calibration signal is recorded in the same session and channel |
+| Method 2: laboratory normative scaling | A_measured / µ_norm(electrode, protocol, age group) | The site has its own normative data, or data from an identical setup |
+| Method 3: project-defined electrode-amplitude hierarchy | Amplitude relative to a reference value for its electrode type | Neither a calibration signal nor laboratory norms are available |
 
 ---
 
-## Calibration Metrics (Brier Score)
+## Flash Duration
 
-Source: Chapter 14 §14.5.3; Chapter 16 §16.5.3
+Source: Chapter 9 §9.1.1; Robson et al. (2022), p. 174
 
-| Brier Score | Calibration Quality | Action |
-|-------------|---------------------|--------|
-| < 0.10 | Excellent | PASS |
-| 0.10 – 0.20 | Good | PASS |
-| 0.20 – 0.25 | Acceptable | PASS with caveat |
-| ≥ 0.25 | Poor | CALIBRATION_WARNING; probability withheld from clinical report |
+Implicit times are measured from the flash. A flash shorter than 1 ms is treated as instantaneous. Longer flashes, up to the ISCEV maximum of 5 ms, are timed from the middle of the flash.
 
 ---
 
-## Validation Performance Thresholds
+## Calibration (Brier Score)
 
-Source: Chapter 16 §16.5; Blueprint Section 5.1
+Source: Chapter 16 §16.5.3
 
-| Metric | Deployment Threshold | Rationale |
-|--------|---------------------|-----------|
-| Stage 1 binary AUC | ≥ 0.90 on external validation | Screening gate: missing a true abnormality is unacceptable |
-| Stage 2 macro-AUC | ≥ 0.80 on external validation | Minimum clinically actionable discrimination |
-| Per-class sensitivity | ≥ 0.75 for all classes | Classes below this threshold flagged in Model Card |
-| Brier Score (macro) | < 0.25 | Calibration quality minimum |
+Each class is compared with its own frequency-only reference, p(1 − p), where p is the share of recordings in the class. A class passes when its Brier score is below its reference. A class that fails sets CALIBRATION_WARNING, and its probability is withheld from clinical reports until recalibration on a larger calibration set passes.
+
+---
+
+## Deployment Thresholds
+
+Source: Chapter 16 §16.2 and §16.5; judged on the lower bound of each 95% confidence interval, on external data
+
+| Metric | Threshold |
+|--------|-----------|
+| Stage 1 binary AUC | at least 0.94 |
+| Stage 2 macro-AUC | at least 0.80 |
+| Sensitivity, every disease class | at least 0.75 |
+| Brier score, every class | below its own frequency-only reference |
+
+See `docs/validation.md` for what happens when a threshold is not met.
 
 ---
 
 ## References
 
 - Baker, R.A., Leo, S.M., Clowes, W.I.N., et al. (2025). ISCEV standard full-field ERG reference limits from 407 healthy subjects. *Documenta Ophthalmologica*, 150, 47–64.
+- Knickelbein, J.E., Jeffrey, B.G., Wei, M.M., et al. (2021). Reproducibility of full-field electroretinogram measurements in birdshot chorioretinopathy patients: an intra- and inter-visit analysis. *Ocular Immunology and Inflammation*, 29(5), 848–853.
 - Robson, A.G., Frishman, L.J., Grigg, J., et al. (2022). ISCEV standard for full-field clinical electroretinography (2022 update). *Documenta Ophthalmologica*, 144(3), 165–177.
-- Tavakoli, H. (2027). *Hands-On Electroretinography in the Age of AI*. Apress/Springer-Nature.
