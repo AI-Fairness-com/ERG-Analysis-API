@@ -669,8 +669,7 @@ def apply_bandpass_filter(signal: np.ndarray, fs_hz: float, lowcut_hz: float = N
 
 def apply_median_filter(signal: np.ndarray, fs_hz: float, config: ERGConfig = None) -> np.ndarray:
     config = config or CONFIG
-    kernel_samples = compute_kernel_samples(fs_hz, config.MEDIAN_KERNEL_MS)
-    return medfilt(signal, kernel_size=kernel_samples)
+    return medfilt(signal, kernel_size=config.MEDIAN_KERNEL_SAMPLES)
 
 
 def design_notch_filter(notch_hz: float, fs_hz: float, config: ERGConfig = None) -> np.ndarray:
