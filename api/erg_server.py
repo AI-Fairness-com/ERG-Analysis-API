@@ -266,6 +266,30 @@ def analyse():
         csv_file.save(tmp.name)
         temp_path = tmp.name
 
+    # Electrode type: the form field, else the CSV's electrode_type
+    # column (Appendix A). It has no default, so a blank value halts
+    # processing before any signal analysis (Chapter 19 Section 19.9.2).
+    if not electrode_type:
+        electrode_type = _field_from_csv(temp_path, "electrode_type") or ""
+    if not electrode_type:
+        os.unlink(temp_path)
+        return safe_jsonify({
+            "status": "HALT",
+            "error": "ELECTRODE_UNKNOWN",
+            "missing_field": "electrode_type",
+            "valid_values": ["contact_lens", "gold_foil", "dtl_fiber", "skin"],
+            "message": (
+                "PROCESSING HALTED: The required field electrode_type is "
+                "missing from the submitted CSV file. The electrode type is "
+                "required for: (1) signal quality threshold assignment; "
+                "(2) normative reference limit selection. Processing cannot "
+                "continue without this field. No classification has been "
+                "attempted. Action required: resubmit the CSV file with the "
+                "electrode_type field completed. Valid values: contact_lens, "
+                "gold_foil, dtl_fiber, skin. See Appendix A for the full CSV "
+                "field specification."),
+        }, 400)
+
     result  = {}
     error   = {}
     t_start = time.perf_counter()
