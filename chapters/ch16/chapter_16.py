@@ -14,7 +14,7 @@ import datetime
 import hashlib
 
 
-def verify_sap_hash(sap_path: str = "docs/ERG_SAP_v2.1.pdf",
+def verify_sap_hash(sap_path: str = "docs/ERG_SAP_v2.2.pdf",
                     registered_hash: str = None) -> dict:
     """
     Compute the SHA-256 hash of the SAP file and compare it with the
