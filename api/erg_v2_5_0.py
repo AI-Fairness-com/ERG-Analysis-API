@@ -36,7 +36,7 @@ class ERGConfig:
     # FILTER PARAMETERS (Clinical Standard, not ISCEV-mandated)
     # ========================================================================
     BUTTERWORTH_ORDER: int = 4              # 4th-order (clinical standard)
-    MEDIAN_KERNEL_MS: float = 5.0           # 5 ms for spike removal
+    MEDIAN_KERNEL_SAMPLES: int = 5          # 5 samples, 2.5 ms at 2000 Hz (Chapter 5)
     NOTCH_QUALITY_FACTOR: float = 50.0      # Q=50 (~1.0 Hz bandwidth, Chapter 5)
     NOTCH_DEFAULT_STATE: bool = False       # OFF by default per ISCEV 2022
 
