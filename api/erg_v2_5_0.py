@@ -48,7 +48,7 @@ class ERGConfig:
         'contact_lens': {'pass': 8.0, 'warning_min': 4.0, 'fail_below': 4.0},
         'gold_foil': {'pass': 6.0, 'warning_min': 3.0, 'fail_below': 3.0},
         'dtl_fiber': {'pass': 4.0, 'warning_min': 2.5, 'fail_below': 2.5},
-        'skin': {'pass': 3.0, 'warning_min': 1.5, 'fail_below': 1.5}
+        'skin': {'pass': 3.0, 'warning_min': 2.0, 'fail_below': 2.0}
     })
 
     # ========================================================================
