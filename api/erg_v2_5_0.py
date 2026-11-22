@@ -1730,7 +1730,28 @@ class ERGReportGenerator:
         supported = electrode in ZONE_SUPPORTED_ELECTRODES
 
         rows = self.classify_parameters(features, electrode, protocol, age_years)
+        # Chapter 2 Section 2.5: a recording whose SNR is in the Fail range
+        # for its electrode gets no Traffic Light, only a quality failure
+        # report. The measured values are kept; their zones are withheld.
+        snr = audit_results.get('snr', {})
+        quality_fail = snr.get('status') == 'FAIL'
+        if quality_fail:
+            for r in rows:
+                if r['zone'] in ZONE_RANK:
+                    r['zone'] = 'UNAVAILABLE'
         traffic_light = self.composite_traffic_light(rows, electrode)
+        if quality_fail:
+            limit = CONFIG.ELECTRODE_SNR_THRESHOLDS.get(
+                snr.get('electrode_type', electrode), {}).get('fail_below')
+            traffic_light['quality_fail'] = True
+            traffic_light['message'] = (
+                f"Signal quality FAIL: the SNR of {snr.get('linear')} is below "
+                f"the Fail threshold of {limit} for this electrode (Chapter 2). "
+                "No Traffic Light is given, because the recording should not "
+                "be used for clinical decisions in its current form. Check "
+                "the electrode position and contact (for example, reposition "
+                "the DTL fiber or prepare the skin sites again), reduce "
+                "electrical noise, and repeat the recording.")
         findings = self.key_findings(rows)
         converted = any(r.get('converted_from_gold_foil') for r in rows)
 
