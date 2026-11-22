@@ -703,7 +703,8 @@ def run_filter_pipeline(signal: np.ndarray, fs_hz: float,
     sig_before = sig.copy()
     sig = apply_median_filter(sig, fs_hz, config)
     spike_removed = np.sum(np.abs(sig_before - sig) > 5) > 0
-    log.append(f"Median filter: kernel={config.MEDIAN_KERNEL_MS} ms, {compute_kernel_samples(fs_hz, config.MEDIAN_KERNEL_MS)} samples")
+    log.append(f"Median filter: kernel={config.MEDIAN_KERNEL_SAMPLES} samples "
+               f"({1000 * config.MEDIAN_KERNEL_SAMPLES / fs_hz:.1f} ms)")
     if spike_removed:
         log.append("  - Spikes detected and removed")
 
