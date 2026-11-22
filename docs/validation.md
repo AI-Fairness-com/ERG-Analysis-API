@@ -1,262 +1,77 @@
-# Validation and Performance Reporting for ERG Analysis API
+# Validation plan and status
 
-## Overview
+This document summarizes how the ERG Analysis API is to be validated, following Chapter 16 (validation), Chapter 17 (Model Card and drift monitoring) and Chapter 10 (data) of *Hands-On Electroretinography in the Age of AI*. The reporting standard is TRIPOD+AI (Collins et al., 2024); Chapter 16 maps each checklist item to the chapter and function that address it.
 
-This document summarizes the validation status, performance metrics, and TRIPOD-AI compliance of the ERG Analysis API. All performance claims are supported by the validation data described below.
+## Current status
 
-**Source:** Chapter 16; Blueprint Section 5; README validation table
+| Part | Status |
+|:---|:---|
+| Traffic Light zoning against Baker et al. (2025) limits | Implemented. Automated tests reproduce the zones and printed limits of the Chapter 19 case studies. |
+| Signal quality, filtering and feature extraction | Implemented and tested on simulated recordings. |
+| Stage 1 and Stage 2 classifiers | Pre-registered target (Chapter 19, Table 19.10). Not yet trained or validated on patient data. |
+| External validation | Phase 1 (protocol, ethics application, data sharing agreement) in preparation. Phase 2 begins once a clinical site is identified, ethics approval is granted and the agreement is signed. |
 
----
+No performance figure in this repository is a project result. The figures in the Model Card (Chapter 17, Table 17.4) and in the figures of Chapters 16 and 17 are illustrative placeholders.
 
-## Validation Status Summary
+## Statistical Analysis Plan
 
-Source: README.md (ERG-Analysis-API repository, version 2.4.0)
+The plan is pre-registered on the Open Science Framework before any validation data are analyzed: https://doi.org/10.17605/OSF.IO/6WA42. The SAP file, `ERG_SAP_v2.1.pdf`, is stored on the associated OSF project, and its SHA-256 hash is written to the Layer 4 audit log of every report generated during validation (Chapter 16 §16.2).
 
-| Validation Type | Dataset | Result | Status |
-|-----------------|---------|--------|--------|
-| **Synthetic (Internal v2.3.2, inherited by v2.4.0)** | 12 scenarios × 5 protocols × 4 electrode types | 13/13 runs passed | ✅ PASS |
-| **Technical (External)** | OculusGraphy 2020 (n=149) | 100% processing success | ✅ PASS |
-| **Specificity (External)** | Baker et al. 2025 (n=407) | 94.5% GREEN rate | ✅ PASS |
-| **Sensitivity (External)** | Real pathology recordings | Planned for V3.0 | ⏳ PENDING |
+- **Primary outcomes:** Stage 1 binary AUC-ROC and Stage 2 macro-AUC-ROC across the six disease classes, both on the external validation dataset.
+- **Secondary outcomes:** per-class sensitivity, specificity, PPV, NPV and Brier score.
+- **Subgroups:** age stratum, sex and recording device.
+- **Confidence intervals:** DeLong for each class AUC; a patient-level bootstrap with 2000 resamples for the macro-AUC and all other metrics. Significance level 0.05, two-tailed.
 
----
+## Deployment thresholds
 
-## Normative Reference Data
+Each threshold is judged on the lower bound of its 95% confidence interval, on external data (Chapter 16 §16.2 and §16.5):
 
-Source: Baker et al. (2025); Blueprint Section 2.3
+| Metric | Threshold | If not met |
+|:---|:---|:---|
+| Stage 1 binary AUC | at least 0.94 | Not fit for use as a screening triage tool, however well Stage 2 performs |
+| Stage 2 macro-AUC | at least 0.80 | Targeted data collection before deployment at external sites |
+| Sensitivity, every disease class | at least 0.75 | Class flagged in the Model Card and excluded from clinical decision support |
+| Brier score, every class | below the class's own frequency-only reference p(1 − p) | CALIBRATION_WARNING; the class probability is withheld until recalibration passes |
 
-| Parameter | Value |
-|-----------|-------|
-| **Dataset name** | ISCEV standard full-field ERG reference limits |
-| **Sample size** | 407 healthy adult subjects |
-| **Age range** | 18–80 years |
-| **Age strata** | ≤35y, 36–59y, ≥60y |
-| **Electrode types** | Silver thread (fornix) + Gold foil (transformed) |
-| **Protocols** | All five ISCEV standard protocols |
-| **Citation** | Baker, R.A., Leo, S.M., Clowes, W.I.N., et al. (2025). *Documenta Ophthalmologica*, 150, 47–64. |
+The Stage 1 operating point is set so that sensitivity on the validation data reaches at least 0.90.
 
-**DOI:** 10.1007/s10633-025-10009-2
+## Data
 
----
+- **Partitions** (Chapter 10, Table 10.5): a test set of 10% of patients, used once only; the development set is split into training (about 72% of all patients) and validation (about 18%) in each fold. All recordings of one patient stay in one partition.
+- **Internal validation:** five-fold stratified cross-validation, split by patient (Chapter 16 §16.3).
+- **Sample size** (Chapter 10): planning numbers for the deep-learning pathway are set by a floor, target and ceiling with a learning curve. For a regression-type Stage 1 model, the Riley et al. (2020) criteria give a planning minimum of 2,308 recordings (1,177 Normal, 1,131 Abnormal; Table 10.2), computed with pmsampsize (`chapters/Appendices/appendices.py`, §C.2).
+- **Diagnosis:** every training label needs a primary diagnosis and at least one corroborating modality (Chapter 10, Table 10.1).
 
-## Minimum Dataset Requirements
+## External validation
 
-Source: Blueprint Section 5.1
+- **Site:** an independent university clinic with an established ERG program, whose recording device is not represented in the training set (Chapter 16 §16.4).
+- **Dataset:** at least 200 recordings with confirmed diagnoses across at least five of the six disease classes, under the retrospective anonymized data pathway.
+- **Transfer:** de-identified feature files in the format of Appendix A §A.3, extracted at the center with the project's pipeline code. No raw signal files are transferred.
+- **Device independence:** no external recording may come from a device model that contributes more than 5% of the training set. External centers carry a `center_id` that begins with `EXT_`, and the leakage check must PASS before any external result is reported.
+- **Investigation trigger:** an external AUC more than 0.10 below the internal AUC after harmonization.
 
-| Disease Class | Minimum N | Target N |
-|---------------|-----------|----------|
-| Healthy (Normal) | 200 | 400 |
-| Diabetic Retinopathy (early) | 150 | 300 |
-| Glaucoma (early) | 150 | 300 |
-| Retinitis Pigmentosa / Rod Dystrophy | 120 | 250 |
-| Age-Related Macular Degeneration | 120 | 250 |
-| Cone Dystrophy | 100 | 200 |
-| Complete CSNB | 60 | 120 |
-| **TOTAL** | **900** | **1,820** |
+## Harmonization
 
-Sample size specifications derived from:
-- Riley et al. (2020) minimum sample size framework for clinical prediction models
-- Hanley and McNeil (1982) AUC power calculation method
+Centralized processing applies identical filtering, normalization, spectrogram and feature code to every recording. ComBat (Johnson et al., 2007) then removes remaining device offsets (Chapter 16 §16.6):
 
----
+- **Batch:** device manufacturer. **Preserved covariates:** age stratum and sex. Disease labels are never used.
+- **Step 1:** the training devices are harmonized with each other, using the training data only.
+- **Step 2:** an unseen device, such as the external one, is adjusted toward the harmonized training features, which stay unchanged.
+- A feature that fails the harmonization check and cannot be harmonized linearly is excluded and reported as a deviation from the plan.
 
-## Internal Validation
+## After deployment
 
-Source: Chapter 16 §16.3
+Chapter 17 §17.4 monitors the rolling 90-day AUC of reports whose true diagnosis is known:
 
-### Method
+- **Shewhart chart:** WARNING between 2σ and 3σ from the baseline mean, OUT_OF_CONTROL beyond 3σ. The baseline is the first 90 days of deployment; σ comes from 2000 bootstrap AUCs.
+- **Page-Hinkley test:** flags a slow, sustained fall in the average AUC. An alarm starts a root-cause investigation and does not retrain the model automatically.
+- **Revalidation:** every 12 months from first deployment, on the confirmed-label data of the preceding 12 months.
 
-- **Cross-validation:** 5-fold stratified k-fold cross-validation
-- **Stratification:** Patient-level; class proportions preserved in every fold
-- **Splitting:** Performed on raw signal files BEFORE spectrogram extraction (prevents data leakage)
-- **Patient-level shuffling:** All recordings from the same patient appear in exactly one partition
-
-### Per-Class Performance Metrics (to be populated from Chapter 16 validation run)
-
-| Disease Class | Sensitivity (95% CI) | Specificity (95% CI) | AUC-ROC (95% CI) | Brier Score |
-|---------------|---------------------|----------------------|-------------------|--------------|
-| Normal | [computed] | [computed] | [computed] | [computed] |
-| Diabetic Retinopathy | [computed] | [computed] | [computed] | [computed] |
-| Glaucoma | [computed] | [computed] | [computed] | [computed] |
-| RP / Rod Dystrophy | [computed] | [computed] | [computed] | [computed] |
-| AMD | [computed] | [computed] | [computed] | [computed] |
-| Cone Dystrophy | [computed] | [computed] | [computed] | [computed] |
-| Complete CSNB | [computed] | [computed] | [computed] | [computed] |
-| **Macro-average** | [computed] | [computed] | [computed] | [computed] |
-
----
-
-## External Validation
-
-Source: Chapter 16 §16.4; Blueprint Section 5.3
-
-### Primary External Validation Source
-
-| Parameter | Value |
-|-----------|-------|
-| **Source** | Iran ERG center |
-| **Device** | LKC RETeval (different from training set devices) |
-| **Minimum N** | 200 signals |
-| **Disease classes** | ≥5 of the 6 disease classes |
-| **Independence verification** | No signal from Iran center appears in training or internal validation sets |
-
-### Secondary External Validation Sources
-
-| Source | Expected N | Status |
-|--------|------------|--------|
-| ISCEV member laboratory archives | 100–200 signals | Pending data sharing agreements |
-| OculusGraphy (Zhdanov et al., 2022) | 425 signals | Available on IEEE DataPort |
-
----
-
-## Device Independence Criterion
-
-Source: Chapter 16 §16.4.2
-
-The external validation dataset must satisfy device independence:
-
-> *"No recording in the external validation set was made with a device of the same model as any device contributing more than 5% of the training set."*
-
-**Training set devices:** Diagnosys Espion (primary)
-
-**External validation device:** LKC RETeval (different manufacturer)
-
----
-
-## Batch Effect Harmonization
-
-Source: Chapter 16 §16.6; Blueprint Section 4.5
-
-### ComBat Algorithm
-
-ComBat (Johnson, Li, and Rabinovic, 2007) removes systematic inter-site amplitude offsets from the feature matrix.
-
-| Parameter | Value |
-|-----------|-------|
-| **Batch variable** | device_manufacturer |
-| **Biological covariates** | age_strata, sex, label (disease class) |
-| **Fitting** | Training set only |
-| **Application** | Pre-fitted parameters applied to validation and test sets |
-
-### Centralized Processing
-
-All recordings are processed through identical filter parameters, normalization, and spectrogram generation code. This is the primary harmonization intervention; ComBat addresses residual hardware-level offsets.
-
----
-
-## TRIPOD-AI Compliance
-
-Source: Chapter 16 §16.1; Appendix E
-
-The ERG Analysis API is compliant with TRIPOD-AI (Collins et al., 2024). All 22 core TRIPOD items and all AI-specific extensions are addressed.
-
-| TRIPOD-AI Item | Status | Manuscript Section |
-|----------------|--------|---------------------|
-| 1. Title | ✅ ADDRESSED | Title page |
-| 2. Abstract | ✅ ADDRESSED | Abstract |
-| 3. Background | ✅ ADDRESSED | Chapters 1–2 |
-| 4. Objectives | ✅ ADDRESSED | Chapter 1 §1.3 |
-| 5. Data sources | ✅ ADDRESSED | Chapter 10 §10.1–10.2 |
-| 6. Participants | ✅ ADDRESSED | Chapter 17 §17.2.6 |
-| 7. Outcome | ✅ ADDRESSED | Chapter 10 §10.1 |
-| 8. Predictors | ✅ ADDRESSED | Chapters 8–9 |
-| 9. Sample size | ✅ ADDRESSED | Appendix C |
-| 10. Missing data | ✅ ADDRESSED | Chapter 11 |
-| 11. Statistical analysis | ✅ ADDRESSED | Chapter 16 §16.2–16.3 |
-| 12. Development | ✅ ADDRESSED | Chapters 12–13 |
-| 13. Performance | ✅ ADDRESSED | Chapter 16 §16.5 |
-| 14. Model updating | ✅ ADDRESSED | Chapter 17 §17.3 |
-| 15. Limitations | ✅ ADDRESSED | Chapter 17 §17.2.9 |
-| 16. Interpretation | ✅ ADDRESSED | Chapter 19 |
-| 17. Implications | ✅ ADDRESSED | Chapter 19 §19.11 |
-| AI-E1: Training data transparency | ✅ ADDRESSED | Chapter 10 §10.1 |
-| AI-E2: Architecture & hyperparameters | ✅ ADDRESSED | Chapter 13 §13.3 |
-| AI-E3: Explainability | ✅ ADDRESSED | Chapter 14 |
-| AI-E4: Fairness assessment | ✅ ADDRESSED | Chapter 16 §16.5.4 |
-| AI-E5: Post-deployment monitoring | ✅ ADDRESSED | Chapter 17 §17.4 |
-| AI-E6: Pre-registration | ✅ ADDRESSED | Chapter 16 §16.2.1 |
-
-The complete TRIPOD-AI checklist is available as a machine-readable CSV file at `docs/tripod_ai_compliance.csv` and as a human-readable PDF at `docs/tripod_ai_compliance.pdf`.
-
----
-
-## Calibration Metrics
-
-Source: Chapter 16 §16.5.3
-
-### Brier Score Thresholds
-
-| Brier Score | Calibration Quality |
-|-------------|---------------------|
-| < 0.10 | Excellent |
-| 0.10 – 0.20 | Good |
-| 0.20 – 0.25 | Acceptable |
-| ≥ 0.25 | Poor (triggers CALIBRATION_WARNING) |
-
-### Expected Brier Scores (per Albasu et al., 2024 reference)
-
-| Class | Expected Brier Score |
-|-------|---------------------|
-| Normal | 0.08 |
-| Diabetic Retinopathy | 0.11 |
-| Glaucoma | 0.14 |
-| RP / Rod Dystrophy | 0.06 |
-| AMD | 0.18 |
-| Cone Dystrophy | 0.15 |
-| Complete CSNB | 0.09 |
-
-*Note: These are reference point estimates. Project-specific 95% CIs will be computed on the project's own validation data.*
-
----
-
-## Deployment Performance Thresholds
-
-Source: Chapter 16 §16.5; Blueprint Section 5.1
-
-| Metric | Deployment Threshold | Consequence if Below Threshold |
-|--------|---------------------|-------------------------------|
-| Stage 1 binary AUC | ≥ 0.90 on external validation | Do not deploy as screening triage |
-| Stage 2 macro-AUC | ≥ 0.80 on external validation | Insufficient discrimination for clinical use |
-| Per-class sensitivity | ≥ 0.75 for all classes | Flag in Model Card; exclude from unsupervised use |
-| Macro Brier Score | < 0.25 | Recalibrate before deployment |
-
----
-
-## Post-Deployment Drift Detection
-
-Source: Chapter 17 §17.4
-
-### Shewhart Rolling AUC Control Chart
-
-| Parameter | Value |
-|-----------|-------|
-| **Window** | Rolling 90-day window |
-| **Control limits** | Baseline mean ± 3σ |
-| **Warning** | Value between 2σ and 3σ |
-| **Alarm (OUT_OF_CONTROL)** | Value outside 3σ |
-
-### Page-Hinkley Test
-
-| Parameter | Value |
-|-----------|-------|
-| **δ (tolerated mean shift)** | 0.01 AUC units |
-| **λ (alarm threshold)** | 50 |
-| **Trigger** | \(M_t - PH_t > \lambda\) |
-
-### Revalidation Schedule
-
-| Type | Frequency | Trigger |
-|------|-----------|---------|
-| **Mandatory** | Every 12 months | Scheduled |
-| **Drift-triggered** | As needed | Shewhart OUT_OF_CONTROL or Page-Hinkley alarm |
-
----
+The code is in `chapters/ch16/chapter_16.py` and `chapters/ch17/chapter_17.py`.
 
 ## References
 
-- Albasu, F., et al. (2024). Electroretinogram analysis using a short-time Fourier transform and machine learning techniques. *Bioengineering*, 11(9), 866.
 - Baker, R.A., et al. (2025). ISCEV standard full-field ERG reference limits from 407 healthy subjects. *Documenta Ophthalmologica*, 150, 47–64.
-- Collins, G.S., et al. (2024). TRIPOD-AI: updated reporting guidelines for clinical prediction models for artificial intelligence. *BMJ*, 385, e078378.
-- Hanley, J.A. and McNeil, B.J. (1982). The meaning and use of the area under a receiver operating characteristic (ROC) curve. *Radiology*, 143(1), 29–36.
+- Collins, G.S., et al. (2024). TRIPOD+AI statement: updated guidance for reporting clinical prediction models that use regression or machine learning methods. *BMJ*, 385, e078378.
+- Johnson, W.E., Li, C. and Rabinovic, A. (2007). Adjusting batch effects in microarray expression data using empirical Bayes methods. *Biostatistics*, 8(1), 118–127.
 - Riley, R.D., et al. (2020). Calculating the sample size required for developing a clinical prediction model. *BMJ*, 368, m441.
-- Tavakoli, H. (2027). *Hands-On Electroretinography in the Age of AI*. Apress/Springer-Nature.
