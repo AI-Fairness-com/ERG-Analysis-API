@@ -19,6 +19,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile/tablet interface for point-of-care use
 
 ---
+## 2026-11-22 — v2.5.1: fixes from the v2.5 synthetic validation (PIPELINE_VERSION 2.5.1)
+
+### Fixed
+
+- D1: the median filter now uses 5 samples (2.5 ms at 2000 Hz), as specified in Chapter 5, instead of 5 ms (11 samples), which shaved about 4% off a- and b-wave peaks. `MEDIAN_KERNEL_SAMPLES = 5`; regression baselines T-REG-01 to 03 updated.
+- D2: a recording whose SNR is in the Fail range for its electrode now gets no Traffic Light (Chapter 2 §2.5): zones are withheld and a quality failure message with corrective steps is returned.
+
+### Added
+
+- `synthetic_validation/ERG_CSV_Generator_v2_5_0.py` and `run_validation_v2_5_0.py`: 52 simulated Appendix A recordings with a manifest of the expected results. Run 1: 49/52 (D1, D2 found); Run 2: 52/52.
+- `tests/test_v2_5_rules.py`: 55 tests of Equation 10.2 at every limit, the Table 2.3 SNR thresholds, the median filter, Fail recordings and not-recordable waves. Total 82 tests.
+- `docs/regulatory/T1_Synthetic_Validation_Report_v2_5_1`.
+
+### Changed
+
+- Version labels updated to v2.5.1 in the pipeline, the PDF report and the web page.
+
+---
 ## 2026-11-22 — Alignment with the final book (PIPELINE_VERSION unchanged: 2.5.0)
 
 ### Changed
