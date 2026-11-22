@@ -17,7 +17,12 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+try:                                   # run as a file
+    ROOT = Path(__file__).resolve().parents[1]
+    IN_NOTEBOOK = False
+except NameError:                      # pasted into a notebook cell (Colab)
+    ROOT = Path('/content/ERG-Analysis-API')
+    IN_NOTEBOOK = True
 SET = ROOT / 'synthetic_validation' / 'v2_5_0'
 COLOURS = {'GREEN', 'AMBER', 'RED', 'ATYPICAL DIRECTION'}
 # Chapter 2, Table 2.3: (Pass at or above, Fail below)
@@ -33,6 +38,8 @@ def book_snr_status(electrode, snr):
 def poster(url, local):
     if local:
         import contextlib
+        import os
+        os.chdir(ROOT)                 # the API finds data/samples/ from here
         sys.path.insert(0, str(ROOT / 'api'))
         with contextlib.redirect_stdout(io.StringIO()):
             import erg_server
@@ -113,7 +120,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--url', default='http://localhost:8080')
     ap.add_argument('--local', action='store_true')
-    args = ap.parse_args()
+    args, _ = ap.parse_known_args()
+    if IN_NOTEBOOK:                    # no server in a notebook: call the app
+        args.local = True
     manifest = json.loads((SET / 'manifest.json').read_text())
     post = poster(args.url, args.local)
     rows = []

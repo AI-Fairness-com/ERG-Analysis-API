@@ -20,7 +20,15 @@ import numpy as np
 import pandas as pd
 from scipy.ndimage import gaussian_filter1d
 
-ROOT = Path(__file__).resolve().parents[1]
+try:                                   # run as a file
+    ROOT = Path(__file__).resolve().parents[1]
+except NameError:                      # pasted into a notebook cell (Colab)
+    ROOT = Path('/content/ERG-Analysis-API')
+    if not ROOT.exists():
+        import subprocess
+        subprocess.run(['git', 'clone', '-q',
+                        'https://github.com/AI-Fairness-com/ERG-Analysis-API.git',
+                        str(ROOT)], check=True)
 OUT = ROOT / 'synthetic_validation' / 'v2_5_0'
 NORM = json.loads((ROOT / 'data' / 'samples' /
                    'normative_data_baker2025.json').read_text())
