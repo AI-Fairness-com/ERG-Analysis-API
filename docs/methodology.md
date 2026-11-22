@@ -1,17 +1,15 @@
 # Methodology: ERG Signal Processing and Classification
 
-This document provides the mathematical and methodological foundations for the ERG Analysis API. All formulas and explanations are sourced directly from the ERG manuscript (Tavakoli, 2027) and the Blueprint API Action Plan.
+This document summarizes the methods of the ERG Analysis API. Every rule and value comes from *Hands-On Electroretinography in the Age of AI* (Tavakoli, Apress, forthcoming); the section numbers point to the book.
 
-*Feature Coverage section reconciled against the pipeline's actual feature set on 2026-09-07, after a same-day self-correction (see `docs/CHANGELOG.md`) restored the full 28-feature design following a brief, mistaken reduction to 11 features earlier that day.*
-
-## Table of Contents
+## Contents
 
 1. [Traffic Light Zones](#traffic-light-zones)
-2. [ISCEV Filter Specifications](#iscev-filter-specifications)
-3. [STFT Spectrogram Parameters](#stft-spectrogram-parameters)
-4. [Longitudinal Change Detection](#longitudinal-change-detection)
-5. [SHAP Explainability](#shap-explainability)
-6. [References to Source](#references-to-source)
+2. [Device-Relative Normalization](#device-relative-normalization)
+3. [Filtering](#filtering)
+4. [STFT Spectrogram](#stft-spectrogram)
+5. [Serial Change Detection](#serial-change-detection)
+6. [SHAP Explainability](#shap-explainability)
 
 ---
 
@@ -75,178 +73,99 @@ DA 10 b-wave timing has one set of limits for all ages. For the DA 10 a-wave amp
 
 The zones cover the a-wave and b-wave amplitudes and peak times of each ISCEV protocol, and the LA 30 Hz flicker amplitude and peak time, because Baker et al. (2025) publish limits for these. Every other feature the pipeline extracts is reported as a measured value and does not contribute to the Traffic Light. This includes the b/a ratio, the OP amplitudes and OP2 implicit time, the PhNR amplitude, and the nonlinear, DWT, derivative, and frequency-domain features of Chapter 9. Zoning them would need reference limits measured with this pipeline's own methods, which do not yet exist.
 
-### Device-Relative Normalization
+---
 
-Source: Chapter 10 §10.3; Blueprint Section 4.5, Step 5
+## Device-Relative Normalization
 
-Three normalization methods are available:
+Source: Chapter 10 §10.3
 
-| Method | Description | When to Use |
-|--------|-------------|-------------|
-| **Method 1** | Internal calibration signal normalization | Device provides reference calibration flash |
-| **Method 2** | Laboratory normative scaling (amplitude as % of lab's normative mean) | Laboratory has established its own reference data |
-| **Method 3** | ISCEV relative criteria only | Fallback when Methods 1 and 2 unavailable (carries mandatory caveat) |
+| Method | Formula or basis | When used |
+|--------|------------------|-----------|
+| Method 1: internal calibration signal | A_measured / A_calibration | A calibration signal is recorded in the same session and channel, with the same electrodes |
+| Method 2: laboratory normative scaling | A_measured / µ_norm(electrode, protocol, age group) | The site has its own normative data, or data from an identical setup. The main method for the project's training data |
+| Method 3: project-defined electrode-amplitude hierarchy | Amplitude relative to a reference value for its electrode type | Neither a calibration signal nor laboratory norms are available, for example at a new site |
 
 ---
 
-## ISCEV Filter Specifications
+## Filtering
 
-Source: Chapter 5 §5.1; Blueprint Section 4.5, Step 2
+Source: Chapter 5, Table 5.1
 
-### Bandpass Filter Parameters
+| Setting | ISCEV | This pipeline |
+|---------|-------|---------------|
+| High-pass corner, standard responses | 0.3 Hz or lower | 0.3 Hz |
+| Low-pass corner, standard responses | 300 Hz or higher | 300 Hz |
+| OP band | 75 Hz to 300 Hz or higher | 75 to 300 Hz |
+| PhNR band | 0.3 Hz or lower to at least 300 Hz | 0.3 to 300 Hz |
+| Filter roll-off | Not standardized | Fourth-order Butterworth |
+| Notch filter | Should not be used | Off by default; on request only |
+| Sampling rate | 1000 Hz or higher | 2000 Hz |
+| Pre-flash baseline | At least 20 ms | 100 ms (Chapter 2) |
 
-| Protocol | High-Pass Cutoff | Low-Pass Cutoff | Filter Order |
-|----------|------------------|-----------------|--------------|
-| DA 0.01 | 0.3 Hz | 300 Hz | 4th order Butterworth |
-| DA 3.0 | 0.3 Hz | 300 Hz | 4th order Butterworth |
-| DA 10.0 | 0.3 Hz | 300 Hz | 4th order Butterworth |
-| LA 3.0 | 0.3 Hz | 300 Hz | 4th order Butterworth |
-| LA 30 Hz | 0.3 Hz | 300 Hz | 4th order Butterworth |
-
-### Frequency Content of ERG Signals
-
-Source: Chapter 5 §5.2
-
-| ERG Component | Dominant Frequency Band |
-|---------------|-------------------------|
-| a-wave (trough and descent) | 5–30 Hz |
-| b-wave (peak and ascent) | 5–40 Hz |
-| Oscillatory potentials (OP2–OP4) | 75–300 Hz |
-| PhNR (photopic negative response) | 0.3–5 Hz |
-| 30 Hz flicker steady-state | 30 Hz and harmonics (60, 90, 120 Hz) |
-
-### Notch Filter Policy
-
-Source: Chapter 5 §5.1.4; Blueprint Section 4.5, Step 2
-
-Per ISCEV 2022 guidance, **notch filters are NOT RECOMMENDED for routine clinical use** as they distort the ERG waveform. If post-acquisition removal is clinically justified (e.g., high-noise screening environment), explicit user consent is required and output metadata is flagged accordingly.
+Stored recordings are filtered forward and backward (zero phase). Before a notch is considered, `detect_mains_interference()` reports a peak at the mains frequency more than 6 dB above its surroundings. The code is in `chapters/ch05/filtering/`.
 
 ---
 
-## STFT Spectrogram Parameters
+## STFT Spectrogram
 
-Source: Chapter 8; Blueprint Section 4.5, Step 3
+Source: Chapter 8 (§8.2.3, Tables 8.1 and 8.2)
 
-### Default Configuration (Deep Learning Pathway)
+| Setting | Value | Reason |
+|---------|-------|--------|
+| Window function | Hamming | Peak side lobe −43 dB with adequate frequency resolution; the highest AUC of eight windows for a ViT Small on ERG spectrograms (Albasu et al., 2024) |
+| Window size (nperseg) | 64 samples (32 ms at 2000 Hz) | Its 3 dB width (about 41 Hz) separates the b-wave and OP bands |
+| Overlap (noverlap) | 32 samples (50%), a 16 ms hop | The smallest standard overlap that still gives a usable image |
+| Frequency range kept | 0 to 300 Hz | The ISCEV passband: 10 frequency rows |
+| Output | 224 × 224 pixels | The input size of the ViT, reached by bicubic resizing of the 10 × 33 grid of a 500 ms sweep |
 
-| Parameter | Value | Rationale |
-|-----------|-------|-----------|
-| Window function | Hamming | Lowest leakage among common windows; empirically validated (Albasu et al., 2024) |
-| Window size (nperseg) | 64 samples | 32 ms time resolution at 2000 Hz sampling |
-| Overlap (noverlap) | 58 samples | 90.625% overlap, 3 ms hop size |
-| Sampling rate (fs) | 2000 Hz | Safety margin above Nyquist limit for 300 Hz OP band |
-| Frequency range | 0–300 Hz | ISCEV 2022 specified passband |
-| Output resolution | 224 × 224 pixels | Compatible with Vision Transformer (ViT) input |
-
-
-### STFT Mathematical Definition
-
-Source: Chapter 8, Equation 8.1
-
-\[STFT(\tau, f) = \int x(t) \cdot w(t - \tau) \cdot e^{-j2\pi ft} dt\]
-
-Where:
-- \(x(t)\) is the input ERG signal in the time domain
-- \(w(t - \tau)\) is the window function centred at time \(\tau\)
-- \(e^{-j2\pi ft}\) is the complex exponential at frequency \(f\)
-- The spectrogram is the squared magnitude \(|STFT(\tau, f)|^2\)
-
-### Alternative Window Configurations (Classical ML Pathway)
-
-Source: Albasu et al. (2024); Blueprint Section 8
-
-| Window Type | Best For | Performance |
-|-------------|----------|-------------|
-| **Hamming** | Deep learning (ViT) | AUC = 0.888 (primary pathway) |
-| **Boxcar** | Classical ML (Random Forest) | Accuracy = 70.83%, AUC = 0.722 |
-| **Bartlett** | Classical ML (Random Forest) | Accuracy = 70.83%, AUC = 0.722 |
+Each spectrogram is converted to dB, z-scored on its own mean and clipped at ±3 standard deviations before resizing. For classical machine learning, the Bartlett or Boxcar window is used, and four statistics of the whole spectrogram (maximum, minimum, median and mean) form the feature vector (§8.4.2). The settings are in `STFT_CONFIG` in `api/erg_v2_5_0.py` and in `chapters/ch08/chapter_8.py`.
 
 ---
 
-## Longitudinal Change Detection
+## Serial Change Detection
 
-Source: Chapter 15, Equations 15.1–15.3
+Source: Chapter 15 (Tables 15.2 and 15.3)
 
-### Limits of Agreement (LoA)
+- **Limits of agreement:** mean difference ± 1.96 × SD of the differences (Bland and Altman, 1986).
+- **Coefficient of repeatability:** CoR = 1.96 × √2 × s_w, where s_w is the within-subject standard deviation.
+- **Minimum detectable change:** the standard error of measurement equals s_w (Weir, 2005), so for two recordings the MDC₉₅ equals the CoR. The CoR is therefore the single change threshold.
+- Amplitudes are compared on the log10 scale and reported as a percent change.
 
-\[LoA = \bar{d} \pm 1.96 \times SD_d\]
-
-Where:
-- \(\bar{d}\) = mean difference between two recordings
-- \(SD_d\) = standard deviation of the differences
-
-### Coefficient of Repeatability (CoR)
-
-\[CoR = 1.96 \times \sqrt{2} \times s_w\]
-
-Where:
-- \(s_w\) = within-subject standard deviation
-
-The CoR is the minimum detectable change threshold at 95% confidence. A change exceeding the CoR in the direction of deterioration is flagged as statistically significant progression.
-
-### Minimum Detectable Change (MDC95)
-
-\[MDC95 = 1.96 \times \sqrt{2} \times SEM\]
-
-Where:
-- \(SEM\) = Standard Error of Measurement = \(s_w / \sqrt{n}\)
-- \(n\) = number of repeated measurements per subject
-
-For test-retest data (n = 2): \(MDC95 = CoR\)
-
-### Change Flagging Rules
-
-Source: Chapter 15 §15.5
-
-| Change Zone | Criterion | Flag |
+| Change zone | Criterion | Flag |
 |-------------|-----------|------|
-| NO_CHANGE | \|Δ\| < MDC95 | No significant change |
-| BORDERLINE | MDC95 ≤ \|Δ\| < CoR | Borderline change; repeat recording recommended |
-| PROGRESSION | \|Δ\| ≥ CoR (reduction) | Significant progression; urgent review |
-| IMPROVEMENT | \|Δ\| ≥ CoR (increase) | Significant improvement; document response |
+| Green: no significant change | \|Δ\| < CoR | NO_CHANGE |
+| Red: significant progression | \|Δ\| ≥ CoR (amplitude fall or longer implicit time) | SIGNIFICANT_PROGRESSION |
+| Blue: significant improvement | \|Δ\| ≥ CoR (amplitude rise or shorter implicit time) | SIGNIFICANT_IMPROVEMENT |
+
+Published CoR values are in `docs/thresholds.md`; the code is in `chapters/ch15/chapter_15.py`.
 
 ---
 
 ## SHAP Explainability
 
-Source: Chapter 14
+Source: Chapter 14 (Table 14.1)
 
-### Three-Level SHAP Framework
+| Level | Method | Output |
+|-------|--------|--------|
+| Level 1 | TreeSHAP on the Random Forest feature vector | Waterfall chart of each feature's contribution |
+| Level 2 | GradientExplainer on the 330 time-frequency cells of the ViT spectrogram | Saliency map, summarized by named ERG component |
+| Level 3 | Plain-language translation | Narrative for the clinical report |
 
-| Level | Method | Input | Output |
-|-------|--------|-------|--------|
-| **Level 1** | TreeSHAP (shap.TreeExplainer) | Random Forest feature vector | Ranked bar chart of per-parameter contributions |
-| **Level 2** | GradientSHAP (shap.GradientExplainer) | ViT Small spectrogram | Saliency overlay on time-frequency spectrogram |
-| **Level 3** | Plain-language translation | SHAP values → sentence mapping table | Clinician-readable narrative |
+| \|SHAP\| | Contributor level | Reporting |
+|----------|-------------------|-----------|
+| ≥ 0.20 | Dominant | Named first in the narrative; top of the waterfall chart |
+| 0.10 to < 0.20 | Significant | Named in the narrative |
+| 0.05 to < 0.10 | Supporting | Shown in the chart; summarized as a group in the narrative |
+| < 0.05 | Negligible | Shown in the chart (up to 15 features); not mentioned in the narrative |
 
-### SHAP Value Interpretation
-
-Source: Chapter 14 §14.2.3
-
-| SHAP Value Magnitude | Clinical Significance | Reporting Action |
-|----------------------|----------------------|------------------|
-| \|SHAP\| ≥ 0.20 | Dominant contributor | Named first in plain-language narrative |
-| 0.10 ≤ \|SHAP\| < 0.20 | Significant contributor | Named in plain-language narrative |
-| 0.05 ≤ \|SHAP\| < 0.10 | Supporting contributor | Shown in waterfall chart; grouped in narrative |
-| \|SHAP\| < 0.05 | Negligible contribution | Shown in waterfall chart; not mentioned in narrative |
+The SHAP attribution is not shown for a recording with a signal quality warning (Chapter 19 §19.9.1). The code is in `chapters/ch14/chapter_14.py`.
 
 ---
 
-## References to Source
+## References
 
-All content in this document is derived from:
-
-| Topic | Source |
-|-------|--------|
-| Traffic Light zones | Chapter 10 §10.4 (Equation 10.2, Table 10.4); Baker et al. (2025), Tables 2, 4 and 5 |
-| Age-stratified reference ranges | Baker et al. (2025), Blueprint §2.3 |
-| Device-relative normalization | Chapter 10 §10.3, Blueprint §4.5 Step 5 |
-| ISCEV filter specifications | Chapter 5 §5.1, Blueprint §4.5 Step 2 |
-| Frequency content of ERG signals | Chapter 5 §5.2 |
-| STFT spectrogram parameters | Chapter 8, Blueprint §4.5 Step 3 |
-| Longitudinal change detection | Chapter 15 Equations 15.1–15.3 |
-| SHAP explainability | Chapter 14 |
-
-**Full reference:** Tavakoli, H. (2027). *Hands-On Electroretinography in the Age of AI: A Practical Guide from Clinical Fundamentals to Intelligent Decision Support*. Apress/Springer-Nature.
-
-**Repository:** https://github.com/AI-Fairness-com/ERG-Analysis-API
+- Albasu, F., et al. (2024). Electroretinogram analysis using a short-time Fourier transform and machine learning techniques. *Bioengineering*, 11(9), 866.
+- Baker, R.A., et al. (2025). ISCEV standard full-field ERG reference limits from 407 healthy subjects. *Documenta Ophthalmologica*, 150, 47–64.
+- Bland, J.M. and Altman, D.G. (1986). Statistical methods for assessing agreement between two methods of clinical measurement. *The Lancet*, 327(8476), 307–310.
+- Robson, A.G., et al. (2022). ISCEV standard for full-field clinical electroretinography (2022 update). *Documenta Ophthalmologica*, 144(3), 165–177.
+- Weir, J.P. (2005). Quantifying test-retest reliability using the intraclass correlation coefficient and the SEM. *Journal of Strength and Conditioning Research*, 19(1), 231–240.
