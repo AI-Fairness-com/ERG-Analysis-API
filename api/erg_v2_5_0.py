@@ -117,7 +117,7 @@ class ERGConfig:
     # ========================================================================
     STFT_WINDOW: str = 'hamming'           # Default for deep learning
     STFT_NPERSEG: int = 64                 # 32 ms at 2000 Hz
-    STFT_NOVERLAP: int = 58                # 90.625% overlap, 3 ms hop
+    STFT_NOVERLAP: int = 32                # 50% overlap, 16 ms hop (§8.2.3)
     STFT_FMIN_HZ: float = 0.0              # Full ISCEV passband
     STFT_FMAX_HZ: float = 300.0            # ISCEV upper cutoff
     STFT_OUTPUT_H: int = 224               # ViT input height
@@ -1850,7 +1850,7 @@ from skimage.transform import resize
 STFT_CONFIG = {
     'window': 'hamming',      # Default for deep learning (-43 dB sidelobe)
     'nperseg': 64,            # 32 ms window at 2000 Hz
-    'noverlap': 58,           # 90.625% overlap, 3 ms hop
+    'noverlap': 32,           # 50% overlap, 16 ms hop (§8.2.3)
     'fs': 2000.0,             # Hz; must match recording metadata
     'fmin_hz': 0.0,           # Full ISCEV passband
     'fmax_hz': 300.0,         # ISCEV upper cutoff
