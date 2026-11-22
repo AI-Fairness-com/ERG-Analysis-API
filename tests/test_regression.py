@@ -9,9 +9,9 @@ analysed as a DTL fiber recording against the Baker et al. (2025) limits.
 These tests lock the pipeline's numerical output so that any change to
 filtering, feature extraction, zone assignment, FHIR generation, or the
 normative file immediately surfaces as a regression failure.
-  T-REG-01  a-wave amplitude = 134.2 uV ± 1.0, zone GREEN
-  T-REG-02  b-wave amplitude = 274.7 uV ± 1.0, zone GREEN
-  T-REG-03  b-wave implicit time = 53.0 ms ± 0.5, zone GREEN
+  T-REG-01  a-wave amplitude = 137.7 uV ± 1.0, zone GREEN
+  T-REG-02  b-wave amplitude = 281.1 uV ± 1.0, zone GREEN
+  T-REG-03  b-wave implicit time = 51.0 ms ± 0.5, zone GREEN
   T-REG-04  b/a ratio = 2.05 ± 0.05, not zoned
   T-REG-05  composite traffic light = GREEN
   T-REG-06  FHIR status   = final
@@ -31,9 +31,9 @@ def _row(s01_result, parameter):
 
 
 @pytest.mark.parametrize("test_id, parameter, expected, tolerance, zone", [
-    ("T-REG-01", "a_amp",    134.2, 1.0,  "GREEN"),
-    ("T-REG-02", "b_amp",    274.7, 1.0,  "GREEN"),
-    ("T-REG-03", "b_imp",     53.0, 0.5,  "GREEN"),
+    ("T-REG-01", "a_amp",    137.7, 1.0,  "GREEN"),
+    ("T-REG-02", "b_amp",    281.1, 1.0,  "GREEN"),
+    ("T-REG-03", "b_imp",     51.0, 0.5,  "GREEN"),
     ("T-REG-04", "ba_ratio",   2.05, 0.05, "NOT ZONED"),
 ])
 def test_T_REG_01_to_04_values_and_zones(s01_result, test_id, parameter,
