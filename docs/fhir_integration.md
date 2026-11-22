@@ -49,7 +49,7 @@ The eye is taken from the form field `eye` (`OD` or `OS`) or, if that is empty, 
 | `phnr_amp_uv` | LA 3.0 | project code | project code | uV |
 | `ba_ratio` | DA 3.0, DA 10.0, LA 3.0 | project code | project code | 1 |
 
-Source: Regenstrief Institute, LOINC panel 79894-2. LOINC does not separate DA 0.01, DA 3.0, and DA 10.0, so the `iscev-protocol` extension names the protocol. Project codes use the code system `https://ai-fairness.com/fhir/erg/CodeSystem/erg-features`, with the feature name as the code. The LOINC codes are eye-specific, so when the eye is not known, every value is sent under the project code system instead. Units use UCUM. Z-scores and the other features stay in the Layer 2 and Layer 4 report.
+Source: Regenstrief Institute, LOINC panel 79894-2. LOINC does not separate DA 0.01, DA 3.0, and DA 10.0, so the `iscev-protocol` extension names the protocol. Project codes use the code system `https://ai-fairness.com/fhir/erg/CodeSystem/erg-features`, with the feature name as the code. The LOINC codes are eye-specific, so when the eye is not known, every value is sent under the project code system instead. Units use UCUM. The Traffic Light zones and the other features stay in the Layer 2 and Layer 4 report.
 
 ## Bundle
 
