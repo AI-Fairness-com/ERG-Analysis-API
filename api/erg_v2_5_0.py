@@ -173,7 +173,7 @@ class ERGConfig:
             'iscev_min_sampling_rate_hz': self.ISCEV_MIN_SAMPLING_RATE_HZ,
             'iscev_min_prestimulus_ms': self.ISCEV_MIN_PRESTIMULUS_MS,
             'butterworth_order': self.BUTTERWORTH_ORDER,
-            'median_kernel_ms': self.MEDIAN_KERNEL_MS,
+            'median_kernel_samples': self.MEDIAN_KERNEL_SAMPLES,
             'notch_default_state': self.NOTCH_DEFAULT_STATE,
             'notch_q': self.NOTCH_QUALITY_FACTOR,
             'electrode_snr_thresholds': self.ELECTRODE_SNR_THRESHOLDS,
