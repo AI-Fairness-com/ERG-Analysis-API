@@ -9,20 +9,29 @@ This document summarizes how the ERG Analysis API is to be validated, following 
 | Traffic Light zoning against Baker et al. (2025) limits | Implemented. Automated tests reproduce the zones and printed limits of the Chapter 19 case studies. |
 | Signal quality, filtering and feature extraction | Implemented and tested on simulated recordings. |
 | Stage 1 and Stage 2 classifiers | Pre-registered target (Chapter 19, Table 19.10). Not yet trained or validated on patient data. |
-| External validation | Phase 1 (protocol, ethics application, data sharing agreement) in preparation. Phase 2 begins once a clinical site is identified, ethics approval is granted and the agreement is signed. |
+| External validation, Phase A (Traffic Light) | Registered on OSF (Update 5) before any data exist; software locked in release `phaseA-lock-2026-11-23`; protocol and templates in `docs/regulatory/` (T4-A to T4-F v2.0). Starts once a centre is identified, ethics approval is granted and the data agreement is signed. |
+| External validation, Phase B (classifiers) | Follows the registered SAP v2.2 after the Stage 1 and Stage 2 classifiers are trained. |
 
 No performance figure in this repository is a project result. The figures in the Model Card (Chapter 17, Table 17.4) and in the figures of Chapters 16 and 17 are illustrative placeholders.
 
 ## Statistical Analysis Plan
 
-The plan is pre-registered on the Open Science Framework before any validation data are analyzed: https://doi.org/10.17605/OSF.IO/6WA42. The SAP file, `ERG_SAP_v2.1.pdf`, is stored on the associated OSF project, and its SHA-256 hash is written to the Layer 4 audit log of every report generated during validation (Chapter 16 §16.2).
+The plan is pre-registered on the Open Science Framework before any validation data are analyzed: https://doi.org/10.17605/OSF.IO/6WA42. The SAP file, `ERG_SAP_v2.2.pdf`, is stored on the associated OSF project and in `docs/`, with its SHA-256 hash on the OSF Wiki. Chapter 16 §16.2 specifies that this hash is written to the Layer 4 audit log of every report generated during validation; that step is not yet built and must be in place before any validation data are analysed (T4-A, item K2).
 
 - **Primary outcomes:** Stage 1 binary AUC-ROC and Stage 2 macro-AUC-ROC across the six disease classes, both on the external validation dataset.
 - **Secondary outcomes:** per-class sensitivity, specificity, PPV, NPV and Brier score.
 - **Subgroups:** age stratum, sex and recording device.
 - **Confidence intervals:** DeLong for each class AUC; a patient-level bootstrap with 2000 resamples for the macro-AUC and all other metrics. Significance level 0.05, two-tailed.
 
-## Deployment thresholds
+## Phase A: external validation of the Traffic Light (OSF Update 5)
+
+- **Design:** consecutive adults aged 18 to 80 at one or more independent centres; one pre-specified eye per patient; reference standard the consultant ERG report (Normal, Borderline, Abnormal); flagged = composite AMBER or RED.
+- **Primary criteria:** sensitivity with lower 95% exact bound at least 0.85; specificity with lower 95% exact bound at least 0.75.
+- **Sample size:** 120 Abnormal and 250 Normal patients.
+- **Secondary:** weighted kappa; results by protocol, electrode, age group (18–35 against 36–80) and sex.
+- **Documents:** `docs/regulatory/T4-A_Validation_Protocol_v2_0.pdf` and the T4-B to T4-F templates.
+
+## Deployment thresholds (Phase B, classifiers)
 
 Each threshold is judged on the lower bound of its 95% confidence interval, on external data (Chapter 16 §16.2 and §16.5):
 
