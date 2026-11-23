@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile/tablet interface for point-of-care use
 
 ---
+## 2026-11-23 — Web page and documentation (PIPELINE_VERSION unchanged: 2.5.1)
+
+### Changed
+
+- Web page: the pre-stimulus duration now defaults to 100 ms, matching the book's files (Chapters 3 and 19) and the validation set; the waveform fallback matches. Badge "52/52 Synthetic (v2.5.1)"; the age-group box describes the Baker percentile limits (48 limit sets) instead of means and SDs; the PhNR card reads "No published limits · not zoned".
+- Age scope stated openly: Baker et al. (2025) subjects were aged 7 to 86 (353 aged 18 to 80, 50 under 18, 4 over 80, from the public dataset, DOI 10.17632/kcptb9jrf5.1). The ≤35 limits include the 50 children. The published limits are used unchanged; use in adults aged 18 to 80 is this project's choice. Web page hint, `docs/thresholds.md` and `docs/methodology.md` updated; book Chapters 10 and 17 updated to match.
+
+---
 ## 2026-11-22 — v2.5.1: fixes from the v2.5 synthetic validation (PIPELINE_VERSION 2.5.1)
 
 ### Fixed
