@@ -1,6 +1,8 @@
 # Disclaimer
 
-The ERG Analysis API is the companion code of *Hands-On Electroretinography in the Age of AI* (Tavakoli, Apress). It is a clinical decision support tool for full-field ERG recordings. It supports the clinical judgment of a qualified healthcare professional and does not replace it. It is not a medical diagnosis.
+The ERG Analysis API is the companion code of *Hands-On Electroretinography in the Age of AI* (Tavakoli, Apress). It is designed as a clinical decision support tool for full-field ERG recordings, as described in the book: it would support the clinical judgment of a qualified healthcare professional, not replace it, and its output is not a medical diagnosis.
+
+**Current status: research and teaching use only.** The code and the hosted demonstration have not been validated on patients and are not a medical device. They have not been assessed, certified or registered with any regulator, and must not be used for clinical decisions about a patient. Upload anonymised or simulated recordings only. The intended use below describes the use the software is designed for, which requires external validation and regulatory approval first (`docs/regulatory/T3-D` and `T3-E`).
 
 ## Mandatory output disclaimer
 
