@@ -9,7 +9,7 @@ Original file is located at
 
 # ============================================================================
 # CELL 1: ERG PIPELINE CONFIGURATION (ISCEV 2022 Compliant)
-# Single source of truth - Version 2.5.0
+# Single source of truth - Version 2.5.1
 # ============================================================================
 
 import numpy as np
