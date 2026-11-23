@@ -651,8 +651,8 @@ PAEDIATRIC_AGE_GROUPS = {'0-12mo', '1-5y', '6-12y', '13-17y'}
 
 PAEDIATRIC_DISCLAIMER_TEXT = (
     "<b>PAEDIATRIC AGE GROUP — Normative Reference Caution.</b> The normative reference "
-    "data (Baker et al., 2025, N=407) was derived from adult subjects aged 18–80+ years. "
-    "No paediatric reference ranges are available in the current normative dataset. "
+    "data (Baker et al., 2025, N=407) came from subjects aged 7 to 86 years, with few "
+    "children, and this API is validated for adults aged 18 to 80 only. "
     "Traffic Light zones have been computed against the nearest adult "
     "stratum (≤35 years) as a provisional fallback. <b>These results must not be used as "
     "the sole basis for clinical decision-making in paediatric patients.</b> Specialist "
