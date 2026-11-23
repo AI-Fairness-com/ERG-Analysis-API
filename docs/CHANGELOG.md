@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Web page, README and DISCLAIMER now state that the code and the hosted demonstration are for research and teaching only, are not a medical device, and must not be used for clinical decisions (T3-E §3.1).
 - Version comment and VERSION_DATE in `api/erg_v2_5_0.py` corrected; the PDF paediatric box now states Baker's real age range; "SNOMED CT" removed from the web page (T3-A).
 
+### Added (Phase A external validation)
+
+- OSF registration Update 5: Phase A, external validation of the Traffic Light, registered before any data exist (primary criteria: sensitivity lower 95% bound at least 0.85, specificity lower 95% bound at least 0.75; 120 Abnormal and 250 Normal patients). The classifier study under SAP v2.2 becomes Phase B.
+- Release `phaseA-lock-2026-11-23` locks `api/erg_v2_5_0.py` and `data/samples/normative_data_baker2025.json` by SHA-256 for Phase A.
+- `docs/regulatory/`: T4-A to T4-F v2.0 (protocol, ethics and data-agreement templates, surveillance plan, QMS skeleton, report template), replacing the v2.4.0 drafts of June 2026. Also on OSF (folder Phase_A_External_Validation).
+- `docs/validation.md` updated for Phase A and SAP v2.2.
+
 ---
 ## 2026-11-22 — v2.5.1: fixes from the v2.5 synthetic validation (PIPELINE_VERSION 2.5.1)
 
