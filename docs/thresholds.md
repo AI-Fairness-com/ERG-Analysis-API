@@ -34,6 +34,8 @@ The limits are for silver thread electrodes in the lower fornix (DTL fiber). DTL
 
 Values are L–U, with L_lo and U_hi in brackets, for the three age groups. They are stored in `data/samples/normative_data_baker2025.json` (schema 2.0) together with both confidence intervals, the sample sizes, and the gold foil model.
 
+**Who is behind the limits.** Baker et al. released their reference data with the paper (Mendeley Data, DOI [10.17632/kcptb9jrf5.1](https://doi.org/10.17632/kcptb9jrf5.1)). Of the 407 reference subjects, 353 were aged 18 to 80, 50 were children aged 7 to 17, and 4 were aged 83 to 86. All 50 children are in the ≤35 group, about 37% of its 135 subjects; the 4 oldest are in the ≥60 group. This project uses the published limits unchanged, so that they remain citable and match the pre-registered analysis plan. Restricting use to adults aged 18 to 80 is this project's choice, not a limit set by Baker et al., so a patient aged 18 to 35 is compared with limits that partly reflect children's ERGs. Limits recalculated from the adults aged 18 to 35 alone would rest on only 77 to 84 subjects per parameter, below the more than 120 in each published group, so they are not used (Chapter 10 §10.4).
+
 **Amplitude (µV), Table 5**
 
 | Component | ≤35 years | 36–59 years | ≥60 years |
