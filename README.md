@@ -7,7 +7,7 @@ Companion code for the book **Hands-On Electroretinography in the Age of AI: A P
 
 The repository holds the code of every chapter, a pipeline that processes ISCEV 2022 full-field ERG recordings, and a small web application that turns a recording into a four-layer clinical report with a Traffic Light result.
 
-> **Not a medical diagnosis.** The API supports clinical judgment and does not replace it. The disease classifier is a pre-registered target and has not been trained or validated on patient data. Read [DISCLAIMER.md](DISCLAIMER.md) before use.
+> **Research and teaching use only.** This code and the hosted demonstration accompany the book. They are not a medical device, have not been validated on patients, and must not be used for clinical decisions about a patient. The disease classifier is a pre-registered target and has not been trained or validated on patient data. Read [DISCLAIMER.md](DISCLAIMER.md) before use.
 
 ## What is in the repository
 
