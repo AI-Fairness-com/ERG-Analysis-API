@@ -29,7 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `synthetic_validation/baker2025_reference_check.py` and the Baker et al. (2025) public dataset (`ISCEV ffERG reference data.xlsx`, CC BY 4.0, credited in `NOTICE`). The script recalculates every reference limit from the subject-level data (46/46 rows match the published tables) and measures how often healthy subjects are flagged by age, sex and electrode. Results are used in T3-B v2.0 and T3-C v2.0.
-- `docs/regulatory/`: T2 v2.0, T3-A v2.0 and T3-B v2.0 for v2.5.1.
+- `docs/regulatory/`: T2 v2.0 and T3-A to T3-E v2.0 for v2.5.1. With T1 v2.5.1, Tiers 1–3 are complete; the v2.4.0 set is kept in `docs/regulatory/archive/v2.4.0/`. All files are also on OSF (project hfa5y).
+
+### Changed (status of the demonstration)
+
+- Web page, README and DISCLAIMER now state that the code and the hosted demonstration are for research and teaching only, are not a medical device, and must not be used for clinical decisions (T3-E §3.1).
+- Version comment and VERSION_DATE in `api/erg_v2_5_0.py` corrected; the PDF paediatric box now states Baker's real age range; "SNOMED CT" removed from the web page (T3-A).
 
 ---
 ## 2026-11-22 — v2.5.1: fixes from the v2.5 synthetic validation (PIPELINE_VERSION 2.5.1)
