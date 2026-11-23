@@ -21,3 +21,9 @@ def test_T_SAP_02_changed_file_is_reported_as_mismatch(tmp_path):
 def test_T_SAP_03_missing_file_is_reported_as_missing(tmp_path):
     rec = sap_audit_record(str(tmp_path / "absent.pdf"))
     assert rec["status"] == "MISSING" and rec["computed_sha256"] is None
+
+
+def test_T_SAP_04_server_module_loads():
+    """Catches a broken erg_server.py before it reaches a deploy."""
+    import erg_server
+    assert erg_server.app is not None
