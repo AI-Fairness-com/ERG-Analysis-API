@@ -16,7 +16,7 @@ No performance figure in this repository is a project result. The figures in the
 
 ## Statistical Analysis Plan
 
-The plan is pre-registered on the Open Science Framework before any validation data are analyzed: https://doi.org/10.17605/OSF.IO/6WA42. The SAP file, `ERG_SAP_v2.2.pdf`, is stored on the associated OSF project and in `docs/`, with its SHA-256 hash on the OSF Wiki. Chapter 16 §16.2 specifies that this hash is written to the Layer 4 audit log of every report generated during validation; that step is not yet built and must be in place before any validation data are analysed (T4-A, item K2).
+The plan is pre-registered on the Open Science Framework before any validation data are analyzed: https://doi.org/10.17605/OSF.IO/6WA42. The SAP file, `ERG_SAP_v2.2.pdf`, is stored on the associated OSF project and in `docs/`, with its SHA-256 hash on the OSF Wiki. As Chapter 16 §16.2 specifies, this hash is checked and written to the Layer 4 audit log of every report (`api/sap_audit.py`, entry `sap_integrity`: MATCH, MISMATCH or MISSING), and carried into the FHIR AuditEvent. A MISMATCH or MISSING entry means no validation result may be reported from that run (T4-A, item K2).
 
 - **Primary outcomes:** Stage 1 binary AUC-ROC and Stage 2 macro-AUC-ROC across the six disease classes, both on the external validation dataset.
 - **Secondary outcomes:** per-class sensitivity, specificity, PPV, NPV and Brier score.
