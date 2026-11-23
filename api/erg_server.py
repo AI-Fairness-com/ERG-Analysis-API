@@ -19,7 +19,8 @@ import numpy as np
 from flask import Flask, request, Response, send_file
 from flask_cors import CORS
 
-from erg_report_generator import generate_clinical_report_pdf from sap_audit import sap_audit_record
+from erg_report_generator import generate_clinical_report_pdf
+from sap_audit import sap_audit_record
 
 # ── 0. JSON encoder that handles all numpy / Python types ─────────────────────
 
