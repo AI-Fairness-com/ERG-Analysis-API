@@ -12,3 +12,13 @@ This product includes software from the following open-source projects:
 - MNE-Python (BSD License)
 - SHAP (MIT License)
 - Hugging Face Timm (Apache 2.0 License)
+
+This repository includes third-party data:
+- synthetic_validation/ISCEV ffERG reference data.xlsx
+  Robson, A. (2025). ISCEV standard full-field ERG reference limits from
+  407 healthy subjects, derived from transference and validation of
+  reference data between electrode types and centres [Data set].
+  Mendeley Data, V1. https://doi.org/10.17632/kcptb9jrf5.1
+  Licence: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+  Redistributed unchanged. Described in Baker, R.A., et al. (2025),
+  Documenta Ophthalmologica, 150, 47-64.
