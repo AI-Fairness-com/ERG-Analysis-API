@@ -169,4 +169,10 @@ def main(xlsx):
 
 if __name__ == "__main__":
     args = [a for a in sys.argv[1:] if a.lower().endswith(".xlsx")]
-    main(args[0] if args else DEFAULT_XLSX)
+    if args:
+        xlsx = args[0]
+    elif Path(DEFAULT_XLSX).exists():                       # current folder (Colab)
+        xlsx = DEFAULT_XLSX
+    else:                                                   # copy kept in the repo
+        xlsx = ROOT / "synthetic_validation" / DEFAULT_XLSX
+    main(xlsx)
