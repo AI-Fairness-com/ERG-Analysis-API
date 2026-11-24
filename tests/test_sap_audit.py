@@ -13,7 +13,7 @@ def test_T_SAP_01_repository_sap_matches_registered_hash():
 
 
 def test_T_SAP_02_changed_file_is_reported_as_mismatch(tmp_path):
-    changed = tmp_path / "ERG_SAP_v2.2.pdf"
+    changed = tmp_path / "ERG_SAP_v2.3.pdf"
     changed.write_bytes(b"not the registered plan")
     assert sap_audit_record(str(changed))["status"] == "MISMATCH"
 
