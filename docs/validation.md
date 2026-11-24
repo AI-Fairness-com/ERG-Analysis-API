@@ -10,7 +10,7 @@ This document summarizes how the ERG Analysis API is to be validated, following 
 | Signal quality, filtering and feature extraction | Implemented and tested on simulated recordings. |
 | Stage 1 and Stage 2 classifiers | Pre-registered target (Chapter 19, Table 19.10). Not yet trained or validated on patient data. |
 | External validation, Phase A (Traffic Light) | Registered on OSF (Update 5) before any data exist; software locked in release `phaseA-lock-2026-11-23`; protocol and templates in `docs/regulatory/` (T4-A to T4-F v2.0). Starts once a centre is identified, ethics approval is granted and the data agreement is signed. |
-| External validation, Phase B (classifiers) | Follows the registered SAP v2.2 after the Stage 1 and Stage 2 classifiers are trained. |
+| External validation, Phase B (classifiers) | Follows the registered SAP v2.3 after the Stage 1 and Stage 2 classifiers are trained. |
 
 No performance figure in this repository is a project result. The figures in the Model Card (Chapter 17, Table 17.4) and in the figures of Chapters 16 and 17 are illustrative placeholders.
 
