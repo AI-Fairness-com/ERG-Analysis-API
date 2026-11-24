@@ -1,6 +1,6 @@
 """SAP integrity record for the Layer 4 audit log (book Chapter 16 §16.2).
 
-The registered Statistical Analysis Plan (docs/ERG_SAP_v2.2.pdf) is hashed
+The registered Statistical Analysis Plan (docs/ERG_SAP_v2.3.pdf) is hashed
 with SHA-256 and compared with the hash registered on OSF
 (10.17605/OSF.IO/6WA42, Wiki Home page). The result is written to the
 Layer 4 technical audit of every report, so each report shows which plan
