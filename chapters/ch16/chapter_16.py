@@ -493,8 +493,7 @@ def build_performance_table(
     b1 = bootstrap_brier(s1_true[:, None], s1_proba[:, None],
                          s1_ids, n_boot)[0]
     rows.append(table_row("Stage 1 (Abnormal vs Normal)", ci1,
-                              auc1, b1))
-                                                 s1_proba)))
+                          auc1, b1))
 
     k = len(class_names)
     y_bin = label_binarize(y_true, classes=list(range(k)))
@@ -509,14 +508,13 @@ def build_performance_table(
         auc = ("not computed" if a["auc"] is None else
                f"{a['auc']:.3f} ({a['ci_lower']:.3f} to "
                f"{a['ci_upper']:.3f})")
-         rows.append(table_row(name, ci2[c], auc, b2[c]))
+        rows.append(table_row(name, ci2[c], auc, b2[c]))
 
     m = bootstrap_macro_auc_ci(y_true, y_proba, patient_ids,
                                n_boot)
     macro_auc = fmt(np.mean([v for v in aucs if v is not None]),
                     m["macro_auc_ci_lower"],
                     m["macro_auc_ci_upper"])
-    macro_brier = np.mean([brier[n] for n in class_names])
     rows.append(table_row("Macro-average (Stage 2)", ci2[k],
                           macro_auc, b2[k]))
 
@@ -696,7 +694,6 @@ def build_validation_report(
         "primary_outcomes": [
             "Stage 1 binary AUC-ROC, external validation",
             "Stage 2 six-class macro-AUC-ROC, external validation"],
-                            "external validation"),
         "internal_validation": {
             "n_splits": internal_cv_results["n_splits"],
             "leakage_check": internal_cv_results["leakage_check"],
