@@ -19,7 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile/tablet interface for point-of-care use
 
 ---
-## 2026-11-23 — Web page and documentation (PIPELINE_VERSION unchanged: 2.5.1)
+## 2026-11-24 — SAP v2.3 and registration Update 6 (PIPELINE_VERSION unchanged: 2.5.1)
+
+### Changed
+
+- OSF registration Update 6: self-reported ethnicity and iris color (light or dark, recorded by the examiner) added as descriptive subgroups for external validation and Phase A, recorded only where law and ethics approval allow. For the feature-based models, these results are reported before and after ComBat harmonization; "Not recorded" is reported as its own group. In Phase A, both travel in the consultant-label file, so the Standardized ERG CSV files and the Phase A locked files are unchanged.
+- SAP v2.3 (`docs/ERG_SAP_v2.3.pdf`, SHA-256 `7be7f46d00d4ff42e3ae8fb1902b0c198cde55d92da1e6bc42a499a682f72bd5`) replaces v2.2 as the registered plan; v2.2 is kept for the audit trail and is superseded. `api/sap_audit.py`, `tests/test_sap_audit.py`, `docs/validation.md` and `chapters/ch16/chapter_16.py` updated to v2.3.
+- Book Chapters 16 and 17 updated to match.
+
+---
 
 ### Changed
 
