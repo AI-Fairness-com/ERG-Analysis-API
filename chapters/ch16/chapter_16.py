@@ -360,7 +360,6 @@ import os
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import brier_score_loss
 from sklearn.preprocessing import label_binarize
 
 # Requires delong_auc_ci() and bootstrap_macro_auc_ci() from
@@ -423,6 +422,36 @@ def bootstrap_metrics(y_bin, pred_bin, patient_ids,
     return out
 
 
+def bootstrap_brier(y_bin, proba, patient_ids,
+                    n_boot=2000, alpha=0.05, random_state=42):
+    """
+    Brier score of each column of y_bin, and their mean (macro),
+    each with a percentile 95% CI from the same patient-level
+    bootstrap. Returns a list of (point, lower, upper) tuples.
+    """
+    rng = np.random.default_rng(random_state)
+    k = y_bin.shape[1]
+    patients = np.unique(patient_ids)
+    rows_of = {p: np.where(patient_ids == p)[0] for p in patients}
+
+    def scores(idx):
+        per = [float(np.mean((proba[idx, c] - y_bin[idx, c]) ** 2))
+               for c in range(k)]
+        return per + [float(np.mean(per))]
+
+    point = scores(np.arange(len(patient_ids)))
+    draws = []
+    for _ in range(n_boot):
+        drawn = rng.choice(patients, size=len(patients),
+                           replace=True)
+        draws.append(scores(np.concatenate(
+            [rows_of[p] for p in drawn])))
+    lo, hi = np.percentile(np.array(draws),
+                           [100 * alpha / 2, 100 * (1 - alpha / 2)],
+                           axis=0)
+    return [(point[c], lo[c], hi[c]) for c in range(k + 1)]
+
+
 def fmt(p, lo, hi):
     return f"{p:.3f} ({lo:.3f} to {hi:.3f})"
 
@@ -433,13 +462,13 @@ def table_row(name, ci, auc, brier):
                                 "PPV", "NPV"]):
         row[f"{label} (95% CI)"] = fmt(*ci[m])
     row["AUC-ROC (95% CI)"] = auc
-    row["Brier Score"] = f"{brier:.3f}"
+    row["Brier Score (95% CI)"] = fmt(*brier)
     return row
 
 
 def build_performance_table(
         s1_true, s1_proba, s1_threshold, s1_ids,
-        y_true, y_proba, patient_ids, class_names, brier,
+        y_true, y_proba, patient_ids, class_names,
         output_dir="outputs/validation", n_boot=2000):
     """
     Integrated table: one Stage 1 row, one row for each of the
@@ -447,8 +476,10 @@ def build_performance_table(
 
     Stage 1: s1_true is 1 for Abnormal, s1_proba is the calibrated
     probability of Abnormal, and s1_threshold is the operating
-    point. Stage 2: brier maps each class name to its Brier score
+    point. Stage 2: y_proba holds the calibrated probabilities
     (Section 16.5.3). The predicted class is the most probable.
+    Brier scores and their CIs use the same patient-level
+    bootstrap as the other metrics.
     """
     os.makedirs(output_dir, exist_ok=True)
     rows = []
@@ -459,8 +490,10 @@ def build_performance_table(
     a = delong_auc_ci(s1_true, s1_proba)
     auc1 = (f"{a['auc']:.3f} ({a['ci_lower']:.3f} to "
             f"{a['ci_upper']:.3f})")
+    b1 = bootstrap_brier(s1_true[:, None], s1_proba[:, None],
+                         s1_ids, n_boot)[0]
     rows.append(table_row("Stage 1 (Abnormal vs Normal)", ci1,
-                          auc1, brier_score_loss(s1_true,
+                              auc1, b1))
                                                  s1_proba)))
 
     k = len(class_names)
@@ -468,6 +501,7 @@ def build_performance_table(
     pred_bin = label_binarize(y_proba.argmax(axis=1),
                               classes=list(range(k)))
     ci2 = bootstrap_metrics(y_bin, pred_bin, patient_ids, n_boot)
+    b2 = bootstrap_brier(y_bin, y_proba, patient_ids, n_boot)
     aucs = []
     for c, name in enumerate(class_names):
         a = delong_auc_ci(y_bin[:, c], y_proba[:, c])
@@ -475,7 +509,7 @@ def build_performance_table(
         auc = ("not computed" if a["auc"] is None else
                f"{a['auc']:.3f} ({a['ci_lower']:.3f} to "
                f"{a['ci_upper']:.3f})")
-        rows.append(table_row(name, ci2[c], auc, brier[name]))
+         rows.append(table_row(name, ci2[c], auc, b2[c]))
 
     m = bootstrap_macro_auc_ci(y_true, y_proba, patient_ids,
                                n_boot)
@@ -484,7 +518,7 @@ def build_performance_table(
                     m["macro_auc_ci_upper"])
     macro_brier = np.mean([brier[n] for n in class_names])
     rows.append(table_row("Macro-average (Stage 2)", ci2[k],
-                          macro_auc, macro_brier))
+                          macro_auc, b2[k]))
 
     table = pd.DataFrame(rows)
     table.to_csv(f"{output_dir}/performance_table.csv",
@@ -586,7 +620,7 @@ def check_harmonization(X_h: np.ndarray,
     Check each harmonized feature in two ways.
 
     Levene: the spread of the feature must not differ between
-    batches (p >= alpha).
+    batches (p > alpha).
     MMD: the largest MMD between two batches must be no larger
     than the largest MMD between two random halves of one batch.
     A feature that fails either check is listed in "failed".
@@ -612,7 +646,7 @@ def check_harmonization(X_h: np.ndarray,
             within.append(mmd(g[:half], g[half:], bw))
         within = max(within)
 
-        ok = lev_p >= alpha and between <= within
+        ok = lev_p > alpha and between <= within
         results[name] = {"levene_p": round(lev_p, 4),
                          "mmd_between": round(between, 4),
                          "mmd_within": round(within, 4),
@@ -659,7 +693,9 @@ def build_validation_report(
         "preregistration_doi": "10.17605/OSF.IO/6WA42",
         "normative_reference": ("Baker et al. (2025), "
                                 "DOI:10.1007/s10633-025-10009-2"),
-        "primary_outcome": ("Macro-AUC-ROC, Stage 2 six-class, "
+        "primary_outcomes": [
+            "Stage 1 binary AUC-ROC, external validation",
+            "Stage 2 six-class macro-AUC-ROC, external validation"],
                             "external validation"),
         "internal_validation": {
             "n_splits": internal_cv_results["n_splits"],
@@ -693,6 +729,15 @@ def build_validation_report(
             "minimum_class_sensitivity": 0.75,
             "classes_below_threshold": "[sensitivity < 0.75]",
             "deployment_cleared": "[True if lower CI >= 0.80]",
+        },
+        "subgroup_results": {
+            "factors": ["age_stratum", "sex", "device_manufacturer",
+                        "ethnicity", "iris_color"],
+            "per_class_auc_95ci": "[computed for each subgroup]",
+            "ethnicity_and_iris_color": ("[before and after ComBat "
+                                         "for feature-based models]"),
+            "not_recorded": "[reported as its own group]",
+            "too_small_to_interpret": "[subgroups under 20 patients]",
         },
         "batch_harmonization": {
             "method": "ComBat (neuroCombat), two steps (16.6.1)",
@@ -773,7 +818,7 @@ if __name__ == '__main__':
     s1_proba = 1 - proba[:, 0]
     table = build_performance_table(
         s1_true, s1_proba, 0.5, ext_pid, y_ext, proba, ext_pid,
-        classes, cal['per_class'], n_boot=200)
+        classes, n_boot=200)
     print(table.to_string(index=False))
 
     # ComBat: two training devices plus one external device
