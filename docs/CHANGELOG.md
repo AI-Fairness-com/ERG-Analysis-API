@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SAP v2.3 (`docs/ERG_SAP_v2.3.pdf`, SHA-256 `7be7f46d00d4ff42e3ae8fb1902b0c198cde55d92da1e6bc42a499a682f72bd5`) replaces v2.2 as the registered plan; v2.2 is kept for the audit trail and is superseded. `api/sap_audit.py`, `tests/test_sap_audit.py`, `docs/validation.md` and `chapters/ch16/chapter_16.py` updated to v2.3.
 - Book Chapters 16 and 17 updated to match.
 - `chapters/ch16/chapter_16.py` aligned with SAP v2.3 and book Chapter 16: Brier scores now carry patient-level bootstrap 95% CIs (`bootstrap_brier()`; the `brier` argument of `build_performance_table()` is removed); the Levene check passes only when p > 0.05; the validation report lists both primary outcomes and adds a `subgroup_results` block for the Update 6 subgroups.
+- `chapters/ch17/chapter_17.py` aligned with book Chapter 17: a PATCH release that changes the configuration hash is now flagged VERSION_MAJOR_CHANGE; the Model Card JSON lists both primary outcomes and adds ethnicity and iris color to its factors and fairness subgroups.
 
 ---
 
