@@ -13,9 +13,9 @@ import datetime
 import hashlib
 import os
 
-SAP_FILENAME = "ERG_SAP_v2.2.pdf"
+SAP_FILENAME = "ERG_SAP_v2.3.pdf"
 REGISTERED_SAP_SHA256 = (
-    "2c15a8a91ef05950437fe78eccc3db167639b4da6c460c6e13204000a8d0e6bd"
+    "7be7f46d00d4ff42e3ae8fb1902b0c198cde55d92da1e6bc42a499a682f72bd5"
 )
 _DEFAULT_SAP_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "docs", SAP_FILENAME)
