@@ -363,8 +363,9 @@ def build_model_card_json(
         "quantitative_analyses": {
             "stage1_binary": vr.get("stage1_binary", {}),
             "stage2_multiclass": vr.get("stage2_multiclass", {}),
-            "fairness_subgroups": ["age_stratum", "sex",
-                                   "device_manufacturer"],
+            "fairness_subgroups": [
+                "age_stratum", "sex", "ethnicity", "iris_color",
+                "device_manufacturer"],
         },
         # 8. Ethical considerations
         "ethical_considerations": {
