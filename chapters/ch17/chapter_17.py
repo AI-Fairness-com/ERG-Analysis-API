@@ -95,6 +95,10 @@ def compare_version_stamps(stamp_a: dict, stamp_b: dict) -> dict:
         if v_a[0] == v_b[0]:
             message += (" The model weights or normative reference "
                         "changed, so a MAJOR version was required.")
+    elif "config_hash" in changes and v_a[1] == v_b[1]:
+        flag = "VERSION_MAJOR_CHANGE"
+        message = ("The configuration changed in a PATCH release, "
+                   "so probabilities may differ. " + review)
     elif v_a[1] != v_b[1]:
         flag = "VERSION_MINOR_CHANGE"
         message = (f"MINOR change between versions {names}: new "
@@ -331,13 +335,14 @@ def build_model_card_json(
                 "categories"],
         },
         # 3. Factors
-        "factors": ["age_stratum", "sex", "electrode_type",
-                    "device_manufacturer", "disease_severity",
-                    "multi_morbidity"],
+        "factors": ["age_stratum", "sex", "ethnicity", "iris_color",
+                    "electrode_type", "device_manufacturer",
+                    "disease_severity", "multi_morbidity"],
         # 4. Metrics
         "metrics": {
-            "primary": ("Stage 2 macro-AUC (one-versus-rest, "
-                        "six-class average), external validation"),
+            "primary": ["Stage 1 binary AUC-ROC, external validation",
+                        ("Stage 2 macro-AUC (one-versus-rest, "
+                         "six-class average), external validation")],
             "stage1_auc_threshold": 0.94,
             "stage1_sensitivity_operating_point": 0.90,
             "stage2_macro_auc_threshold": 0.80,
