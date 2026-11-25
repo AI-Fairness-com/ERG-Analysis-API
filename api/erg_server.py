@@ -370,6 +370,17 @@ def analyse():
                 recording_date=recording_date or None,
             )
             fhir_bundle = fhir_gen.generate_bundle(fhir_observation, full_report)
+            # End each finding with a full stop in the FHIR conclusion;
+            # the locked pipeline joins the findings with spaces only.
+            l2 = full_report.get("layer_2_clinical_summary", {})
+            parts = [str(x).rstrip(".") + "."
+                     for x in l2.get("key_findings") or []]
+            if l2.get("recommended_action"):
+                parts.append(str(l2["recommended_action"]))
+            for entry in fhir_bundle.get("entry", []):
+                res = entry.get("resource", {})
+                if res.get("resourceType") == "DiagnosticReport" and parts:
+                    res["conclusion"] = " ".join(parts)
             full_report["fhir_observation"] = fhir_observation
             full_report["fhir_bundle"] = fhir_bundle
 
