@@ -610,7 +610,7 @@ def build_quality_panel(quality):
         Paragraph("ISCEV 2022 COMPLIANCE", S_LABEL),
     ], [
         Paragraph(f'<font color="{grade_color.hexval()}"><b>{grade}</b></font>  {desc}', S_VALUE),
-        Paragraph(f"{_fmt(snr_db, ' dB')}  ({snr_status})" if snr_db is not None else "—", S_VALUE),
+        Paragraph(f"{_fmt(snr_db)}  ({snr_status})" if snr_db is not None else "—", S_VALUE),
         Paragraph(quality.get("iscev_text", "Compliant"), S_VALUE),
     ]]
     t = Table(rows, colWidths=[80 * mm, 47 * mm, 47 * mm])
@@ -743,7 +743,7 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
     quality = {
         "grade": quality_raw.get("grade", "—"),
         "description": quality_raw.get("description", ""),
-        "snr_db": snr_raw.get("db"),
+        "snr_db": snr_raw.get("linear"),
         "snr_status": snr_raw.get("status", ""),
         "iscev_text": (
             "Compliant" if iscev_raw.get("overall_compliant") else
