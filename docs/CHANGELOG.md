@@ -19,6 +19,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile/tablet interface for point-of-care use
 
 ---
+## 2026-11-25 — Clinical waveform plot and OP rows in the PDF report (PIPELINE_VERSION unchanged: 2.5.1)
+
+### Fixed
+
+- `api/erg_server.py` read the a-wave and b-wave times under feature names the pipeline does not produce (`a_wave_implicit_time_ms`, `b_wave_implicit_time_ms`), so the PDF waveform never showed its a-wave and b-wave markers. It now reads `a_implicit_ms`, `b_implicit_ms`, `a_amp_uv` and `b_amp_uv`.
+- The PDF now prints the micro sign (µV) instead of "uV". Helvetica is not embedded and some viewers drop its micro sign, so the micro sign alone is drawn in the Vera font that ships with ReportLab and is embedded in the PDF.
+
+### Changed
+
+- The PDF waveform is now a two-panel clinical plot (`build_waveform_two_panel()` in `api/erg_report_generator.py`), 45 mm high. Left: the filtered ERG from −20 to 150 ms, with the a-wave measured from baseline to trough and the b-wave from a-wave trough to b-wave peak, as in ISCEV 2022, each labeled with its amplitude and implicit time. Right: the oscillatory potentials (75–300 Hz) from 0 to 80 ms, with OP2, OP3 and OP4 marked and the OP2 implicit time on the time axis. Both panels use the time origin of the reported implicit times (flash onset plus the flash-midpoint correction), and every marker is sampled from the plotted trace. This replaces the single −100 to 400 ms plot (previously 32 mm high), in which the a-wave, b-wave and OPs were too small to read.
+- The OP panel appears only for DA 3.0 and DA 10.0 recordings with measured OPs. Other protocols show the ERG panel at full width.
+- Layer 2 of the PDF now lists OP2 amplitude and implicit time, OP3 and OP4 amplitudes, and the OP sum, each marked "None published" and "Not zoned", matching the text report.
+- Spacing in the patient block, the Layer 1 panel, the Layer 2 table and the section headings is tightened, so the report stays on one A4 page for DA 3.0 recordings. An LA 3.0 report with the PhNR polarity warning still runs to a second page, as before.
+- The old `build_waveform_drawing()` is kept for the standalone demo in the same file.
+- The FHIR Bundle still carries no OP components; that comes from the Phase A locked pipeline, which is unchanged.
+- The Phase A locked files (`api/erg_v2_5_0.py` and the normative JSON) are unchanged; all 86 tests pass.
+
+---
 ## 2026-11-25 — Report layer names aligned with the book (PIPELINE_VERSION unchanged: 2.5.1)
 
 ### Changed
