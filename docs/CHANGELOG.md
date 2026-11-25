@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The PDF and text reports now show the SNR as the ratio the pipeline computes (for example, 67.6), with its PASS or FAIL status; they previously read a decibel value that does not exist and showed "N/A".
 - The text report lists the oscillatory potentials in Layer 2, marked "no published limits, not zoned", instead of after Layer 4.
 - `api/erg_server.py` ends each finding with a full stop in the FHIR DiagnosticReport conclusion; the locked pipeline joins the findings with spaces only.
+- Layer 4 of the PDF and text reports now shows the full version stamp (API version, model weights hash, configuration hash, and reference version), read from the FHIR Observation; the text report also gives the report ID. The PDF signal-quality panel's first column is widened so the report stays on one A4 page.
 - The Phase A locked files (`api/erg_v2_5_0.py` and the normative JSON) are unchanged.
 
 ---
