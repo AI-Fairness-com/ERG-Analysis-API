@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Layer 3 now states that it is pending: the Stage 1 and Stage 2 classifiers are not yet trained or validated (Chapter 16), so no SHAP explanation is shown (book Chapter 19 §19.10).
 - The PDF waveform height is reduced from 42 to 32 mm, so the report fits on one A4 page again.
 - The web page's footer tile now marks Layer 3 as pending: "Specialist Report (SHAP, pending)".
+- The PDF and text reports now show the SNR as the ratio the pipeline computes (for example, 67.6), with its PASS or FAIL status; they previously read a decibel value that does not exist and showed "N/A".
+- The text report lists the oscillatory potentials in Layer 2, marked "no published limits, not zoned", instead of after Layer 4.
+- `api/erg_server.py` ends each finding with a full stop in the FHIR DiagnosticReport conclusion; the locked pipeline joins the findings with spaces only.
 - The Phase A locked files (`api/erg_v2_5_0.py` and the normative JSON) are unchanged.
 
 ---
