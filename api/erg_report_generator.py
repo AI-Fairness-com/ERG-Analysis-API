@@ -803,10 +803,10 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
     story.append(build_patient_block(meta_full))
     story.append(Spacer(1, 3))
 
-    story.extend(section_heading("Layer 1 — Traffic Light Result"))
+    story.extend(section_heading("Layer 1 — Traffic Light"))
     story.append(build_traffic_light_panel(layer1))
 
-    story.extend(section_heading("Layer 2 — Clinical Parameter Summary"))
+    story.extend(section_heading("Layer 2 — Clinical Summary"))
     story.append(build_metrics_table(features, parameter_zones, zones_available))
     if meta_full.get("age_stratum", "") in PAEDIATRIC_AGE_GROUPS:
         story.append(Spacer(1, 3))
@@ -839,7 +839,13 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
                                  ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
     story.append(legend)
 
-    story.extend(section_heading("Layer 3 — Signal Quality & ISCEV Compliance"))
+    story.extend(section_heading("Layer 3 — Specialist Report"))
+    story.append(Paragraph(
+        "PENDING. The Stage 1 and Stage 2 classifiers are not yet "
+        "trained or validated (Chapter 16), so no SHAP explanation "
+        "is shown.", S_BODY_SM))
+
+    story.extend(section_heading("Layer 4 — Technical Audit"))
     story.append(build_quality_panel(quality))
     story.append(Spacer(1, 4))
     story.append(build_disclaimer_block())
