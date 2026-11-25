@@ -3161,6 +3161,19 @@
       (iscev.warnings||[]).forEach(w => lines.push('  ⚠ ' + w));
     }
 
+    const obs = d.fhir_observation || {};
+    const vs = {};
+    (obs.extension || [])
+      .filter(e => (e.url || '').endsWith('/version-stamp'))
+      .forEach(e => (e.extension || []).forEach(x => { vs[x.url] = x.valueString; }));
+    lines.push('');
+    lines.push('Version stamp');
+    lines.push('Report ID        : ' + (obs.id || 'N/A'));
+    lines.push('API version      : ' + (vs.api_version || 'N/A'));
+    lines.push('Model weights    : ' + (vs.model_weights_hash || 'N/A'));
+    lines.push('Configuration    : ' + (vs.config_hash || 'N/A'));
+    lines.push('Reference limits : ' + (vs.normative_ref_version || 'N/A'));
+
     lines.push('');
     lines.push('====================================================================');
     lines.push('DISCLAIMER: Clinical decision support only. Not a medical diagnosis.');
