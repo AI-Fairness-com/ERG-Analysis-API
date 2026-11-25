@@ -428,10 +428,10 @@ def analyse():
             if report_id:
                 a_wave_t = None
                 b_wave_t = None
-                if features.get("a_wave_implicit_time_ms") is not None:
-                    a_wave_t = pre_stimulus_ms + features["a_wave_implicit_time_ms"]
-                if features.get("b_wave_implicit_time_ms") is not None:
-                    b_wave_t = pre_stimulus_ms + features["b_wave_implicit_time_ms"]
+                if features.get("a_implicit_ms") is not None:
+                    a_wave_t = pre_stimulus_ms + features["a_implicit_ms"]
+                if features.get("b_implicit_ms") is not None:
+                    b_wave_t = pre_stimulus_ms + features["b_implicit_ms"]
 
                 cache_waveform = sanitise({
                     "time_ms":         waveform_t,
@@ -440,11 +440,11 @@ def analyse():
                     "pre_stimulus_ms": pre_stimulus_ms,
                     "fs_hz":           float(fs_hz),
                     "a_wave": (
-                        {"time_ms": a_wave_t, "amp_uv": features.get("a_wave_amplitude_uv")}
+                        {"time_ms": a_wave_t, "amp_uv": features.get("a_amp_uv")}
                         if a_wave_t is not None else None
                     ),
                     "b_wave": (
-                        {"time_ms": b_wave_t, "amp_uv": features.get("b_wave_amplitude_uv")}
+                        {"time_ms": b_wave_t, "amp_uv": features.get("b_amp_uv")}
                         if b_wave_t is not None else None
                     ),
                 })

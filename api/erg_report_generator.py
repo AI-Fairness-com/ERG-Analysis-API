@@ -19,6 +19,7 @@ same `full_report` dict already produced by ERGReportGenerator, plus the
 waveform arrays already produced by ERGFilter.
 """
 
+import math
 import os
 import io
 from datetime import datetime
@@ -77,6 +78,26 @@ def _get_logo_image_reader():
 
 PAGE_W, PAGE_H = A4
 MARGIN = 18 * mm
+
+# Helvetica is not embedded, and some PDF viewers drop its micro sign.
+# Vera ships inside ReportLab, so it is always available; it is embedded
+# and used only for the micro sign.
+try:
+    from reportlab.pdfbase import pdfmetrics as _pdfm
+    from reportlab.pdfbase.ttfonts import TTFont as _TTF
+    _pdfm.registerFont(_TTF("Vera", "Vera.ttf"))
+    _pdfm.registerFont(_TTF("VeraBd", "VeraBd.ttf"))
+    MU_FONT, MU_FONT_BD = "Vera", "VeraBd"
+except Exception:
+    MU_FONT = MU_FONT_BD = None
+
+
+def _mu(text, bold=False):
+    """Micro sign for Paragraph text, drawn in the embedded Vera font."""
+    if MU_FONT is None:
+        return text.replace("\u00b5", "u")
+    f = MU_FONT_BD if bold else MU_FONT
+    return text.replace("\u00b5", f'<font name="{f}">\u00b5</font>')
 
 SIGNAL_COLORS = {
     "RED": RED_SIG, "AMBER": AMBER_SIG, "GREEN": GREEN_SIG, "UNAVAILABLE": GREY_SIG,
@@ -432,6 +453,151 @@ def build_waveform_drawing(time_ms, amplitude_uv, op_signal=None, fs_hz=2000.0,
     return d
 
 
+# ── Two-panel clinical waveform (sandbox test, 25 Nov 2026) ─────────────────
+def build_waveform_two_panel(time_ms, amplitude_uv, op_signal=None,
+                             pre_stimulus_ms=50.0, a_wave=None, b_wave=None,
+                             features=None, protocol="", width_mm=174, height_mm=50):
+    """Left: broadband ERG, -20 to 150 ms, a- and b-wave marked ISCEV style
+    (a: baseline to trough, b: a-trough to b-peak, implicit times on the
+    time axis). Right: OP band (75-300 Hz), 0 to 80 ms, OP2-OP4 marked.
+    All marker y-positions are sampled from the plotted trace."""
+    from reportlab.graphics.shapes import PolyLine
+    import numpy as np
+    from scipy.signal import find_peaks
+    features = features or {}
+    W, H = width_mm * mm, height_mm * mm
+    d = Drawing(W, H)
+    d.add(Rect(0, 0, W, H, fillColor=white, strokeColor=None))
+    if not time_ms or not amplitude_uv:
+        d.add(String(W / 2, H / 2, "Waveform unavailable", fontSize=8,
+                     fillColor=SLATE, textAnchor="middle"))
+        return d
+    # Same time origin as the reported implicit times: flash onset plus the
+    # flash-midpoint correction the pipeline applies (ISCEV 2022).
+    corr = float(features.get("flash_midpoint_correction_ms") or 0.0) \
+        if features.get("flash_midpoint_correction_applied") else 0.0
+    flash_t = time_ms[0] + pre_stimulus_ms + corr
+    rel = [t - flash_t for t in time_ms]
+    MU = "µV"
+
+    def panel(x0, w, t_lo, t_hi, sig, tick_step, title, y_pad_top=0.30, y_pad_bot=0.18):
+        pad_l, pad_r, pad_t, pad_b = 10 * mm, 2 * mm, 5.5 * mm, 8 * mm
+        pw, ph = w - pad_l - pad_r, H - pad_t - pad_b
+        idx = [i for i, t in enumerate(rel) if t_lo <= t <= t_hi]
+        vals = [sig[i] for i in idx]
+        lo, hi = min(vals + [0.0]), max(vals + [0.0])
+        span = (hi - lo) or 1.0
+        lo -= span * y_pad_bot; hi += span * y_pad_top; span = hi - lo
+        X = lambda t: x0 + pad_l + (t - t_lo) / (t_hi - t_lo) * pw
+        Y = lambda a: pad_b + (a - lo) / span * ph
+        # grid + y labels
+        ystep = next(st for st in (1, 2, 5, 10, 20, 25, 50, 100, 200) if span / st <= 6)
+        v = math.ceil(lo / ystep) * ystep
+        while v <= hi:
+            gy = Y(v)
+            d.add(Line(x0 + pad_l, gy, x0 + pad_l + pw, gy, strokeColor=WAVE_GRID, strokeWidth=0.4))
+            d.add(String(x0 + pad_l - 2, gy - 2.2, f"{v:.0f}", fontSize=6, fillColor=SLATE, textAnchor="end", fontName="Helvetica"))
+            v += ystep
+        tk = (t_lo // tick_step) * tick_step
+        while tk <= t_hi:
+            if tk >= t_lo:
+                gx = X(tk)
+                d.add(Line(gx, pad_b, gx, pad_b + ph, strokeColor=WAVE_GRID, strokeWidth=0.4))
+                d.add(String(gx, pad_b - 7, f"{tk:.0f}", fontSize=6, fillColor=SLATE, textAnchor="middle", fontName="Helvetica"))
+            tk += tick_step
+        # zero baseline
+        d.add(Line(x0 + pad_l, Y(0), x0 + pad_l + pw, Y(0), strokeColor=SLATE, strokeWidth=0.4,
+                   strokeDashArray=[1.5, 1.5]))
+        # flash
+        if t_lo <= 0 <= t_hi:
+            d.add(Line(X(0), pad_b, X(0), pad_b + ph, strokeColor=WAVE_RED, strokeWidth=0.6,
+                       strokeDashArray=[2, 1.5]))
+        pts = []
+        for i in idx:
+            pts.extend([X(rel[i]), Y(sig[i])])
+        if len(pts) >= 4:
+            d.add(PolyLine(pts, strokeColor=WAVE_TEAL, strokeWidth=1.0))
+        d.add(Rect(x0 + pad_l, pad_b, pw, ph, fillColor=None, strokeColor=RULE, strokeWidth=0.6))
+        d.add(String(x0 + pad_l, H - 4.2 * mm, title, fontSize=7.2, fontName="Helvetica-Bold", fillColor=INK))
+        d.add(String(x0 + pad_l + pw / 2, 0.8 * mm, "Time after flash (ms)", fontSize=6.2,
+                     fillColor=SLATE, textAnchor="middle", fontName="Helvetica"))
+        d.add(String(x0 + 1, pad_b + ph + 2, MU, fontSize=6.2, fillColor=SLATE,
+                     fontName=MU_FONT or "Helvetica"))
+        return X, Y, pad_b, ph
+
+    def label(x, y, text, color, anchor="start", bold=True, plate=True):
+        tw = len(text) * 3.35 + 2
+        rx = x if anchor == "start" else (x - tw if anchor == "end" else x - tw / 2)
+        if plate:
+            d.add(Rect(rx - 1, y - 1.5, tw + 2, 7.4, fillColor=white, strokeColor=None))
+        fn = ("Helvetica-Bold" if bold else "Helvetica")
+        if "\u00b5" in text and MU_FONT:
+            fn = MU_FONT_BD if bold else MU_FONT
+        d.add(String(x, y, text, fontSize=6.4, fillColor=color, textAnchor=anchor, fontName=fn))
+
+    def circ(x, y, c):
+        from reportlab.graphics.shapes import Circle
+        d.add(Circle(x, y, 1.9, fillColor=white, strokeColor=c, strokeWidth=1.1))
+
+    def tick_label(X, pad_b, t, c):
+        d.add(Line(X(t), pad_b, X(t), pad_b - 2.5, strokeColor=c, strokeWidth=1.0))
+
+    # ---- left panel: broadband ERG ----
+    _op2 = features.get("op2_amp_uv")
+    has_op = (bool(op_signal) and len(op_signal) == len(time_ms)
+              and protocol.strip().upper() in ("DA 3.0", "DA 10.0")
+              and _op2 is not None and _op2 == _op2)
+    lw = W * 0.60 if has_op else W
+    X, Y, pb, ph = panel(0, lw, -20, 150, amplitude_uv, 25, f"ERG  {protocol}  (0.3–300 Hz)".replace("  ()", ""))
+    a_t = a_wave.get("time_ms") if a_wave else None
+    b_t = b_wave.get("time_ms") if b_wave else None
+    if a_t is not None:
+        a_rel = a_t - (time_ms[0] + pre_stimulus_ms); a_t = flash_t + a_rel; a_y = _sample_at(time_ms, amplitude_uv, a_t)
+        # a-wave bracket: baseline to trough
+        bx = X(a_rel) - 2.5 * mm
+        d.add(Line(bx, Y(0), bx, Y(a_y), strokeColor=RED_SIG, strokeWidth=0.6))
+        d.add(Line(bx - 1.5, Y(0), bx + 1.5, Y(0), strokeColor=RED_SIG, strokeWidth=0.6))
+        d.add(Line(bx - 1.5, Y(a_y), bx + 1.5, Y(a_y), strokeColor=RED_SIG, strokeWidth=0.6))
+        circ(X(a_rel), Y(a_y), RED_SIG); tick_label(X, pb, a_rel, RED_SIG)
+        amp = features.get("a_amp_uv"); imp = features.get("a_implicit_ms")
+        txt = f"a  {amp:.1f} {MU}, {imp:.1f} ms" if amp is not None and imp is not None else "a"
+        label(X(a_rel) + 4, Y(a_y) - 9, txt, RED_SIG)
+    if b_t is not None:
+        b_rel = b_t - (time_ms[0] + pre_stimulus_ms); b_t = flash_t + b_rel; b_y = _sample_at(time_ms, amplitude_uv, b_t)
+        circ(X(b_rel), Y(b_y), GREEN_SIG); tick_label(X, pb, b_rel, GREEN_SIG)
+        if a_t is not None:
+            bx = X(b_rel) + 2.5 * mm
+            d.add(Line(bx, Y(a_y), bx, Y(b_y), strokeColor=GREEN_SIG, strokeWidth=0.6))
+            d.add(Line(bx - 1.5, Y(a_y), bx + 1.5, Y(a_y), strokeColor=GREEN_SIG, strokeWidth=0.6))
+            d.add(Line(bx - 1.5, Y(b_y), bx + 1.5, Y(b_y), strokeColor=GREEN_SIG, strokeWidth=0.6))
+        amp = features.get("b_amp_uv"); imp = features.get("b_implicit_ms")
+        txt = f"b  {amp:.1f} {MU}, {imp:.1f} ms" if amp is not None and imp is not None else "b"
+        label(X(b_rel) + 4, Y(b_y) + 7, txt, GREEN_SIG)
+
+    # ---- right panel: OP band ----
+    if has_op:
+        X2, Y2, pb2, ph2 = panel(lw, W - lw, 0, 80, op_signal, 10, "Oscillatory potentials (75–300 Hz)",
+                                 y_pad_top=0.45, y_pad_bot=0.12)
+        # OP peaks: same rule as the pipeline (prominence 5 uV, 8 ms apart, >= 20.29 ms)
+        ii = [i for i, t in enumerate(rel) if 0 <= t <= 100]
+        seg = np.array([op_signal[i] for i in ii])
+        fs = 1000.0 / (time_ms[1] - time_ms[0])
+        pk, _ = find_peaks(seg, prominence=5.0, distance=max(1, int(8.0 * fs / 1000)))
+        pk = [p for p in pk if rel[ii[p]] >= 20.29][:3]
+        for n, p in enumerate(pk):
+            name = f"OP{n + 2}"; t = rel[ii[p]]; v = seg[p]
+            circ(X2(t), Y2(v), WAVE_AMBER)
+            amp = features.get(f"op{n + 2}_amp_uv")
+            txt = f"{name} {amp:.1f}" if amp is not None else name
+            label(X2(t), Y2(v) + 3.5, txt, WAVE_AMBER, anchor="middle", plate=False)
+            if n == 0:
+                tick_label(X2, pb2, t, WAVE_AMBER)
+                it = features.get("op2_implicit_ms")
+                if it is not None:
+                    label(X2(t) + 2, pb2 + 2.5, f"{it:.1f} ms", WAVE_AMBER)
+    return d
+
+
 def _circle_marker(x, y, color, r=2.0):
     from reportlab.graphics.shapes import Circle
     return Circle(x, y, r, fillColor=white, strokeColor=color, strokeWidth=1.1)
@@ -469,8 +635,8 @@ def build_patient_block(meta):
         ("BACKGROUND", (0, 0), (-1, -1), PANEL_BG),
         ("BOX", (0, 0), (-1, -1), 0.6, RULE),
         ("INNERGRID", (0, 0), (-1, -1), 0.4, RULE),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
         ("LEFTPADDING", (0, 0), (-1, -1), 7),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
     ]))
@@ -486,7 +652,7 @@ def build_traffic_light_panel(traffic_light):
     heading = Paragraph(f'<font color="{color.hexval()}">{signal}</font>', S_FINDING_HD)
     sublabel = Paragraph(SIGNAL_LABELS.get(signal, ""), _style("sub", fontSize=8.5,
                           textColor=SLATE, fontName="Helvetica-Bold"))
-    msg = Paragraph((message or "—").replace("\u00b5", "u"), S_FINDING_BD)
+    msg = Paragraph(_mu(message or "—"), S_FINDING_BD)
 
     counts = traffic_light.get("counts") or {}
     count_txt = " \u00b7 ".join(f"{counts[z]} {z}" for z in
@@ -495,9 +661,9 @@ def build_traffic_light_panel(traffic_light):
     left_col = Table([[badge, Spacer(1, 1)], ], colWidths=[10 * mm])
     left_col.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
 
-    text_col = [heading, sublabel, Spacer(1, 3), msg]
+    text_col = [heading, sublabel, Spacer(1, 2), msg]
     if count_txt:
-        text_col += [Spacer(1, 3), Paragraph("Zoned parameters: " + count_txt,
+        text_col += [Spacer(1, 1.5), Paragraph("Zoned parameters: " + count_txt,
                      _style("counts", fontSize=7.8, textColor=SLATE))]
 
     inner = Table([[left_col, text_col]],
@@ -515,7 +681,7 @@ def build_traffic_light_panel(traffic_light):
         ("BACKGROUND", (0, 0), (-1, -1), bg),
         ("BOX", (0, 0), (-1, -1), 0, None),
         ("LINEBELOW", (0, 0), (-1, -1), 2.2, color),
-        ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("LEFTPADDING", (0, 0), (-1, -1), 10), ("RIGHTPADDING", (0, 0), (-1, -1), 10),
     ]))
     return wrapper
@@ -536,8 +702,7 @@ def build_metrics_table(features, parameter_zones, zones_available=True):
     ]]
 
     for r in parameter_zones or []:
-        # The built-in PDF fonts have no micro sign, so units print as uV.
-        unit = (r.get("unit") or "").replace("\u00b5", "u")
+        unit = r.get("unit") or ""
         sep = " " if unit else ""
         val = r.get("value")
         if r.get("not_recordable"):
@@ -572,11 +737,30 @@ def build_metrics_table(features, parameter_zones, zones_available=True):
 
         rows.append([
             Paragraph(_label(r.get("label", "")), S_VALUE),
-            Paragraph(val_txt, S_VALUE_BOLD),
-            Paragraph(lim_txt, S_VALUE),
+            Paragraph(_mu(val_txt, bold=True), S_VALUE_BOLD),
+            Paragraph(_mu(lim_txt), S_VALUE),
             Paragraph(zone_txt, _style("st", fontSize=8.2, fontName="Helvetica-Bold",
                                        textColor=zone_color)),
         ])
+
+    op_rows = []
+    f = features or {}
+    def _ok(k):
+        v = f.get(k)
+        return v is not None and v == v
+    if _ok("op2_amp_uv"):
+        t2 = f" at {f['op2_implicit_ms']:.1f} ms" if _ok("op2_implicit_ms") else ""
+        op_rows.append(("OP2 amplitude, implicit time", f"{f['op2_amp_uv']:.1f} \u00b5V{t2}"))
+    if _ok("op3_amp_uv") or _ok("op4_amp_uv"):
+        g = lambda k: f"{f[k]:.1f}" if _ok(k) else "\u2014"
+        op_rows.append(("OP3 / OP4 amplitude", f"{g('op3_amp_uv')} / {g('op4_amp_uv')} \u00b5V"))
+    if _ok("op_sum_uv"):
+        op_rows.append(("OP sum (OP2+OP3+OP4)", f"{f['op_sum_uv']:.1f} \u00b5V"))
+    for lab, val in op_rows:
+        rows.append([Paragraph(lab, S_VALUE), Paragraph(_mu(val, bold=True), S_VALUE_BOLD),
+                     Paragraph("None published", S_VALUE),
+                     Paragraph("Not zoned", _style("st", fontSize=8.2, fontName="Helvetica-Bold",
+                                                   textColor=SLATE))])
 
     if len(rows) == 1:
         rows.append([Paragraph("No parameters measured", S_VALUE), "", "", ""])
@@ -588,7 +772,7 @@ def build_metrics_table(features, parameter_zones, zones_available=True):
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, 0), 7.2),
         ("TOPPADDING", (0, 0), (-1, 0), 4), ("BOTTOMPADDING", (0, 0), (-1, 0), 4),
-        ("TOPPADDING", (0, 1), (-1, -1), 4), ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+        ("TOPPADDING", (0, 1), (-1, -1), 2), ("BOTTOMPADDING", (0, 1), (-1, -1), 2),
         ("LINEBELOW", (0, 0), (-1, -2), 0.4, RULE),
         ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -700,9 +884,9 @@ def build_phnr_warning_block():
 
 def section_heading(text):
     return [
-        Spacer(1, 2),
+        Spacer(1, 1),
         Paragraph(text.upper(), S_SECTION),
-        HRFlowable(width="100%", thickness=0.7, color=GREEN, spaceBefore=1.5, spaceAfter=4),
+        HRFlowable(width="100%", thickness=0.7, color=GREEN, spaceBefore=1, spaceAfter=2.5),
     ]
 
 
@@ -815,29 +999,23 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
         story.append(Spacer(1, 3))
         story.append(build_phnr_warning_block())
 
-    story.extend(section_heading("Filtered ERG Waveform"))
-    wf_drawing = build_waveform_drawing(
+    _op2 = features.get("op2_amp_uv")
+    _has_op = (str(meta_full.get("protocol", "")).strip().upper() in ("DA 3.0", "DA 10.0")
+               and _op2 is not None and _op2 == _op2)
+    story.extend(section_heading("Filtered ERG Waveform and Oscillatory Potentials"
+                                 if _has_op else "Filtered ERG Waveform"))
+    wf_drawing = build_waveform_two_panel(
         waveform_data.get("time_ms", []),
         waveform_data.get("amplitude_uv", []),
         op_signal=waveform_data.get("op_signal"),
-        fs_hz=waveform_data.get("fs_hz", 2000.0),
         pre_stimulus_ms=waveform_data.get("pre_stimulus_ms", 50.0),
         a_wave=waveform_data.get("a_wave"),
         b_wave=waveform_data.get("b_wave"),
-        phnr_wave=waveform_data.get("phnr_wave"),
-        ba_amplitude_uv=features.get("b_amp_uv"),
-        height_mm=32,
+        features=features,
+        protocol=meta_full.get("protocol", ""),
+        height_mm=45,
     )
     story.append(wf_drawing)
-    legend = Table([[
-        Paragraph('<font color="#0E7C86">\u2014\u2014</font> Filtered signal', S_BODY_SM),
-        Paragraph('<font color="#C18A0B">\u2014 \u2014</font> OP band', S_BODY_SM),
-        Paragraph('<font color="#B3261E">\u2014 \u2014</font> Flash onset', S_BODY_SM),
-        Paragraph('Shaded region: pre-stimulus baseline', S_BODY_SM),
-    ]], colWidths=[34 * mm, 34 * mm, 34 * mm, 72 * mm])
-    legend.setStyle(TableStyle([("TOPPADDING", (0, 0), (-1, -1), 1),
-                                 ("BOTTOMPADDING", (0, 0), (-1, -1), 0)]))
-    story.append(legend)
 
     story.extend(section_heading("Layer 3 — Specialist Report"))
     story.append(Paragraph(
@@ -861,7 +1039,7 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
             f"{stamp.get('config_hash', '—')} \u00b7 limits "
             f"{stamp.get('normative_ref_version', '—')}",
             _style("stamp", fontSize=6.5, leading=8, textColor=SLATE)))
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 2))
     story.append(build_disclaimer_block())
 
     doc.build(story, canvasmaker=_make_canvas)
