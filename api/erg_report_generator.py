@@ -613,7 +613,7 @@ def build_quality_panel(quality):
         Paragraph(f"{_fmt(snr_db)}  ({snr_status})" if snr_db is not None else "—", S_VALUE),
         Paragraph(quality.get("iscev_text", "Compliant"), S_VALUE),
     ]]
-    t = Table(rows, colWidths=[80 * mm, 47 * mm, 47 * mm])
+    t = Table(rows, colWidths=[100 * mm, 37 * mm, 37 * mm])
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), PANEL_BG),
         ("BOX", (0, 0), (-1, -1), 0.6, RULE),
@@ -847,6 +847,20 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
 
     story.extend(section_heading("Layer 4 — Technical Audit"))
     story.append(build_quality_panel(quality))
+    stamp = {}
+    for ext in fhir_obs.get("extension", []):
+        if ext.get("url", "").endswith("/version-stamp"):
+            stamp = {e.get("url"): e.get("valueString")
+                     for e in ext.get("extension", [])}
+    if stamp:
+        story.append(Spacer(1, 1))
+        story.append(Paragraph(
+            "<b>Version stamp:</b> API "
+            f"{stamp.get('api_version', '—')} \u00b7 weights "
+            f"{stamp.get('model_weights_hash', '—')} \u00b7 config "
+            f"{stamp.get('config_hash', '—')} \u00b7 limits "
+            f"{stamp.get('normative_ref_version', '—')}",
+            _style("stamp", fontSize=6.5, leading=8, textColor=SLATE)))
     story.append(Spacer(1, 4))
     story.append(build_disclaimer_block())
 
