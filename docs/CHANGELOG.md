@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mobile/tablet interface for point-of-care use
 
 ---
+## 2026-11-25 — Report layer names aligned with the book (PIPELINE_VERSION unchanged: 2.5.1)
+
+### Changed
+
+- The PDF report (`api/erg_report_generator.py`) and the text report in `api/templates/ERG_API_v2_5.html` now use the four layer names of book Chapters 14 and 19: Layer 1 Traffic Light, Layer 2 Clinical Summary, Layer 3 Specialist Report, and Layer 4 Technical Audit. Signal quality and ISCEV 2022 compliance, previously labeled as Layers 3 and 4, now sit under Layer 4.
+- Layer 3 now states that it is pending: the Stage 1 and Stage 2 classifiers are not yet trained or validated (Chapter 16), so no SHAP explanation is shown (book Chapter 19 §19.10).
+- The PDF waveform height is reduced from 42 to 34 mm, so the report fits on one A4 page again.
+- The Phase A locked files (`api/erg_v2_5_0.py` and the normative JSON) are unchanged.
+
+---
 ## 2026-11-24 — SAP v2.3 and registration Update 6 (PIPELINE_VERSION unchanged: 2.5.1)
 
 ### Changed
