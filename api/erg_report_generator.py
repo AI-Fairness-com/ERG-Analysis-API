@@ -826,7 +826,7 @@ def generate_clinical_report_pdf(output_path, full_report, waveform_data, meta=N
         b_wave=waveform_data.get("b_wave"),
         phnr_wave=waveform_data.get("phnr_wave"),
         ba_amplitude_uv=features.get("b_amp_uv"),
-        height_mm=42,
+        height_mm=34,
     )
     story.append(wf_drawing)
     legend = Table([[
