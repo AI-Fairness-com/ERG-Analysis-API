@@ -3119,6 +3119,13 @@
         }
         return lines;
       })()),
+      ...((ops && ops.op_sum_uv != null) ? [
+        'OP2 / OP3 / OP4      : ' + [ops.op2_amp_uv, ops.op3_amp_uv, ops.op4_amp_uv]
+          .map(v => v != null ? Number(v).toFixed(1) : 'N/A').join(' / ')
+          + ' µV  [no published limits, not zoned]',
+        'OP sum (OP2+OP3+OP4) : ' + Number(ops.op_sum_uv).toFixed(1)
+          + ' µV  [no published limits, not zoned]',
+      ] : []),
       '',
       '── LAYER 3: SPECIALIST REPORT ──────────────────────────────────────',
       'PENDING. The Stage 1 and Stage 2 classifiers are not yet trained',
@@ -3128,7 +3135,7 @@
       'Signal quality',
       'Quality grade    : ' + (q.grade || 'N/A'),
       'Grade description: ' + (q.description || 'N/A'),
-      'SNR              : ' + (snr.db!=null ? snr.db+' dB' : 'N/A') + '  (' + (snr.status||'N/A') + ')',
+      'SNR              : ' + (snr.linear!=null ? snr.linear : 'N/A') + '  (' + (snr.status||'N/A') + ')',
       'Electrode        : ' + (snr.electrode_type || 'N/A'),
       '',
       'ISCEV 2022 compliance',
@@ -3154,15 +3161,6 @@
       (iscev.warnings||[]).forEach(w => lines.push('  ⚠ ' + w));
     }
 
-    lines.push('');
-    lines.push('── OSCILLATORY POTENTIALS ──────────────────────────────────────────────');
-    if (ops && ops.op_sum_uv != null) {
-      lines.push('OP2 / OP3 / OP4 : ' +
-        [ops.op2_amp_uv, ops.op3_amp_uv, ops.op4_amp_uv].map(v => v!=null ? Number(v).toFixed(1) : 'N/A').join(' / ') + ' µV');
-      lines.push('OP sum (OP2+OP3+OP4) : ' + (ops.op_sum_uv!=null ? Number(ops.op_sum_uv).toFixed(1)+' µV' : 'N/A'));
-    } else {
-      lines.push('Oscillatory potentials: not extracted for this protocol/quality');
-    }
     lines.push('');
     lines.push('====================================================================');
     lines.push('DISCLAIMER: Clinical decision support only. Not a medical diagnosis.');
