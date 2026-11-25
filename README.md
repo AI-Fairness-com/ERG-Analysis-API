@@ -77,10 +77,10 @@ Age strata: 35 years or younger, 36 to 59 years, 60 years or older. Protocols: D
 ## Output
 
 - **Layer 1:** Traffic Light, with the mandatory disclaimer (Chapter 1 §1.7.4)
-- **Layer 2:** clinical summary with the zone of every parameter
+- **Layer 2:** clinical summary with the zone of every parameter, including the oscillatory potentials (not zoned)
 - **Layer 3:** specialist report
 - **Layer 4:** technical audit with the version stamp
-- **PDF report** and an **HL7 FHIR R4 Bundle** (LOINC panel 79894-2, Appendix B)
+- **One-page PDF report** with a clinical waveform plot (ERG with a- and b-wave marked; oscillatory potentials for DA 3.0 and DA 10.0) and an **HL7 FHIR R4 Bundle** (LOINC panel 79894-2, Appendix B)
 
 ## Citation
 
